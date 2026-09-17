@@ -108,13 +108,15 @@ export class SkillRegistry implements SkillMatcher {
 }
 
 /**
- * The project's say over which files each skill reviews.
+ * The project's say over which files each skill reviews -- the only say.
  *
- * A mapping replaces the skill's own `applies_to` -- the catalogue is where a
- * project states its policy, and a mapping of `[]` switches a skill off
- * without touching the file. A skill nobody scopes is kept but can never
- * match, and says so once; a mapping for a skill that was not loaded is
- * almost always a typo, and says so too.
+ * A skill document carries no scope of its own (ADR 0005): the catalogue's
+ * `skills.mappings` is where a project states which files a skill reviews,
+ * and a mapping of `[]` switches a skill off without touching the file. So a
+ * loaded skill that no mapping names can never match, and that is almost
+ * always a forgotten line rather than a decision -- it is reported as a
+ * warning, once. A mapping for a skill that was not loaded is almost always
+ * a typo, and says so too.
  */
 export function applyMappings(
   skills: readonly Skill[],
@@ -129,14 +131,16 @@ export function applyMappings(
   }
   return skills.map((skill) => {
     const mapped = Object.hasOwn(mappings, skill.name) ? mappings[skill.name] : undefined;
-    const globs = mapped ?? skill.globs;
-    if (globs.length === 0) {
-      log.info(
-        mapped === undefined
-          ? `Skill ${pyRepr(skill.name)} has no 'applies_to' and no entry in the project's skills.mappings; it will not be applied.`
-          : `Skill ${pyRepr(skill.name)} is switched off by the project's skills.mappings.`,
+    if (mapped === undefined) {
+      // Loaded, unreachable, and nobody said so on purpose.
+      log.warn(
+        `Skill ${pyRepr(skill.name)} has no entry in the project's skills.mappings and will not be applied to any file. Map it (skills.mappings.${skill.name}: ["<glob>"]) or switch it off explicitly with [].`,
       );
+      return skill;
     }
-    return mapped === undefined ? skill : { ...skill, globs };
+    if (mapped.length === 0) {
+      log.info(`Skill ${pyRepr(skill.name)} is switched off by the project's skills.mappings.`);
+    }
+    return { ...skill, globs: mapped };
   });
 }

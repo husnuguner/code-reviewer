@@ -712,10 +712,7 @@
       },
       "expected": {
         "name": "medusa-route",
-        "globs": [
-          "src/api/**/route.ts",
-          "src/api/**/middlewares.ts"
-        ],
+        "globs": [],
         "body": "Guidance text injected into the review prompt.\n\n- rule one\n- rule two",
         "source": "repo",
         "description": "Review MedusaJS 2.x API route files."
@@ -728,9 +725,7 @@
       },
       "expected": {
         "name": "medusa-model",
-        "globs": [
-          "src/modules/**/models/*.ts"
-        ],
+        "globs": [],
         "body": "Model guidance.",
         "source": "repo",
         "description": ""
@@ -743,9 +738,7 @@
       },
       "expected": {
         "name": "bare",
-        "globs": [
-          "**/*.ts"
-        ],
+        "globs": [],
         "body": "Body.",
         "source": "repo",
         "description": ""
@@ -758,9 +751,7 @@
       },
       "expected": {
         "name": "spaced",
-        "globs": [
-          "**/*.ts"
-        ],
+        "globs": [],
         "body": "Body with leading blank lines.",
         "source": "repo",
         "description": ""
@@ -773,9 +764,7 @@
       },
       "expected": {
         "name": "dashes",
-        "globs": [
-          "**/*.ts"
-        ],
+        "globs": [],
         "body": "Intro\n---\nA horizontal rule above.\n---",
         "source": "repo",
         "description": ""
@@ -788,9 +777,7 @@
       },
       "expected": {
         "name": "yaml11",
-        "globs": [
-          "**/*.ts"
-        ],
+        "globs": [],
         "body": "Body.",
         "source": "repo",
         "description": "True"
@@ -803,9 +790,7 @@
       },
       "expected": {
         "name": "numdesc",
-        "globs": [
-          "**/*.ts"
-        ],
+        "globs": [],
         "body": "Body.",
         "source": "repo",
         "description": "42"
@@ -818,9 +803,7 @@
       },
       "expected": {
         "name": "padded",
-        "globs": [
-          "**/*.ts"
-        ],
+        "globs": [],
         "body": "Body.",
         "source": "repo",
         "description": ""
@@ -833,10 +816,7 @@
       },
       "expected": {
         "name": "globs",
-        "globs": [
-          "**/*.ts",
-          "x/*.js"
-        ],
+        "globs": [],
         "body": "Body.",
         "source": "repo",
         "description": ""
@@ -849,11 +829,7 @@
       },
       "expected": {
         "name": "nums",
-        "globs": [
-          "1",
-          "2.5",
-          "True"
-        ],
+        "globs": [],
         "body": "Body.",
         "source": "repo",
         "description": ""
@@ -866,9 +842,7 @@
       },
       "expected": {
         "name": "empty",
-        "globs": [
-          "**/*.ts"
-        ],
+        "globs": [],
         "body": "",
         "source": "repo",
         "description": ""
@@ -881,9 +855,7 @@
       },
       "expected": {
         "name": "ws",
-        "globs": [
-          "**/*.ts"
-        ],
+        "globs": [],
         "body": "",
         "source": "repo",
         "description": ""
@@ -896,9 +868,7 @@
       },
       "expected": {
         "name": "crlf",
-        "globs": [
-          "**/*.ts"
-        ],
+        "globs": [],
         "body": "Body.",
         "source": "repo",
         "description": ""
@@ -930,24 +900,39 @@
       "input": {
         "text": "---\nname: no-globs\n---\nBody.\n"
       },
-      "expected": null,
-      "divergence": "Python skips a skill without usable applies_to; here the skill is kept with no globs so the project's catalogue `skills` map can scope it (or switch it off)."
+      "expected": {
+        "name": "no-globs",
+        "globs": [],
+        "body": "Body.",
+        "source": "repo",
+        "description": ""
+      }
     },
     {
       "name": "parse/applies_to_empty_list",
       "input": {
         "text": "---\nname: empty-globs\napplies_to: []\n---\nBody.\n"
       },
-      "expected": null,
-      "divergence": "Python skips a skill without usable applies_to; here the skill is kept with no globs so the project's catalogue `skills` map can scope it (or switch it off)."
+      "expected": {
+        "name": "empty-globs",
+        "globs": [],
+        "body": "Body.",
+        "source": "repo",
+        "description": ""
+      }
     },
     {
       "name": "parse/applies_to_mapping",
       "input": {
         "text": "---\nname: map-globs\napplies_to: {a: b}\n---\nBody.\n"
       },
-      "expected": null,
-      "divergence": "Python skips a skill without usable applies_to; here the skill is kept with no globs so the project's catalogue `skills` map can scope it (or switch it off)."
+      "expected": {
+        "name": "map-globs",
+        "globs": [],
+        "body": "Body.",
+        "source": "repo",
+        "description": ""
+      }
     },
     {
       "name": "parse/invalid_yaml",
@@ -1026,9 +1011,7 @@
       },
       "expected": {
         "name": "tight",
-        "globs": [
-          "**/*.ts"
-        ],
+        "globs": [],
         "body": "",
         "source": "repo",
         "description": ""
@@ -1408,5 +1391,6 @@
       },
       "expected": "Project/framework standards for this file (apply IN ADDITION to the four lenses):\n\n## dup\nsecond"
     }
-  ]
+  ],
+  "schema": "Skill documents carry no scope: `applies_to` is not read (ADR 0005; skills.mappings is the only source). parse/* expectations are regenerated from the parser; every parsed skill has globs: []."
 }

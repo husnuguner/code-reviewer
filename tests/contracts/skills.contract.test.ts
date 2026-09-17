@@ -43,29 +43,64 @@ describe("frontmatter skill parser", () => {
   const parser = new FrontmatterSkillParser();
   const parseCases = casesUnder<{ text: string }, Skill | null>(cases, "parse");
 
-  it.each(parseCases.filter((c) => c.divergence === undefined))("%s", ({ input, expected }) => {
+  it.each(parseCases)("%s", ({ input, expected }) => {
     expect(parser.parse(input.text, "repo")).toEqual(expected);
   });
 
-  // `applies_to` is optional here: the project's catalogue may scope the
-  // skill instead, so a document without globs is kept rather than dropped.
-  it.each(parseCases.filter((c) => c.divergence !== undefined))(
-    "keeps a skill without usable applies_to for the catalogue to scope: %s",
-    ({ input, expected }) => {
-      expect(expected).toBeNull();
-      const skill = parser.parse(input.text, "repo");
-      expect(skill).not.toBeNull();
-      expect(skill?.globs).toEqual([]);
-    },
-  );
+  it("gives no document a scope of its own: every parsed skill has globs: []", () => {
+    // The scope is the catalogue's to give (skills.mappings); a document
+    // that could scope itself would be a second place for the same
+    // decision, and one of the two would eventually be wrong.
+    const scopes = parseCases
+      .map(({ input }) => parser.parse(input.text, "repo"))
+      .filter((skill): skill is Skill => skill !== null)
+      .map((skill) => skill.globs);
+    expect(scopes.length).toBeGreaterThan(0);
+    expect(scopes.every((globs) => globs.length === 0)).toBe(true);
+  });
+
+  it("warns, once per document, when a skill still declares applies_to", () => {
+    // Not silent: the author wrote a scope and it will not be honoured.
+    const lines: string[] = [];
+    const warned = new FrontmatterSkillParser(recordingLogger(lines));
+    const skill = warned.parse("---\nname: legacy\napplies_to: ['src/**']\n---\nbody\n", "repo");
+    expect(skill?.globs).toEqual([]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^WARNING .*'legacy'.*applies_to.*skills\.mappings/u);
+  });
 });
 
 describe("skill registry", () => {
   const parser = new FrontmatterSkillParser();
-  const parsed = casesUnder<{ text: string }, Skill | null>(cases, "parse")
-    .filter((c) => c.divergence === undefined)
-    .map((c) => parser.parse(c.input.text, "repo"))
-    .filter((skill): skill is Skill => skill !== null);
+  // A parsed skill has no scope of its own (ADR 0005): the project's
+  // `skills.mappings` gives it one. These are the scopes the fixture used to
+  // carry as `applies_to`, moved to where they belong -- the registry's
+  // behaviour is pinned unchanged, only the source of the scope moved.
+  const SCOPES = {
+    "medusa-route": ["src/api/**/route.ts", "src/api/**/middlewares.ts"],
+    "medusa-model": ["src/modules/**/models/*.ts"],
+    bare: ["**/*.ts"],
+    spaced: ["**/*.ts"],
+    dashes: ["**/*.ts"],
+    yaml11: ["**/*.ts"],
+    numdesc: ["**/*.ts"],
+    padded: ["**/*.ts"],
+    globs: ["**/*.ts", "x/*.js"],
+    nums: ["1", "2.5", "True"],
+    empty: ["**/*.ts"],
+    ws: ["**/*.ts"],
+    crlf: ["**/*.ts"],
+    tight: ["**/*.ts"],
+  };
+  const parsed = applyMappings(
+    casesUnder<{ text: string }, Skill | null>(cases, "parse")
+      .map((c) => parser.parse(c.input.text, "repo"))
+      .filter((skill): skill is Skill => skill !== null)
+      // Only the skills the fixture scoped take part; the rest were the
+      // "keeps a skill the catalogue may scope" cases, unscoped by design.
+      .filter((skill) => Object.hasOwn(SCOPES, skill.name)),
+    SCOPES,
+  );
   // Two long skills sharing a glob exercise the total budget and the
   // "last declaration wins" rule, exactly as the fixture was generated.
   const skill = (name: string, globs: string[], body: string): Skill => ({
@@ -142,7 +177,7 @@ describe("the project's skill mappings", () => {
     expect(ruled.find((s) => s.name === "jobs")?.globs).toEqual(["src/jobs/**"]);
   });
 
-  it("scopes a skill that has no applies_to of its own", () => {
+  it("scopes a skill that the catalogue names, and nothing else does", () => {
     const ruled = applyMappings(loaded, { models: ["src/modules/**/models/*.ts"] });
     const registry = new SkillRegistry(ruled);
     expect(registry.skillsFor("src/modules/x/models/m.ts").map((s) => s.name)).toEqual(["models"]);

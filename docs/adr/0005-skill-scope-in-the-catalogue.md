@@ -29,12 +29,17 @@ Schema version 2 of the catalogue (`config.yaml`; see [ADR 0007](0007-one-yaml-c
 
 - **`projects.<name>.skills`** is one section: `path` (the directory in the
   reviewed repository; was the flat `skills_path`) and `mappings`, a map of
-  skill name to glob or list of globs. A mapping replaces the skill's own
-  `applies_to`; a skill mapped nowhere never applies; an empty list switches a
-  skill off; a mapping naming a skill that was not loaded is a warning (it is
-  almost always a typo). `applies_to` in the frontmatter is still read, as a
-  fallback, so a repository that scopes its skills in the files keeps
-  working. The parser no longer drops a skill that has no `applies_to`.
+  skill name to glob or list of globs. This is the **only** place a skill's
+  scope is stated: a skill mapped nowhere never applies (and is warned about,
+  since a loaded skill nobody can reach is almost always a forgotten line);
+  an empty list switches a skill off; a mapping naming a skill that was not
+  loaded is a warning too (it is almost always a typo).
+- **`applies_to` in the frontmatter is not read.** It was, briefly, kept as a
+  fallback -- and a fallback is a second place for the same decision, which
+  means one of the two eventually lies. A document that still carries the key
+  is parsed and warned about, so its author learns where the scope lives now
+  rather than wondering why the skill never fires. The parser keeps a skill
+  that has no scope; the catalogue gives it one.
 - **`skills.path` may be local.** An absolute or `~` path names a directory
   on the reviewer's machine (the usual home is
   `~/.config/reviewer/skills/{{project}}`, `{{project}}` standing for the
@@ -81,9 +86,9 @@ skill of the shipped Medusa library, so the reference cannot drift.
 - This is the first deliberate break with the Python reference's file format.
   The `catalog` and `commands` fixture files are maintained by hand from v2 on
   (they carry a `schema` note saying so); every other fixture file is still a
-  generated snapshot. Three `skills` parser cases are marked as divergences:
-  Python drops a skill without usable `applies_to`, this reviewer keeps it for
-  the catalogue to scope.
+  generated snapshot. The `skills` parser fixture is regenerated from this
+  parser: every parsed skill has `globs: []`, because a document has no scope
+  of its own. (Python read `applies_to` and dropped a skill without it.)
 - The shipped Medusa skills no longer carry `applies_to`; the library's
   mapping lives in the example catalogue. Using the library means copying the
   files to `skills.path` and the `skills.mappings` block into `defaults`.

@@ -31,9 +31,10 @@ is usually shared through `defaults.skills.path`):
       }
     }
 
-A skill mapped nowhere never applies. A skill may still carry its own
-`applies_to` globs in the frontmatter as a fallback; the catalogue wins. The
-complete mapping for this library is in [`docs/config.example.yaml`](../config.example.yaml).
+A skill mapped nowhere never applies, and the run says so. The files carry no
+scope of their own -- `applies_to` in a frontmatter is not read -- so the
+mapping is the one place to look. The complete mapping for this library is in
+[`docs/config.example.yaml`](../config.example.yaml).
 
 ## Medusa (`medusa/`)
 

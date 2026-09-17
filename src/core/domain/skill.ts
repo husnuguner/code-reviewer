@@ -14,8 +14,9 @@ export interface Skill {
   readonly name: string;
   /**
    * Path globs the skill reviews: `**` across directories, `*` within a
-   * segment. From the project's `skills` rules when it names the skill, else
-   * the document's own `applies_to`. Empty = the skill never matches.
+   * segment. Set by the project's `skills.mappings` and by nothing else -- a
+   * document leaves the parser with none, so an unmapped skill never matches
+   * (ADR 0005).
    */
   readonly globs: readonly string[];
   /** The guidance text injected into the review prompt. */

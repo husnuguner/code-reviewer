@@ -66,6 +66,10 @@ jobs:
   comment:
     name: Post the findings as review comments
     needs: review
+    # `always()` on purpose: a review that exits 3 on --fail-on still wrote
+    # its findings and they still belong on the PR. What must NOT happen is
+    # this job going green when there was nothing to post -- see the Comment
+    # step's condition.
     if: ${{ always() && needs.review.result != 'cancelled' }}
     runs-on: ubuntu-latest
     permissions:
@@ -79,13 +83,22 @@ jobs:
         with:
           persist-credentials: false
 
+      # `continue-on-error` keeps a missing artifact from failing the job
+      # (the review job already reported *its* failure); the `id` lets the
+      # next step ask whether anything actually arrived.
       - name: Download the findings
+        id: findings
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: code-review-findings
         continue-on-error: true
 
+      # Only when there is something to post. Otherwise this step is
+      # *skipped*, which is the truth -- not a green tick over a no-op that
+      # would make "the review never ran" indistinguishable from "the review
+      # found nothing".
       - name: Comment
+        if: ${{ steps.findings.outcome == 'success' }}
         uses: ./comment-action # in another repository: husnuguner/code-reviewer/comment-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

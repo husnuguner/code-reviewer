@@ -157,8 +157,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4 # the poster is this repository's own code
       - uses: actions/download-artifact@v4
+        id: findings
         with: { name: code-review-findings }
+        continue-on-error: true
       - uses: husnuguner/code-reviewer/comment-action@v1
+        if: ${{ steps.findings.outcome == 'success' }} # skipped, not green, when there is nothing to post
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           findings: code-review.ndjson
@@ -266,7 +269,7 @@ skills:
     medusa-links: []
 ```
 
-Globs use `**` (across directories), `*` (within a segment), `?` and `[...]` classes. A mapping replaces the skill's own `applies_to` frontmatter (still accepted as a fallback); a skill mapped nowhere never applies; `[]` switches one off without touching the file; a mapping naming a skill that was not loaded is logged as a warning. A file without valid frontmatter — a README in the skills directory — is ignored by the loader.
+Globs use `**` (across directories), `*` (within a segment), `?` and `[...]` classes. The mapping is the only place a skill's scope is stated — an `applies_to` key in a skill's frontmatter is not read, and a document that still has one is warned about; a skill mapped nowhere never applies (and is warned about too); `[]` switches one off without touching the file; a mapping naming a skill that was not loaded is logged as a warning. A file without valid frontmatter — a README in the skills directory — is ignored by the loader.
 
 Injection is capped so a wide match cannot flood the prompt: `max-skill-chars` truncates one skill's body, `max-skills-total-chars` caps the whole per-file block, and a skill that would overflow is skipped with an INFO log naming it.
 

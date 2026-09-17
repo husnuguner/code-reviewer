@@ -18,9 +18,9 @@ import {
   isLocalSkillsPath,
 } from "../src/infra/skills/sources";
 
-const ROUTE = "---\nname: medusa-route\napplies_to: ['src/api/**/route.ts']\n---\nRoute rules.\n";
-const MODEL =
-  "---\nname: medusa-model\napplies_to: ['src/modules/**/models/*.ts']\n---\nModel rules.\n";
+// No `applies_to`: a skill document carries no scope of its own (ADR 0005).
+const ROUTE = "---\nname: medusa-route\n---\nRoute rules.\n";
+const MODEL = "---\nname: medusa-model\n---\nModel rules.\n";
 const README = "# Skills\n\nThis directory holds review skills.\n";
 
 /** A throwaway working tree with a nested skills directory. */
@@ -46,10 +46,18 @@ describe("skills read from the working tree", () => {
     expect(await new WorktreeSkillSource(root, "does/not/exist").load()).toEqual([]);
   });
 
-  it("feeds a registry that matches skills to paths", async () => {
-    const registry = await SkillRegistry.build([
-      new WorktreeSkillSource(checkout(), ".review/skills"),
-    ]);
+  it("feeds a registry that matches skills to the paths the project maps them to", async () => {
+    // The scope comes from the catalogue's mappings and nowhere else: a
+    // source that loaded these two skills without a mapping would give the
+    // registry nothing that matches.
+    const registry = await SkillRegistry.build(
+      [new WorktreeSkillSource(checkout(), ".review/skills")],
+      undefined,
+      {
+        "medusa-route": ["src/api/**/route.ts"],
+        "medusa-model": ["src/modules/**/models/*.ts"],
+      },
+    );
     expect(registry.skillsFor("src/api/admin/route.ts").map((s) => s.name)).toEqual([
       "medusa-route",
     ]);
