@@ -417,6 +417,21 @@ describe("resolution", () => {
     expect(config.reviewLang).toBe("English");
   });
 
+  it("treats an empty environment variable as unset, not as an override", () => {
+    // `REVIEW_SKILLS_PATH=` in a shell, or a CI input left blank and exported
+    // anyway, is not an instruction to disable skills: it must fall through
+    // to the project the way an unset variable does. Otherwise a repository's
+    // own .review/config.yaml is silently overridden by nothing.
+    const s = scratch();
+    const config = load(s, {
+      project: "app",
+      configFile: s.catalogFile,
+      env: cleanEnvironment(s, { REVIEW_SKILLS_PATH: "", REVIEW_LANG: "  " }),
+    });
+    expect(config.skillSettings().path).toBe(".review/skills");
+    expect(config.reviewLang).toBe("Turkish");
+  });
+
   it("lets a .env file override the catalogue too", () => {
     const s = scratch();
     writeFileSync(s.cwdEnvFile, "REVIEW_LANG=en\n", "utf8");

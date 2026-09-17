@@ -25,9 +25,11 @@ inputs:
     description: "The LLM key. Pass a secret; never a literal."
     required: true
   provider:
-    description: "LLM provider: claude, or local for an OpenAI-compatible server."
+    description: >-
+      LLM provider: claude, or local for an OpenAI-compatible server. Empty
+      takes the checkout's .review/config.yaml (else the tool's default).
     required: false
-    default: "claude"
+    default: ""
   model:
     description: "Model name the provider expects. Empty uses the provider's default."
     required: false
@@ -37,9 +39,9 @@ inputs:
     required: false
     default: ""
   language:
-    description: "Language of the findings' text, e.g. tr or en."
+    description: "Language of the findings' text, e.g. tr or en. Empty takes the checkout's config."
     required: false
-    default: "en"
+    default: ""
   skills-path:
     description: >-
       Where this repository's review skills live, relative to the checkout.
@@ -65,9 +67,9 @@ inputs:
     required: false
     default: ""
   max-findings-per-file:
-    description: "Max findings reported per file; the most severe survive. 0 = no cap."
+    description: "Max findings reported per file; the most severe survive. 0 = no cap. Empty takes the checkout's config."
     required: false
-    default: "3"
+    default: ""
   fail-on:
     description: >-
       Severities that fail the job, e.g. "bug,security". "none" (the default)
@@ -77,9 +79,10 @@ inputs:
   verify:
     description: >-
       Check each file's findings against its own diff and drop the refuted
-      ones (one extra model call per file that found something).
+      ones (one extra model call per file that found something). Empty takes
+      the checkout's config (default on).
     required: false
-    default: "true"
+    default: ""
   preview:
     description: >-
       Print which files would be reviewed and stop. Calls no model, so it
@@ -158,14 +161,18 @@ runs:
       working-directory: ${{ github.workspace }}
       env:
         LLM_API_KEY: ${{ inputs.api-key }}
-        LLM_PROVIDER: ${{ inputs.provider }}
-        LLM_MODEL: ${{ inputs.model }}
-        LLM_BASE_URL: ${{ inputs.base-url }}
-        REVIEW_LANG: ${{ inputs.language }}
-        REVIEW_SKILLS_PATH: ${{ inputs.skills-path }}
-        REVIEW_EXCLUDE_PATHS: ${{ inputs.exclude }}
-        REVIEW_MAX_FINDINGS_PER_FILE: ${{ inputs.max-findings-per-file }}
-        REVIEW_VERIFY: ${{ inputs.verify }}
+        # Optional inputs arrive under IN_* and are exported below only when
+        # set. An empty environment variable still counts as "supplied" to the
+        # tool and would shadow the checkout's own .review/config.yaml --
+        # silently disabling its skills, say.
+        IN_PROVIDER: ${{ inputs.provider }}
+        IN_MODEL: ${{ inputs.model }}
+        IN_BASE_URL: ${{ inputs.base-url }}
+        IN_LANGUAGE: ${{ inputs.language }}
+        IN_SKILLS_PATH: ${{ inputs.skills-path }}
+        IN_EXCLUDE: ${{ inputs.exclude }}
+        IN_MAX_FINDINGS: ${{ inputs.max-findings-per-file }}
+        IN_VERIFY: ${{ inputs.verify }}
         REVIEWER_CONFIG: ${{ inputs.config }}
         HEAD_REF: ${{ inputs.head-ref }}
         FAIL_ON: ${{ inputs.fail-on }}
@@ -176,6 +183,15 @@ runs:
         BASE_REF: ${{ steps.base.outputs.ref }}
       run: |
         set -uo pipefail
+        # Only a set input reaches the tool; the rest is the checkout's to say.
+        [ -n "${IN_PROVIDER}" ]     && export LLM_PROVIDER="${IN_PROVIDER}"
+        [ -n "${IN_MODEL}" ]        && export LLM_MODEL="${IN_MODEL}"
+        [ -n "${IN_BASE_URL}" ]     && export LLM_BASE_URL="${IN_BASE_URL}"
+        [ -n "${IN_LANGUAGE}" ]     && export REVIEW_LANG="${IN_LANGUAGE}"
+        [ -n "${IN_SKILLS_PATH}" ]  && export REVIEW_SKILLS_PATH="${IN_SKILLS_PATH}"
+        [ -n "${IN_EXCLUDE}" ]      && export REVIEW_EXCLUDE_PATHS="${IN_EXCLUDE}"
+        [ -n "${IN_MAX_FINDINGS}" ] && export REVIEW_MAX_FINDINGS_PER_FILE="${IN_MAX_FINDINGS}"
+        [ -n "${IN_VERIFY}" ]       && export REVIEW_VERIFY="${IN_VERIFY}"
         args=(
           --base "origin/${BASE_REF}"
           --branch "${HEAD_REF}"
@@ -189,7 +205,7 @@ runs:
           args+=(--format github --out "${OUT_FILE}")
         fi
         [ -n "${PROJECT}" ] && args+=(--project "${PROJECT}")
-        [ -n "${REVIEWER_CONFIG}" ] && args+=(--config "${REVIEWER_CONFIG}")
+        if [ -n "${REVIEWER_CONFIG}" ]; then args+=(--config "${REVIEWER_CONFIG}"); else unset REVIEWER_CONFIG; fi
 
         node "${ACTION_PATH}/dist/cli/index.js" "${args[@]}"
         status=$?

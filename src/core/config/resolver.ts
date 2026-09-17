@@ -111,10 +111,23 @@ function suppliedAliases(sources: ConfigSources): Set<string> {
   const supplied = new Set<string>();
   for (const source of [sources.processEnv, ...sources.envFiles]) {
     for (const [name, value] of Object.entries(source)) {
-      if (value !== undefined) supplied.add(name.toUpperCase());
+      if (isSet(value)) supplied.add(name.toUpperCase());
     }
   }
   return supplied;
+}
+
+/**
+ * Whether an environment value counts as *said*.
+ *
+ * An empty variable does not. `REVIEW_SKILLS_PATH=` in a shell, or a CI
+ * input left blank and exported anyway, is not an instruction to disable
+ * skills -- it is the absence of one, and must fall through to the project
+ * the way an unset variable does. The command line is different: a typed
+ * `--skills-path ""` is a deliberate statement and is handled as one there.
+ */
+function isSet(value: string | undefined): value is string {
+  return value !== undefined && value.trim() !== "";
 }
 
 /**
@@ -126,7 +139,7 @@ function mergedEnvironment(sources: ConfigSources): Record<string, string> {
   const merged: Record<string, string> = {};
   for (const source of [...sources.envFiles, sources.processEnv]) {
     for (const [name, value] of Object.entries(source)) {
-      if (value !== undefined) merged[name.toUpperCase()] = value;
+      if (isSet(value)) merged[name.toUpperCase()] = value;
     }
   }
   return merged;
