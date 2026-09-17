@@ -1,7 +1,7 @@
 /**
  * Path-glob matching with `pathlib.PurePosixPath.full_match` semantics.
  *
- * The rules a skill's `applies_to` globs follow are a behavioural contract
+ * The rules a skill mapping's globs follow are a behavioural contract
  * (frozen in `tests/fixtures/skills.json`), so they are implemented here rather
  * than delegated to a glob library whose dialect differs in the corners:
  *

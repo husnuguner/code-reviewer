@@ -153,13 +153,14 @@ projects:
     max-context-chars: 6000
     max-concurrent-files: 4
 
-    # The project's own: skill name -> glob or list of globs it reviews. A
-    # mapping replaces the skill's own `applies_to`; a skill mapped nowhere
-    # never applies; [] switches a skill off without touching the file. A
-    # mapping naming a skill that does not exist is logged as a warning.
+    # The project's own: skill name -> glob or list of globs it reviews. This
+    # is the only place a skill's scope is stated; a skill mapped nowhere
+    # never applies (and is warned about); [] switches a skill off without
+    # touching the file. A mapping naming a skill that does not exist is a
+    # warning too.
     # Default {}.
     #
-    # This is the mapping for the Medusa library in docs/example-skills/.
+    # An example: a MedusaJS project's skills and where each applies.
     skills:
       mappings:
         medusa-conventions: ["src/**/*.ts"]

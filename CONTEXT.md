@@ -41,7 +41,7 @@ knows no Repository; only the CI bot that turns a Report into review comments
 needs one, because only it talks to a hosting system. When a Repository
 appears in this codebase it is therefore a posting concern, never a reviewing
 one — and a change that gives the reviewer a Repository is a change that has
-crossed the line ADR 0009 draws.
+crossed the one line this design draws.
 
 ## Selection
 

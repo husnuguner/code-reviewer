@@ -9,14 +9,12 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default defineConfig(
-  // docs/ holds skill documents and their upstream helper scripts, copied verbatim.
   {
     ignores: [
       "dist/**",
       "coverage/**",
       "node_modules/**",
       "tests/fixtures/**",
-      "docs/**",
       // Lifted out of the build, kept only to be read: see backup/RESTORE.md.
       "backup/**",
     ],

@@ -5,8 +5,6 @@ tests/fixtures/
 package-lock.json
 .vitest/
 # Skill documents are prompt content, copied verbatim; formatters must not touch them.
-docs/example-skills/
-docs/medusa/
 prompts/
 templates/
 backup/

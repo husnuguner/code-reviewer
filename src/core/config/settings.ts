@@ -60,8 +60,8 @@ export interface ConcurrencyLimits {
 
 /**
  * Which files each skill reviews: skill name -> path globs. Set per project
- * in the catalogue; overrides the skill's own `applies_to`. An empty list
- * switches the skill off.
+ * in the catalogue, and nowhere else. An empty list switches the skill off; a
+ * skill mapped nowhere never applies.
  */
 export type SkillMappings = Readonly<Record<string, readonly string[]>>;
 

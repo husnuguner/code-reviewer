@@ -10,7 +10,7 @@
  * A project is not a repository on a hosting system. This reviewer reads
  * local git and reports; nothing here describes a connection, a credential
  * or a place to post to, because there is no longer anything to connect to
- * (see `docs/adr/0009-local-git-only.md`).
+ * (see README, "Why the reviewer cannot post").
  *
  * One secret may stay out of the file: `llm.api-key` takes either the name of
  * an environment variable (read from the environment and the `.env` files) or
@@ -117,14 +117,13 @@ const REMOVED_SETTING_KEYS: Readonly<Record<string, string>> = {
 };
 const REMOVED_PROJECT_KEYS: Readonly<Record<string, string>> = {
   ...REMOVED_SETTING_KEYS,
-  repository:
-    "a project is a local checkout now; name it with 'local-path' (see docs/adr/0009-local-git-only.md)",
+  repository: "a project is a local checkout now; name it with 'local-path'",
   repo: "a project is a local checkout now; name it with 'local-path'",
   repo_provider: "this build talks to no hosting system; remove it",
 };
 const REMOVED_ROOT_KEYS: Readonly<Record<string, string>> = {
   repositories:
-    "this build talks to no hosting system: it reads local git and reports (see docs/adr/0009-local-git-only.md)",
+    "this build talks to no hosting system: it reads local git and reports; a CI bot posts (see README, 'Why the reviewer cannot post')",
   repo_providers: "this build talks to no hosting system; remove it",
 };
 

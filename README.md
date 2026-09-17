@@ -6,7 +6,7 @@ Every changed file is reviewed through four lenses (bug, security, performance, 
 
 - **LLM:** any OpenAI-compatible endpoint (LM Studio / Ollama / vLLM / cloud OpenAI) or Anthropic, through the [AI SDK](https://ai-sdk.dev).
 - **Git:** the `git` executable on the checkout you point it at. No hosting API, no token, no daemon.
-- **CI:** a [composite action](#github-action) reviews every pull request and a **separate CI-bot job** turns the findings into review comments ([ADR 0009](docs/adr/0009-local-git-only.md)).
+- **CI:** a [composite action](#github-action) reviews every pull request and a **separate CI-bot job** turns the findings into review comments.
 
 > The reviewer does not comment. That is deliberate: the process that reads untrusted diff text into a model has no way to write to your pull request. See [Why the reviewer cannot post](#why-the-reviewer-cannot-post).
 
@@ -200,7 +200,7 @@ A reviewer that posts needs a write credential in the same process that feeds un
 
 Splitting it removes the question: the job that runs the model has `contents: read` and no more, and the job that can write runs no model. The NDJSON between them is a plain data file. Nothing else about the review changes — the same findings, the same anchors, the same skills.
 
-The posting code that used to live _inside the reviewer_ is kept, unbuilt and gitignored, under `backup/` (see `backup/RESTORE.md`); the decision is recorded in [ADR 0009](docs/adr/0009-local-git-only.md).
+The posting code that used to live _inside the reviewer_ is kept, unbuilt and gitignored, under `backup/` (see `backup/RESTORE.md`).
 
 ### `review-comment` — the poster
 
@@ -238,7 +238,7 @@ A **skill** is one Markdown file of review guidelines scoped to a set of path gl
 
 This is the part worth configuring first: it is what turns a generic review into one that knows your conventions.
 
-**The reviewer ships no skills of its own.** Where they are read from is the project's `skills.path` ([ADR 0003](docs/adr/0003-no-bundled-skill-library.md), amended by [ADR 0005](docs/adr/0005-skill-scope-in-the-catalogue.md)):
+**The reviewer ships no skills of its own.** Where they are read from is the project's `skills.path`:
 
 | `skills.path`        | Where skills are read from                                                                                                                                           |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -258,7 +258,7 @@ description: Review MedusaJS 2.x API route files.
 Guidance text injected into the review prompt for matching files.
 ```
 
-**Which files a skill reviews is the project's decision**, made in `config.yaml` ([ADR 0005](docs/adr/0005-skill-scope-in-the-catalogue.md)):
+**Which files a skill reviews is the project's decision**, made in `config.yaml`:
 
 ```yaml
 skills:
@@ -269,15 +269,13 @@ skills:
     medusa-links: []
 ```
 
-Globs use `**` (across directories), `*` (within a segment), `?` and `[...]` classes. The mapping is the only place a skill's scope is stated — an `applies_to` key in a skill's frontmatter is not read, and a document that still has one is warned about; a skill mapped nowhere never applies (and is warned about too); `[]` switches one off without touching the file; a mapping naming a skill that was not loaded is logged as a warning. A file without valid frontmatter — a README in the skills directory — is ignored by the loader.
+Globs use `**` (across directories), `*` (within a segment), `?` and `[...]` classes. The mapping is the only place a skill's scope is stated — a skill's frontmatter carries `name` and `description`, nothing about paths; a skill mapped nowhere never applies (and is warned about); `[]` switches one off without touching the file; a mapping naming a skill that was not loaded is logged as a warning. A file without valid frontmatter — a README in the skills directory — is ignored by the loader.
 
 Injection is capped so a wide match cannot flood the prompt: `max-skill-chars` truncates one skill's body, `max-skills-total-chars` caps the whole per-file block, and a skill that would overflow is skipped with an INFO log naming it.
 
-Eleven MedusaJS skills are kept as a library in [`docs/example-skills/`](docs/example-skills/) — copy them into the repository whose conventions they describe.
-
 ## Pre-context
 
-The model judges one file's diff, but a diff rarely explains itself. Before each call the reviewer fetches, from the checkout ([ADR 0008](docs/adr/0008-deterministic-pre-context.md)):
+The model judges one file's diff, but a diff rarely explains itself. Before each call the reviewer fetches, from the checkout:
 
 | Block           | What                                                                                                         | Answers                                            |
 | --------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
@@ -368,7 +366,7 @@ A key set on the project wins over `defaults`, which wins over the built-in defa
 
 **The model's key** — `llm.api-key` — takes either the **name** of an environment variable (spelled like one: `ANTHROPIC_API_KEY`; read from the environment and the `.env` files) or the value itself. Naming keeps the file shareable; a named variable that is not set is an error rather than a confusing 401 later.
 
-**`prompts`** names the files whose text is the review _policy_ — who the reviewer is, what it looks for, what it leaves alone. The other half of the system prompt — how the diff is presented and the exact JSON that comes back — is the reviewer's and is not configurable, so a policy can never break the parser ([ADR 0006](docs/adr/0006-review-policy-is-a-file.md)).
+**`prompts`** names the files whose text is the review _policy_ — who the reviewer is, what it looks for, what it leaves alone. The other half of the system prompt — how the diff is presented and the exact JSON that comes back — is the reviewer's and is not configurable, so a policy can never break the parser.
 
 A key the schema does not recognise is **rejected**, not ignored. A key from an earlier spelling (`lang`, `skills_path`, `max_*`, `maxFindingsPerFile`…) is answered with its current name, and a key from the posting era (`repositories`, `repository`, `severities`, `max-prior-comment-chars`, `max-concurrent-prs`) is answered with what replaced it.
 
@@ -464,7 +462,19 @@ Layout — three layers with the dependency direction enforced by ESLint (`impor
 
 Tests: `tests/contracts/` pin every pure module to the fixtures in `tests/fixtures/`; `tests/*.test.ts` cover the adapters and the flow against real git and a mock language model.
 
-Design decisions with a real trade-off behind them are recorded in [`docs/adr/`](docs/adr/); the domain vocabulary is in [`CONTEXT.md`](CONTEXT.md); ideas deliberately kept out are in [`docs/post-parity-notes.md`](docs/post-parity-notes.md).
+The domain vocabulary is in [`CONTEXT.md`](CONTEXT.md).
+
+### Decisions
+
+The choices with a real trade-off behind them, and what was given up:
+
+- **The reviewer reads local git and posts nothing.** A job that feeds untrusted diff text to a model must not hold a write credential; posting is a separate executable in a separate job. Given up: reading a PR's existing comments to avoid repeating them.
+- **Skills belong to the reviewed repository, not to the reviewer.** They are that repository's own conventions, versioned with its code, so a change to a rule ships with the code that follows it. The reviewer ships none of its own.
+- **A skill's scope is stated once, in the catalogue.** `skills.mappings` is the only place that says which files a skill reviews; a skill document carries no scope of its own. Two places for one decision means one of them eventually lies.
+- **Every relative path in a catalogue is taken from the catalogue's own directory.** `prompts` and `skills.path` share one base, so a reader can check either against the other.
+- **The review policy is a file the operator owns; the output contract is not.** A policy can say anything about what to review and nothing about how to answer, so it can never break the parser.
+- **Pre-context is deterministic.** The reviewer decides what surrounding code to fetch; the model asks for nothing. The review stays one call and the output contract stays fixed.
+- **Nothing is dropped in silence.** Refuted, capped, unanchored, skipped — each is counted or listed, never merely omitted.
 
 ## License
 

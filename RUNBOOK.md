@@ -83,7 +83,7 @@ ANTHROPIC_API_KEY=...          # named by defaults.llm.api-key
 
 That is the whole list. The reviewer reads local git and reports; it holds no
 repository token, because it has nothing to post (see
-[ADR 0009](docs/adr/0009-local-git-only.md)).
+the README's "Why the reviewer cannot post").
 
 A secret setting takes either a variable's **name** (spelled like one) or the
 value itself; naming keeps `config.yaml` shareable. Exported `LLM_*` /
@@ -109,25 +109,10 @@ and a body of rules. **Two halves, two places, both under `~/.config/reviewer`:*
 | the rules (the `.md` files)    | `~/.config/reviewer/skills/` (`defaults.skills.path`) |
 | which files each skill reviews | `projects.shop.skills.mappings` in `config.yaml`      |
 
-Your 11 Medusa skills are already there; they apply to every project, with
-nothing committed to the reviewed repository. (A relative `skills.path` would
-instead read them from inside the reviewed repository's checkout — which is
-what CI wants, since the runner has no `~/.config/reviewer`.)
-
-The library they came from lives in this repository:
-
-| Path                                    | What                                                                       |
-| --------------------------------------- | -------------------------------------------------------------------------- |
-| `docs/example-skills/medusa/`           | the 11 reviewer skills, as shipped                                         |
-| `docs/example-skills/library-README.md` | the list, with each skill's one-line description                           |
-| `docs/config.example.yaml`              | the `skills.mappings` for them (already in your `config.yaml`)             |
-| `docs/medusa/`                          | the long-form `SKILL.md` sources they were distilled from (reference only) |
-
-To refresh the live copy after editing the library:
-
-```bash
-cp docs/example-skills/medusa/*.md ~/.config/reviewer/skills/shop/
-```
+The skills live **in the reviewed repository**, under `.review/skills/`, and
+nowhere else: that is the copy the team edits, reviews and commits, and the
+copy CI reads. Keep no second copy on your machine -- two copies drift, and the
+one CI does not read is the one that gets edited.
 
 A new project is one command, run from inside its checkout:
 

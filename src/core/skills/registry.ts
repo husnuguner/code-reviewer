@@ -110,7 +110,7 @@ export class SkillRegistry implements SkillMatcher {
 /**
  * The project's say over which files each skill reviews -- the only say.
  *
- * A skill document carries no scope of its own (ADR 0005): the catalogue's
+ * A skill document carries no scope of its own: the catalogue's
  * `skills.mappings` is where a project states which files a skill reviews,
  * and a mapping of `[]` switches a skill off without touching the file. So a
  * loaded skill that no mapping names can never match, and that is almost

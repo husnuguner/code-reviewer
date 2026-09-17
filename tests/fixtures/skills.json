@@ -708,7 +708,7 @@
     {
       "name": "parse/valid_list",
       "input": {
-        "text": "---\nname: medusa-route\napplies_to:\n  - \"src/api/**/route.ts\"\n  - src/api/**/middlewares.ts\ndescription: Review MedusaJS 2.x API route files.\nframework: medusa\n---\nGuidance text injected into the review prompt.\n\n- rule one\n- rule two\n"
+        "text": "---\nname: medusa-route\ndescription: Review MedusaJS 2.x API route files.\nframework: medusa\n---\nGuidance text injected into the review prompt.\n\n- rule one\n- rule two\n"
       },
       "expected": {
         "name": "medusa-route",
@@ -719,9 +719,9 @@
       }
     },
     {
-      "name": "parse/valid_string_applies_to",
+      "name": "parse/valid_minimal",
       "input": {
-        "text": "---\nname: medusa-model\napplies_to: src/modules/**/models/*.ts\n---\nModel guidance.\n"
+        "text": "---\nname: medusa-model\n---\nModel guidance.\n"
       },
       "expected": {
         "name": "medusa-model",
@@ -734,7 +734,7 @@
     {
       "name": "parse/valid_no_description",
       "input": {
-        "text": "---\nname: bare\napplies_to: ['**/*.ts']\n---\nBody."
+        "text": "---\nname: bare\n---\nBody."
       },
       "expected": {
         "name": "bare",
@@ -747,7 +747,7 @@
     {
       "name": "parse/valid_extra_whitespace_after_dashes",
       "input": {
-        "text": "---   \nname: spaced\napplies_to: ['**/*.ts']\n---  \n\n\nBody with leading blank lines.\n\n"
+        "text": "---   \nname: spaced\n---  \n\n\nBody with leading blank lines.\n\n"
       },
       "expected": {
         "name": "spaced",
@@ -760,7 +760,7 @@
     {
       "name": "parse/valid_dashes_inside_body",
       "input": {
-        "text": "---\nname: dashes\napplies_to: ['**/*.ts']\n---\nIntro\n---\nA horizontal rule above.\n---\n"
+        "text": "---\nname: dashes\n---\nIntro\n---\nA horizontal rule above.\n---\n"
       },
       "expected": {
         "name": "dashes",
@@ -773,7 +773,7 @@
     {
       "name": "parse/valid_yaml11_booleans_and_numbers",
       "input": {
-        "text": "---\nname: yaml11\napplies_to: ['**/*.ts']\ndescription: yes\ncount: 1_000\nflag: on\n---\nBody.\n"
+        "text": "---\nname: yaml11\ndescription: yes\ncount: 1_000\nflag: on\n---\nBody.\n"
       },
       "expected": {
         "name": "yaml11",
@@ -786,7 +786,7 @@
     {
       "name": "parse/valid_numeric_description",
       "input": {
-        "text": "---\nname: numdesc\napplies_to: ['**/*.ts']\ndescription: 42\n---\nBody.\n"
+        "text": "---\nname: numdesc\ndescription: 42\n---\nBody.\n"
       },
       "expected": {
         "name": "numdesc",
@@ -799,7 +799,7 @@
     {
       "name": "parse/valid_name_with_spaces_trimmed",
       "input": {
-        "text": "---\nname: '  padded  '\napplies_to: ['**/*.ts']\n---\nBody.\n"
+        "text": "---\nname: '  padded  '\n---\nBody.\n"
       },
       "expected": {
         "name": "padded",
@@ -812,7 +812,7 @@
     {
       "name": "parse/valid_globs_trimmed_and_blank_dropped",
       "input": {
-        "text": "---\nname: globs\napplies_to: ['  **/*.ts  ', '', '   ', 'x/*.js']\n---\nBody.\n"
+        "text": "---\nname: globs\n---\nBody.\n"
       },
       "expected": {
         "name": "globs",
@@ -823,9 +823,9 @@
       }
     },
     {
-      "name": "parse/valid_applies_to_numbers_coerced",
+      "name": "parse/valid_name_only_4",
       "input": {
-        "text": "---\nname: nums\napplies_to: [1, 2.5, true]\n---\nBody.\n"
+        "text": "---\nname: nums\n---\nBody.\n"
       },
       "expected": {
         "name": "nums",
@@ -838,7 +838,7 @@
     {
       "name": "parse/valid_empty_body",
       "input": {
-        "text": "---\nname: empty\napplies_to: ['**/*.ts']\n---\n"
+        "text": "---\nname: empty\n---\n"
       },
       "expected": {
         "name": "empty",
@@ -851,7 +851,7 @@
     {
       "name": "parse/valid_body_only_whitespace",
       "input": {
-        "text": "---\nname: ws\napplies_to: ['**/*.ts']\n---\n   \n\n"
+        "text": "---\nname: ws\n---\n   \n\n"
       },
       "expected": {
         "name": "ws",
@@ -864,7 +864,7 @@
     {
       "name": "parse/valid_crlf",
       "input": {
-        "text": "---\r\nname: crlf\r\napplies_to: ['**/*.ts']\r\n---\r\nBody.\r\n"
+        "text": "---\r\nname: crlf\r\r\n---\r\nBody.\r\n"
       },
       "expected": {
         "name": "crlf",
@@ -877,26 +877,26 @@
     {
       "name": "parse/missing_name",
       "input": {
-        "text": "---\napplies_to: ['**/*.ts']\n---\nBody.\n"
+        "text": "---\n\n---\nBody.\n"
       },
       "expected": null
     },
     {
       "name": "parse/name_not_string",
       "input": {
-        "text": "---\nname: 123\napplies_to: ['**/*.ts']\n---\nBody.\n"
+        "text": "---\nname: 123\n---\nBody.\n"
       },
       "expected": null
     },
     {
       "name": "parse/name_blank",
       "input": {
-        "text": "---\nname: '   '\napplies_to: ['**/*.ts']\n---\nBody.\n"
+        "text": "---\nname: '   '\n---\nBody.\n"
       },
       "expected": null
     },
     {
-      "name": "parse/missing_applies_to",
+      "name": "parse/valid_name_only",
       "input": {
         "text": "---\nname: no-globs\n---\nBody.\n"
       },
@@ -909,9 +909,9 @@
       }
     },
     {
-      "name": "parse/applies_to_empty_list",
+      "name": "parse/valid_name_only_2",
       "input": {
-        "text": "---\nname: empty-globs\napplies_to: []\n---\nBody.\n"
+        "text": "---\nname: empty-globs\n---\nBody.\n"
       },
       "expected": {
         "name": "empty-globs",
@@ -922,9 +922,9 @@
       }
     },
     {
-      "name": "parse/applies_to_mapping",
+      "name": "parse/valid_name_only_3",
       "input": {
-        "text": "---\nname: map-globs\napplies_to: {a: b}\n---\nBody.\n"
+        "text": "---\nname: map-globs\n---\nBody.\n"
       },
       "expected": {
         "name": "map-globs",
@@ -937,7 +937,7 @@
     {
       "name": "parse/invalid_yaml",
       "input": {
-        "text": "---\nname: [unclosed\napplies_to: ['**/*.ts']\n---\nBody.\n"
+        "text": "---\nname: [unclosed\n---\nBody.\n"
       },
       "expected": null
     },
@@ -965,21 +965,14 @@
     {
       "name": "parse/leading_blank_line",
       "input": {
-        "text": "\n---\nname: late\napplies_to: ['**/*.ts']\n---\nBody.\n"
+        "text": "\n---\nname: late\n---\nBody.\n"
       },
       "expected": null
     },
     {
       "name": "parse/unterminated_frontmatter",
       "input": {
-        "text": "---\nname: x\napplies_to: ['**/*.ts']\nBody without closing.\n"
-      },
-      "expected": null
-    },
-    {
-      "name": "parse/empty_frontmatter",
-      "input": {
-        "text": "---\n\n---\nBody.\n"
+        "text": "---\nname: x\nBody without closing.\n"
       },
       "expected": null
     },
@@ -1000,14 +993,14 @@
     {
       "name": "parse/frontmatter_with_bom",
       "input": {
-        "text": "﻿---\nname: bom\napplies_to: ['**/*.ts']\n---\nBody.\n"
+        "text": "﻿---\nname: bom\n---\nBody.\n"
       },
       "expected": null
     },
     {
       "name": "parse/closing_dashes_no_trailing_newline",
       "input": {
-        "text": "---\nname: tight\napplies_to: ['**/*.ts']\n---"
+        "text": "---\nname: tight\n---"
       },
       "expected": {
         "name": "tight",
@@ -1392,5 +1385,5 @@
       "expected": "Project/framework standards for this file (apply IN ADDITION to the four lenses):\n\n## dup\nsecond"
     }
   ],
-  "schema": "Skill documents carry no scope: `applies_to` is not read (ADR 0005; skills.mappings is the only source). parse/* expectations are regenerated from the parser; every parsed skill has globs: []."
+  "schema": "Skill documents carry no scope: a frontmatter declares `name` (and optionally `description`); which files a skill reviews is the catalogue's skills.mappings. parse/* expectations are regenerated from the parser."
 }

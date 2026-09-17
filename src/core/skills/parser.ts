@@ -12,7 +12,7 @@ import { parse as parseYaml } from "yaml";
 import { type Skill } from "../domain/skill";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { errorMessage } from "../util/errors";
-import { PY_WHITESPACE_CLASS, isDict, pyRepr, pyString, pyStrip } from "../util/py";
+import { PY_WHITESPACE_CLASS, isDict, pyString, pyStrip } from "../util/py";
 
 export interface SkillParser {
   /** A skill, or `null` when `text` is not a valid skill document. */
@@ -30,13 +30,11 @@ const FRONTMATTER = new RegExp(
  *
  * Frontmatter must declare `name`; `description` is optional. Which files a
  * skill reviews is *not* the document's to say: that is the project's
- * `skills.mappings` in the catalogue (ADR 0005), and a skill leaves the parser
- * with no globs of its own. A document that still carries `applies_to` is
- * parsed, and told so -- silently ignoring the field would leave its author
- * wondering why the skill never fires. Returns `null` (logging a warning) when
- * frontmatter is missing, the YAML is invalid, or `name` is absent. YAML is
- * read with 1.1 semantics (`yes` is a boolean, `1_000` a number), the dialect
- * skill authors have been writing against.
+ * `skills.mappings` in the catalogue, so a skill leaves the parser
+ * with no globs of its own and any other frontmatter key is ignored. Returns
+ * `null` (logging a warning) when frontmatter is missing, the YAML is invalid,
+ * or `name` is absent. YAML is read with 1.1 semantics (`yes` is a boolean,
+ * `1_000` a number), the dialect skill authors have been writing against.
  */
 export class FrontmatterSkillParser implements SkillParser {
   private readonly log: Logger;
@@ -55,14 +53,6 @@ export class FrontmatterSkillParser implements SkillParser {
     if (name === "") {
       this.log.warn(`Skipping skill (${source}): missing 'name'.`);
       return null;
-    }
-
-    // Not an error, not silent either: the author wrote a scope and it will
-    // not be honoured. One line says where the scope lives now.
-    if (Object.hasOwn(meta, "applies_to")) {
-      this.log.warn(
-        `Skill ${pyRepr(name)} (${source}) declares 'applies_to', which is no longer read: which files a skill reviews is set in the project's skills.mappings. Remove the key from the document.`,
-      );
     }
 
     return {

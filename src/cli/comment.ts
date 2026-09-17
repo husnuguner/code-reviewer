@@ -5,7 +5,7 @@
  * whole design. This one holds a repository token and cannot call a model;
  * `reviewer` calls a model and cannot post. Neither can be talked into the
  * other's job, which is what makes a prompt-injected diff harmless here
- * (see docs/adr/0009-local-git-only.md).
+ * (see README, "Why the reviewer cannot post").
  *
  * Its input is the NDJSON `reviewer --out` writes, so it is equally usable
  * from a workflow, a cron job, or by hand against a file on disk.

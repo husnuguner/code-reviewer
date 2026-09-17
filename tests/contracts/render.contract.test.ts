@@ -54,7 +54,7 @@ describe("prompts", () => {
     const shippedSentences = new Set(sentences(shipped));
     const referenceSentences = sentences(String(reference?.expected));
     for (const sentence of referenceSentences) {
-      // The one reference sentence this implementation extended (pre-context, ADR 0008).
+      // The one reference sentence this implementation extended (pre-context).
       const isExtended = sentence.startsWith("Input format:");
       expect(
         isExtended

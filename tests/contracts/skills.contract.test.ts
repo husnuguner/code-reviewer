@@ -58,24 +58,13 @@ describe("frontmatter skill parser", () => {
     expect(scopes.length).toBeGreaterThan(0);
     expect(scopes.every((globs) => globs.length === 0)).toBe(true);
   });
-
-  it("warns, once per document, when a skill still declares applies_to", () => {
-    // Not silent: the author wrote a scope and it will not be honoured.
-    const lines: string[] = [];
-    const warned = new FrontmatterSkillParser(recordingLogger(lines));
-    const skill = warned.parse("---\nname: legacy\napplies_to: ['src/**']\n---\nbody\n", "repo");
-    expect(skill?.globs).toEqual([]);
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/^WARNING .*'legacy'.*applies_to.*skills\.mappings/u);
-  });
 });
 
 describe("skill registry", () => {
   const parser = new FrontmatterSkillParser();
-  // A parsed skill has no scope of its own (ADR 0005): the project's
-  // `skills.mappings` gives it one. These are the scopes the fixture used to
-  // carry as `applies_to`, moved to where they belong -- the registry's
-  // behaviour is pinned unchanged, only the source of the scope moved.
+  // A parsed skill has no scope of its own: the project's
+  // `skills.mappings` gives it one. These scopes pin the registry's
+  // behaviour exactly as the fixture was generated.
   const SCOPES = {
     "medusa-route": ["src/api/**/route.ts", "src/api/**/middlewares.ts"],
     "medusa-model": ["src/modules/**/models/*.ts"],

@@ -52,14 +52,4 @@ describe("docs/config.example.yaml", () => {
     // ... and prompts replace the defaults' list.
     expect(config.promptFiles).toEqual(["prompts/system.md", "prompts/shop.md"]);
   });
-
-  it("names every skill of the shipped Medusa library, and only those", () => {
-    const { mappings } = catalog.project("shop").settings.skills as { mappings: object };
-    const rules = Object.keys(mappings);
-    const shipped = readFileSync(
-      join(import.meta.dirname, "..", "docs", "example-skills", "library-README.md"),
-      "utf8",
-    );
-    for (const name of rules) expect(shipped).toContain(`\`${name}\``);
-  });
 });

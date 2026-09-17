@@ -18,7 +18,7 @@ import {
   isLocalSkillsPath,
 } from "../src/infra/skills/sources";
 
-// No `applies_to`: a skill document carries no scope of its own (ADR 0005).
+// A skill document carries no scope of its own; the mapping gives it one.
 const ROUTE = "---\nname: medusa-route\n---\nRoute rules.\n";
 const MODEL = "---\nname: medusa-model\n---\nModel rules.\n";
 const README = "# Skills\n\nThis directory holds review skills.\n";
