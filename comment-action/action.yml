@@ -14,8 +14,14 @@ inputs:
     description: "The NDJSON record stream to post."
     required: false
     default: "code-review.ndjson"
+  provider:
+    description: >-
+      The hosting system to post to. `github` today; a second provider is a
+      registered adapter and one more accepted value here.
+    required: false
+    default: "github"
   repo:
-    description: "The repository the pull request belongs to, as owner/name."
+    description: "The repository the change request belongs to, as the provider names it (GitHub: owner/name)."
     required: false
     default: ${{ github.repository }}
   pr:
@@ -23,14 +29,17 @@ inputs:
     required: false
     default: ${{ github.event.pull_request.number }}
   token:
-    description: "A token with `pull-requests: write`. This is the only thing here that can write."
+    description: >-
+      A token that may post a review. The provider says which variable it
+      expects (GitHub: GITHUB_TOKEN); this input is exported under that name.
+      This is the only thing here that can write.
     required: true
   max-inline:
     description: "Cap on inline comments; the rest are listed in the review body."
     required: false
     default: "50"
   base-url:
-    description: "REST root, for GitHub Enterprise (default api.github.com)."
+    description: "API root, for a self-hosted instance (default: the provider's public endpoint)."
     required: false
     default: ""
   dry-run:
@@ -66,6 +75,7 @@ runs:
         # The token reaches the process as an environment variable, never as
         # a command-line argument, where it would show up in a process list.
         GITHUB_TOKEN: ${{ inputs.token }}
+        PROVIDER: ${{ inputs.provider }}
         FINDINGS: ${{ inputs.findings }}
         REPO: ${{ inputs.repo }}
         PR: ${{ inputs.pr }}
@@ -79,7 +89,7 @@ runs:
           echo "::notice::No ${FINDINGS}; the review produced nothing to post."
           exit 0
         fi
-        args=(--findings "${FINDINGS}" --repo "${REPO}" --pr "${PR}" --max-inline "${MAX_INLINE}")
+        args=(--findings "${FINDINGS}" --provider "${PROVIDER}" --repo "${REPO}" --pr "${PR}" --max-inline "${MAX_INLINE}")
         [ -n "${BASE_URL}" ] && args+=(--base-url "${BASE_URL}")
         [ "${DRY_RUN}" = "true" ] && args+=(--dry-run)
         node "${ACTION_PATH}/../dist/cli/comment.js" "${args[@]}"

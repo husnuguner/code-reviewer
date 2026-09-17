@@ -15,13 +15,16 @@ import {
   commentBody,
   parseRecords,
 } from "../src/core/comment/review-payload";
+import { PostingError } from "../src/core/comment/review-poster";
 import { type SummaryRecord } from "../src/core/ports/review-reporter";
+import { ValueError } from "../src/core/util/errors";
 import {
   GithubError,
   GithubReviewClient,
   // eslint-disable-next-line unicorn/name-replacements -- `Repository` is the domain term (CONTEXT.md), not an abbreviation
   parseRepository,
 } from "../src/infra/github/review-client";
+import { builtinReviewPosterRegistry } from "../src/infra/posters/index";
 
 function finding(over: Partial<Finding> = {}): Finding {
   return {
@@ -67,7 +70,10 @@ interface RecordedCall {
 function clientWith(responder: () => Response, calls: RecordedCall[] = []): GithubReviewClient {
   return new GithubReviewClient({
     token: "t",
-    fetch: (url, init) => {
+    // The client hands over a `URL` it produced after its origin allowlist;
+    // recording it as text is only for the assertions below.
+    fetch: (target, init) => {
+      const url = target.toString();
       // Only a string body is ever sent here, and a test that started
       // sending something else should fail loudly rather than record
       // "[object Object]".
@@ -213,7 +219,9 @@ describe("the repository slug", () => {
 });
 
 describe("posting the review", () => {
-  const repo = { owner: "acme", repo: "app" };
+  // The slug as the command line carries it: splitting and validating it is
+  // the provider's business, exercised through `submit`.
+  const repo = "acme/app";
 
   it("posts one COMMENT review to the pull request's endpoint", async () => {
     const calls: RecordedCall[] = [];
@@ -263,8 +271,51 @@ describe("posting the review", () => {
   });
 
   it("refuses a base URL that is not http(s)", () => {
-    expect(() => new GithubReviewClient({ token: "t", baseUrl: "file:///etc" })).toThrow(
-      GithubError,
-    );
+    expect(
+      () => new GithubReviewClient({ token: "t", baseUrl: "file:///etc", fetch: neverCalled }),
+    ).toThrow(GithubError);
+  });
+
+  it("refuses a slug the provider cannot read, before any request is made", async () => {
+    const calls: RecordedCall[] = [];
+    await expect(
+      clientWith(() => new Response("{}", { status: 200 }), calls).submit({
+        repository: "acme/../app",
+        pullNumber: 7,
+        body: "b",
+        comments: [],
+      }),
+    ).rejects.toThrow(GithubError);
+    expect(calls).toHaveLength(0);
+  });
+});
+
+/** A transport for a test that must never reach it. */
+function neverCalled(): Promise<Response> {
+  throw new Error("fetch must not be called");
+}
+
+describe("the poster registry", () => {
+  const registry = builtinReviewPosterRegistry();
+
+  it("knows GitHub, and says which variable its token lives in", () => {
+    expect(registry.names()).toEqual(["github"]);
+    expect(registry.get("github").tokenVariable).toBe("GITHUB_TOKEN");
+    expect(registry.describe()).toContain("'github'");
+  });
+
+  it("names the providers that exist when asked for one that does not", () => {
+    // The message is what a user with a typo reads; it must list the answer.
+    expect(() => registry.get("gitlab")).toThrow(ValueError);
+    expect(() => registry.get("gitlab")).toThrow(/'github'/u);
+  });
+
+  it("builds a poster that speaks the port, whatever the provider", async () => {
+    // Through the registry, not the class: this is the path review-comment
+    // takes, and it must not know it is talking to GitHub.
+    const poster = registry.create("github", { token: "t", baseUrl: null });
+    await expect(
+      poster.submit({ repository: "not a slug", pullNumber: 1, body: "b", comments: [] }),
+    ).rejects.toThrow(PostingError);
   });
 });

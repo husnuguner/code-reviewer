@@ -215,16 +215,17 @@ review-comment --findings code-review.ndjson --repo acme/app --pr 7 --dry-run
 review-comment --findings code-review.ndjson --repo acme/app --pr 7   # needs GITHUB_TOKEN
 ```
 
-| Flag           | Effect                                                                |
-| -------------- | --------------------------------------------------------------------- |
-| `--findings`   | The NDJSON stream `reviewer --out` wrote.                             |
-| `--repo`       | `owner/name`; anything else is refused before a request is made.      |
-| `--pr`         | The pull request number.                                              |
-| `--max-inline` | Cap on inline comments (default 50); the rest are listed in the body. |
-| `--base-url`   | REST root, for GitHub Enterprise.                                     |
-| `--dry-run`    | Print the review instead of posting it. Needs no token.               |
+| Flag           | Effect                                                                                                                  |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `--findings`   | The NDJSON stream `reviewer --out` wrote.                                                                               |
+| `--provider`   | The hosting system (`github`, the default). A second one is a registered adapter, and its token variable comes with it. |
+| `--repo`       | The repository as the provider names it — `owner/name` on GitHub; a bad slug is refused before a request is made.       |
+| `--pr`         | The pull request number.                                                                                                |
+| `--max-inline` | Cap on inline comments (default 50); the rest are listed in the body.                                                   |
+| `--base-url`   | REST root, for GitHub Enterprise.                                                                                       |
+| `--dry-run`    | Print the review instead of posting it. Needs no token.                                                                 |
 
-It reads `GITHUB_TOKEN` from the environment, never from a flag. What it does
+It reads the token from the variable the provider names (`GITHUB_TOKEN` for GitHub), never from a flag. What it does
 with a stream:
 
 - an **anchored** finding becomes an inline comment, most severe first;
@@ -494,6 +495,7 @@ The choices with a real trade-off behind them, and what was given up:
 - **The review policy is a file the operator owns; the output contract is not.** A policy can say anything about what to review and nothing about how to answer, so it can never break the parser.
 - **Pre-context is deterministic.** The reviewer decides what surrounding code to fetch; the model asks for nothing. The review stays one call and the output contract stays fixed.
 - **Nothing is dropped in silence.** Refuted, capped, unanchored, skipped — each is counted or listed, never merely omitted.
+- **Three things vary, and each varies the same way.** The model (`LLM_PROVIDER`), the rendering (`--format`), the hosting system (`--provider`) are each a registry of strategies: adding one is a file and a line, and no `switch` anywhere has to learn the new name.
 
 ## License
 

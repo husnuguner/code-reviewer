@@ -28,21 +28,36 @@ import { type Config, type ConfigField } from "../core/config/config";
 import { type LLMProviderRegistry } from "../core/llm/provider-registry";
 import { type ChatModel } from "../core/ports/chat-model";
 import { type ConsoleOutput } from "../core/ports/console";
+import { type GitReader } from "../core/ports/git-reader";
 import { type Logger } from "../core/ports/logger";
 import { type BranchReviewReporter, type PreviewReporter } from "../core/ports/review-reporter";
+import { type SkillMatcher } from "../core/ports/skill-matcher";
 import { type ReportFormatRegistry, type SummaryWriter } from "../core/reporting/format-registry";
 import { type PerFileVerifier } from "../core/review/changed-file";
 import { FileReviewer } from "../core/review/file-reviewer";
 import { systemPrompt } from "../core/review/prompts";
 import { FindingVerifier } from "../core/review/verify";
+import { SkillRegistry } from "../core/skills/registry";
 import { loadRunConfig } from "../infra/config/loader";
-import { configHome, configPath } from "../infra/config/paths";
+import {
+  configHome,
+  configPath,
+  expandUser,
+  isRepoConfig,
+  repoRootOf,
+} from "../infra/config/paths";
+import { LocalGitReader, worktree } from "../infra/git/local-git";
 import { builtinLLMProviderRegistry } from "../infra/llm/index";
 import { PinoLogger } from "../infra/logging/pino-logger";
 import { catalogDirectory, readReviewPolicy } from "../infra/prompts/policy-files";
 import { builtinReportFormatRegistry } from "../infra/reporters/index";
 import { NdjsonReporter, StreamConsole, TeeReporter, lineWriter } from "../infra/reporters/stdout";
 import { shippedFile } from "../infra/shipped-files";
+import {
+  DirectorySkillSource,
+  WorktreeSkillSource,
+  isLocalSkillsPath,
+} from "../infra/skills/sources";
 
 /**
  * Where a run's findings go, as the command line spells it.
@@ -87,6 +102,29 @@ export interface RunCradle {
   readonly branchReporter: BranchReviewReporter;
   readonly configHomePath: string;
   readonly catalogPath: string;
+  /**
+   * The checkout the run reviews. A project's `local-path` wins; without one,
+   * a repository's own catalogue names its repository, so `reviewer` run from
+   * any subdirectory reviews that checkout -- the way `git` finds its
+   * repository. Only a machine-wide catalogue falls back to the current
+   * directory.
+   */
+  readonly checkoutRoot: string;
+  /** Local git over that checkout: the diff source and the file reader. */
+  readonly gitReader: GitReader;
+  /**
+   * The project's skills, loaded and scoped by its mappings. Resolved once
+   * per run; the source is a directory on this machine or one inside the
+   * checkout, decided by the shape of `skills.path`.
+   */
+  readonly skills: Promise<SkillMatcher>;
+}
+
+/** Skills from a directory on this machine, `~` expanded. */
+function skillSource(root: string, path: string, logger: Logger): DirectorySkillSource {
+  return isLocalSkillsPath(path)
+    ? new DirectorySkillSource(expandUser(path.trim()), { logger })
+    : new WorktreeSkillSource(root, path, { logger });
 }
 
 /**
@@ -183,6 +221,18 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
     branchReporter: asFunction(({ request: r, reportFormats }: RunCradle) =>
       buildBranchReporter(r, reportFormats),
     ).singleton(),
+    checkoutRoot: asFunction(({ config, catalogPath }: RunCradle) => {
+      const fallback = isRepoConfig(catalogPath) ? repoRootOf(catalogPath) : "";
+      return worktree(config.localPath === "" ? fallback : config.localPath);
+    }).singleton(),
+    gitReader: asFunction(
+      ({ checkoutRoot, logger }: RunCradle) => new LocalGitReader(checkoutRoot, undefined, logger),
+    ).singleton(),
+    skills: asFunction(({ config, checkoutRoot, logger }: RunCradle) => {
+      const { path, mappings } = config.skillSettings();
+      // An empty path yields an empty registry; the source handles it.
+      return SkillRegistry.build([skillSource(checkoutRoot, path, logger)], logger, mappings);
+    }).singleton(),
     configHomePath: asFunction(() => configHome()).singleton(),
     // `existsSync` makes the lookup real: a repository's own `.review/` is
     // found from the working directory upwards, and only its absence falls

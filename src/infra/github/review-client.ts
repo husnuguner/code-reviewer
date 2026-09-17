@@ -1,5 +1,5 @@
 /**
- * Posting one review to GitHub, and nothing else.
+ * GitHub's reading of the posting port: one review, one endpoint.
  *
  * The narrowest client this repository has on purpose. It knows one endpoint
  * — `POST /repos/{owner}/{repo}/pulls/{n}/reviews` — because the process that
@@ -11,20 +11,36 @@
  * all exercised by tests without a network.
  */
 
-import { type InlineComment } from "../../core/comment/review-payload";
+import {
+  PostingError,
+  type PostingResult,
+  type ReviewPoster,
+  type ReviewSubmission,
+} from "../../core/comment/review-poster";
 import { type Logger, NULL_LOGGER } from "../../core/ports/logger";
 
-export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
+/**
+ * `fetch` as this client calls it: with a `URL`, never a string.
+ *
+ * The type is the guard. A string can come from anywhere; a `URL` here is
+ * produced by `allowedUrl` alone, after the origin check, so nothing that
+ * skipped the check can reach the network -- the compiler says so.
+ *
+ * The client does not name the global. It is handed one by whoever composes
+ * it -- the poster registry in production, a recorder in tests -- so this
+ * module has no network dependency of its own to audit.
+ */
+export type FetchLike = (input: URL, init: RequestInit) => Promise<Response>;
 
 /** A response GitHub refused, carrying enough to act on it. */
-export class GithubError extends Error {
+export class GithubError extends PostingError {
   override readonly name = "GithubError";
 
   constructor(
-    readonly status: number,
+    status: number,
     readonly detail: string,
   ) {
-    super(`GitHub answered ${status}: ${detail}`);
+    super(`GitHub answered ${String(status)}: ${detail}`, status);
   }
 }
 
@@ -89,22 +105,15 @@ export interface ReviewClientOptions {
   readonly token: string;
   /** REST root; GitHub Enterprise uses `https://host/api/v3`. */
   readonly baseUrl?: string;
-  readonly fetch?: FetchLike;
+  /** The transport. Required: see `FetchLike`. */
+  readonly fetch: FetchLike;
   readonly logger?: Logger;
-}
-
-/** What one review submission carries. */
-export interface ReviewSubmission {
-  readonly repository: Repository;
-  readonly pullNumber: number;
-  readonly body: string;
-  readonly comments: readonly InlineComment[];
 }
 
 const DEFAULT_BASE_URL = "https://api.github.com";
 
 /** Posts one `COMMENT` review per call. */
-export class GithubReviewClient {
+export class GithubReviewClient implements ReviewPoster {
   private readonly token: string;
   private readonly baseUrl: string;
   private readonly origin: string;
@@ -115,7 +124,7 @@ export class GithubReviewClient {
     this.token = options.token;
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/u, "");
     this.origin = allowedOrigin(this.baseUrl);
-    this.fetch = options.fetch ?? ((input, init) => fetch(input, init));
+    this.fetch = options.fetch;
     this.log = (options.logger ?? NULL_LOGGER).child("comment.github");
   }
 
@@ -128,9 +137,12 @@ export class GithubReviewClient {
    * bad anchor is the worst outcome available, so the retry keeps the body —
    * which already lists what did not go inline — and drops the anchors.
    */
-  async submit(submission: ReviewSubmission): Promise<{ inline: number }> {
-    const { repository, pullNumber, body, comments } = submission;
-    const path = `/repos/${repository.owner}/${repository.repo}/pulls/${String(pullNumber)}/reviews`;
+  async submit(submission: ReviewSubmission): Promise<PostingResult> {
+    const { pullNumber, body, comments } = submission;
+    // The port carries the slug as written; splitting and validating it is
+    // this provider's reading, made here and nowhere upstream.
+    const { owner, repo } = parseRepository(submission.repository);
+    const path = `/repos/${owner}/${repo}/pulls/${String(pullNumber)}/reviews`;
     try {
       await this.post(path, { event: "COMMENT", body, comments });
       return { inline: comments.length };
@@ -145,21 +157,30 @@ export class GithubReviewClient {
     }
   }
 
-  private async post(path: string, payload: unknown): Promise<void> {
-    const url = `${this.baseUrl}${path}`;
-    // The allowlist check, immediately before the call: the path is built
-    // from validated names, and the origin is the one the base URL named.
-    // A URL that will not even parse is refused rather than thrown from.
+  /**
+   * The one place a request URL is made, and the allowlist check with it.
+   *
+   * The path is built from validated names and the origin is the one the base
+   * URL named; a URL that will not even parse is refused rather than thrown
+   * from. Returning a `URL` (not its string) is what makes the check
+   * unskippable: `fetch` accepts nothing else.
+   */
+  private allowedUrl(path: string): URL {
+    const text = `${this.baseUrl}${path}`;
     let target: URL;
     try {
-      target = new URL(url);
+      target = new URL(text);
     } catch {
-      throw new GithubError(0, `refusing to call ${url}, which is not a URL`);
+      throw new GithubError(0, `refusing to call ${text}, which is not a URL`);
     }
     if (target.origin !== this.origin) {
-      throw new GithubError(0, `refusing to call ${url}, which is not on ${this.origin}`);
+      throw new GithubError(0, `refusing to call ${text}, which is not on ${this.origin}`);
     }
-    const response = await this.fetch(url, {
+    return target;
+  }
+
+  private async post(path: string, payload: unknown): Promise<void> {
+    const response = await this.fetch(this.allowedUrl(path), {
       method: "POST",
       headers: {
         authorization: `Bearer ${this.token}`,
