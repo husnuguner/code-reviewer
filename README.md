@@ -405,6 +405,30 @@ Two exclusions are not the project's to make, so they are not settings ([`src/co
 
 There is deliberately **no extension allowlist**. What is worth skipping for value — lockfiles, generated code, snapshots — is the project's judgement and belongs in its `exclude`, where it is written down and can be read back.
 
+## Versioning
+
+Releases follow GitHub's action convention: an **immutable** `vX.Y.Z` tag per release, and a **moving** major tag (`v1`) that always points at the latest `v1.*`. A workflow that says `@v1` gets fixes without editing; one that wants no surprises pins the full commit SHA, as it would for `actions/checkout`.
+
+```yaml
+- uses: husnuguner/code-reviewer@v1 # latest 1.x; recommended
+- uses: husnuguner/code-reviewer@v1.0.0 # this exact release
+- uses: husnuguner/code-reviewer@<full-sha> # what a hardened workflow pins
+```
+
+`@main` is the development branch. It works, but it is what a security review will — correctly — flag: a mutable reference in a step that receives a secret.
+
+Cutting a release (maintainers):
+
+```bash
+npm version 1.2.3 --no-git-tag-version     # package.json
+git commit -am "release: v1.2.3"
+git tag -a v1.2.3 -m "v1.2.3"
+git tag -f v1 v1.2.3                        # move the major tag
+git push origin main v1.2.3 && git push -f origin v1
+```
+
+A breaking change to the action's inputs or the NDJSON contract is a new major (`v2`), never a moved `v1`.
+
 ## Development
 
 ```bash
