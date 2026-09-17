@@ -200,7 +200,7 @@ A reviewer that posts needs a write credential in the same process that feeds un
 
 Splitting it removes the question: the job that runs the model has `contents: read` and no more, and the job that can write runs no model. The NDJSON between them is a plain data file. Nothing else about the review changes — the same findings, the same anchors, the same skills.
 
-The posting code that used to live _inside the reviewer_ is kept, unbuilt and gitignored, under `backup/` (see `backup/RESTORE.md`).
+The posting code that used to live _inside the reviewer_ is gone; `review-comment` is its replacement.
 
 ### `review-comment` — the poster
 
@@ -431,6 +431,23 @@ git push origin main v1.2.3 && git push -f origin v1
 ```
 
 A breaking change to the action's inputs or the NDJSON contract is a new major (`v2`), never a moved `v1`.
+
+## When it does not run
+
+| Symptom                                                   | Cause / fix                                                                  |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| exit 2, `ANTHROPIC_API_KEY ... is not set`                | Put it in `~/.config/reviewer/.env` (or `.review/.env`), or export it        |
+| exit 2, `1 validation error for Config`                   | A setting has the wrong shape; the message names the variable                |
+| exit 2, `... is not a git repository`                     | Run inside a checkout, or set `local-path` / `REVIEW_LOCAL_PATH`             |
+| exit 2, `'repositories' was removed in schema version 3`  | A v2 catalogue: drop `repositories` and `repository`, add `local-path`       |
+| exit 3                                                    | Not an error: a finding matched `--fail-on`                                  |
+| `No merge-base for 'X' and 'Y'`                           | Unrelated refs, or a shallow clone — CI needs `fetch-depth: 0`               |
+| 0 findings and `files_reviewed=0`                         | Everything was skipped; `--preview` says why, per file                       |
+| `Skill ... has no entry in the project's skills.mappings` | A loaded skill nobody scoped; map it, or switch it off with `[]`             |
+| `Skill mapping for '…' matches no loaded skill`           | The mapping names a skill that is not in `skills.path`; almost always a typo |
+| exit 1 with a usage message                               | Bad flag; `--help`                                                           |
+
+A free first check that needs no key: `reviewer --preview --base main -v` resolves the config, opens git, computes the merge-base and prints the scope.
 
 ## Development
 

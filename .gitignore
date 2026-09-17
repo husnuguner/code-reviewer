@@ -14,7 +14,3 @@ npm-debug.log*
 
 # Tooling caches
 .vitest/
-
-# The pull-request posting flow, lifted out of the build (see backup/RESTORE.md).
-# Kept on disk so it can be read and restored; never part of the shipped tool.
-backup/

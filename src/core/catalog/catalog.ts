@@ -108,8 +108,7 @@ const RENAMED_LLM_KEYS: Readonly<Record<string, string>> = {
  * read like a typo when the truth is that the feature moved out of the tool.
  */
 const REMOVED_SETTING_KEYS: Readonly<Record<string, string>> = {
-  severities:
-    "this build reports every severity; gate a run with --fail-on instead (see backup/RESTORE.md for the posting flow)",
+  severities: "this build reports every severity; gate a run with --fail-on instead",
   "max-prior-comment-chars":
     "there is no prior discussion to read: this build reviews local git and posts nothing",
   "max-concurrent-prs":

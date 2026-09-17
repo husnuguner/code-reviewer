@@ -7,4 +7,3 @@ package-lock.json
 # Skill documents are prompt content, copied verbatim; formatters must not touch them.
 prompts/
 templates/
-backup/

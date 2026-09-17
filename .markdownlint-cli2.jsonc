@@ -1,4 +1,0 @@
-{
-  // Skill documents are prompt content, copied verbatim; linters must not touch them.
-  "ignores": ["prompts/**", "node_modules/**", "dist/**"],
-}

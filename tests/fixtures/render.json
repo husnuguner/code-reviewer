@@ -34,5 +34,5 @@
       "expected": "**[]** w"
     }
   ],
-  "schema": "Local-git rendering only: the posting-side cases (comment_body, review_body, one_line, dry_run_report, max_listed) moved to backup/ with the posting flow."
+  "schema": "Local-git rendering only: the posting-side cases (comment_body, review_body, one_line, dry_run_report, max_listed) were removed with the posting flow."
 }

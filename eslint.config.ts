@@ -10,14 +10,7 @@ import tseslint from "typescript-eslint";
 
 export default defineConfig(
   {
-    ignores: [
-      "dist/**",
-      "coverage/**",
-      "node_modules/**",
-      "tests/fixtures/**",
-      // Lifted out of the build, kept only to be read: see backup/RESTORE.md.
-      "backup/**",
-    ],
+    ignores: ["dist/**", "coverage/**", "node_modules/**", "tests/fixtures/**"],
   },
 
   js.configs.recommended,
