@@ -150,7 +150,11 @@ describe("the catalogue commands", () => {
     const files: CatalogFiles = new FsCatalogFiles(path, "<CONFIG_HOME>");
     const placeholders = (text: string): string =>
       text.replaceAll(files.promptPath, "<PROMPT_PATH>").replaceAll(path, "<CONFIG_PATH>");
-    const starter = { catalog: shippedFile("templates/config.yaml"), policy: "policy text" };
+    const starter = {
+      catalog: shippedFile("templates/config.yaml"),
+      policy: "policy text",
+      skillsReadme: "what a skill is",
+    };
     const out = recorder();
     expect(initCatalog(files, out, starter)).toBe(expected("init/writes_skeleton").code);
     expect(placeholders(out.text())).toBe(expected("init/writes_skeleton").out);
@@ -160,6 +164,42 @@ describe("the catalogue commands", () => {
     const again = recorder();
     expect(initCatalog(files, again, starter)).toBe(expected("init/refuses_existing").code);
     expect(placeholders(again.text())).toBe(expected("init/refuses_existing").out);
+  });
+
+  it("inside a repository, init writes the repository's own .review/ with everything CI needs", () => {
+    const repo = mkdtempSync(join(tmpdir(), "reviewer-repo-"));
+    const files: CatalogFiles = new FsCatalogFiles(join(repo, ".review", "config.yaml"), "<HOME>");
+    expect(files.home).toBe("repo");
+    const out = recorder();
+    const code = initCatalog(files, out, {
+      catalog: shippedFile("templates/repo-config.yaml"),
+      policy: "policy",
+      skillsReadme: "what a skill is",
+    });
+
+    expect(code).toBe(0);
+    // The whole setup, in one committed folder: config, policy, skills.
+    expect(readFileSync(join(repo, ".review", "config.yaml"), "utf8")).toContain("version: 3");
+    expect(readFileSync(join(repo, ".review", "prompts", "system.md"), "utf8")).toBe("policy");
+    expect(readFileSync(join(repo, ".review", "skills", "README.md"), "utf8")).toBe(
+      "what a skill is",
+    );
+    // A project-specific key may live in .review/.env; committing it is the
+    // one mistake init must make impossible by default.
+    expect(readFileSync(join(repo, ".review", ".gitignore"), "utf8")).toContain(".env");
+    expect(out.text()).toContain("Commit .review/");
+    // The repository holds one project, so its skills sit directly in skills/.
+    expect(files.skillsDirectory("anything")).toBe(join(repo, ".review", "skills"));
+  });
+
+  it("ships a repo-local starter that parses, names one project, and reads skills from .review/skills", () => {
+    const catalog = parseCatalog(parseYaml(shippedFile("templates/repo-config.yaml")), "template");
+    expect(catalog.projects.size).toBe(1);
+    const project = catalog.project(null);
+    // No local-path: the reviewer already knows where it is.
+    expect(project.settings["local-path"]).toBeUndefined();
+    expect(project.settings.skills).toEqual({ path: ".review/skills", mappings: {} });
+    for (const key of Object.keys(catalog.defaults)) expect(PROJECT_SETTING_KEYS).toContain(key);
   });
 
   it("ships a starter catalogue that parses and points at the policy it installs", () => {
@@ -174,7 +214,9 @@ describe("the catalogue commands", () => {
     const files: CatalogFiles = new FsCatalogFiles(join(root, "config.yaml"), root);
     files.writePrompt("mine");
     const out = recorder();
-    expect(initCatalog(files, out, { catalog: "version: 3\n", policy: "shipped" })).toBe(0);
+    expect(
+      initCatalog(files, out, { catalog: "version: 3\n", policy: "shipped", skillsReadme: "r" }),
+    ).toBe(0);
     expect(readFileSync(files.promptPath, "utf8")).toBe("mine");
     expect(out.text()).toContain(`Kept ${files.promptPath}`);
   });

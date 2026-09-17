@@ -10,7 +10,7 @@
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { parse as parseDotenv } from "dotenv";
 import { parse as parseYaml } from "yaml";
@@ -25,7 +25,7 @@ import {
 import { type Logger, NULL_LOGGER } from "../../core/ports/logger";
 import { CatalogError, errorMessage } from "../../core/util/errors";
 
-import { ENV_FILENAME, type Environment, configHome, configPath } from "./paths";
+import { ENV_FILENAME, type Environment, configHome, configPath, findRepoConfig } from "./paths";
 
 /**
  * Read the catalogue, or `null` when there is no file to read.
@@ -38,9 +38,10 @@ export function loadCatalog(
   environment: Environment = process.env,
   logger: Logger = NULL_LOGGER,
   home: string = homedir(),
+  cwd: string = process.cwd(),
 ): Catalog | null {
   const log = logger.child("catalog");
-  const path = configPath(explicit, environment, home, existsSync);
+  const path = configPath(explicit, environment, home, existsSync, cwd);
   if (!existsSync(path) || !statSync(path).isFile()) {
     if (explicit !== null && explicit !== undefined && explicit !== "") {
       throw new CatalogError(`No config file at ${path}`);
@@ -79,17 +80,24 @@ function readEnvironmentFile(path: string): EnvironmentValues {
 /**
  * The `.env` files the run reads, lowest precedence first.
  *
- * Two homes for secrets. The config home is the real one -- it sits beside
- * `config.yaml` and is reachable from inside whichever repository is being
- * reviewed. A `.env` in the current working directory stays supported so a
- * checkout keeps working, but it is the fallback, not the target.
+ * Three homes for secrets, and the order says which wins. The working
+ * directory's `.env` is the weakest: it is whatever the checkout happens to
+ * carry. The machine's `~/.config/reviewer/.env` is where a key normally
+ * lives -- one place, `chmod 600`, reachable from every repository. The
+ * repository's own `.review/.env` (gitignored by `init`) is strongest, so a
+ * key meant for one project beats the machine's default for that project.
  */
 function environmentFilePaths(
   environment: Environment = process.env,
   cwd: string = process.cwd(),
   home: string = homedir(),
 ): string[] {
-  return [join(cwd, ENV_FILENAME), join(configHome(environment, home), ENV_FILENAME)];
+  const repoConfig = findRepoConfig(cwd);
+  return [
+    join(cwd, ENV_FILENAME),
+    join(configHome(environment, home), ENV_FILENAME),
+    ...(repoConfig === null ? [] : [join(dirname(repoConfig), ENV_FILENAME)]),
+  ];
 }
 
 export interface LoadRunConfigOptions {
@@ -121,7 +129,7 @@ export function loadRunConfig(options: LoadRunConfigOptions): Config {
     envFiles: environmentFilePaths(environment, cwd, home).map(readEnvironmentFile),
   };
   return resolveConfig({
-    catalog: loadCatalog(options.configFile, environment, logger, home),
+    catalog: loadCatalog(options.configFile, environment, logger, home, cwd),
     project: options.project ?? null,
     ...(options.overrides && { overrides: options.overrides }),
     ...(options.requiresModel !== undefined && { requiresModel: options.requiresModel }),

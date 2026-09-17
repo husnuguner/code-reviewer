@@ -12,17 +12,24 @@ import { dirname, join } from "node:path";
 
 import { parseDocument } from "yaml";
 
-import { type CatalogFiles } from "../../core/catalog/commands";
+import { type CatalogFiles, type CatalogHome } from "../../core/catalog/commands";
 import { CatalogError, errorMessage } from "../../core/util/errors";
+
+import { isRepoConfig } from "./paths";
 
 export class FsCatalogFiles implements CatalogFiles {
   readonly promptPath: string;
+  readonly directory: string;
+  /** Read off the path: a catalogue under `.review/` is a repository's own. */
+  readonly home: CatalogHome;
 
   constructor(
     readonly path: string,
     readonly configHome: string,
   ) {
-    this.promptPath = join(dirname(path), "prompts", "system.md");
+    this.directory = dirname(path);
+    this.home = isRepoConfig(path) ? "repo" : "machine";
+    this.promptPath = join(this.directory, "prompts", "system.md");
   }
 
   exists(): boolean {
@@ -41,9 +48,24 @@ export class FsCatalogFiles implements CatalogFiles {
     writeCreatingParents(this.promptPath, text);
   }
 
-  /** Where a project's own skills live when they are not inside its repository. */
+  /**
+   * Where a project's skills live beside this catalogue.
+   *
+   * A repository's `.review/` holds one project, so its skills sit directly
+   * in `skills/`; the machine's catalogue holds many, one folder each.
+   */
   skillsDirectory(project: string): string {
-    return join(dirname(this.path), "skills", project);
+    return this.home === "repo"
+      ? join(this.directory, "skills")
+      : join(this.directory, "skills", project);
+  }
+
+  writeSidecar(relative: string, text: string): void {
+    writeCreatingParents(join(this.directory, relative), text);
+  }
+
+  sidecarExists(relative: string): boolean {
+    return existsSync(join(this.directory, relative));
   }
 
   createSkillsDirectory(project: string): boolean {

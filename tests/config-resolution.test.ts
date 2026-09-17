@@ -18,7 +18,7 @@ import {
 import { CatalogError } from "../src/core/util/errors";
 import { pySorted } from "../src/core/util/py";
 import { loadCatalog, loadRunConfig } from "../src/infra/config/loader";
-import { configHome, configPath } from "../src/infra/config/paths";
+import { configHome, configPath, findGitRoot, findRepoConfig } from "../src/infra/config/paths";
 
 import { isErrorContract, loadFixture } from "./contracts/fixtures";
 
@@ -122,6 +122,26 @@ function isLegacyOnly(path: string): boolean {
   return path.endsWith("config.json");
 }
 
+/** A disk with nothing on it: no repo-local `.review/`, no legacy file. */
+function isNowhere(): boolean {
+  return false;
+}
+
+/** A disk where only `<repo>/.review/config.yaml` exists. */
+function isRepoLocalOnly(path: string): boolean {
+  return path === "/work/repo/.review/config.yaml";
+}
+
+/** A disk where only `~/.review/config.yaml` exists -- a trap for the walk. */
+function isHomeOnly(path: string): boolean {
+  return path === "/home/u/.review/config.yaml";
+}
+
+/** A disk where only `/home/u/work/repo/.git` exists. */
+function isRepoGitOnly(path: string): boolean {
+  return path === "/home/u/work/repo/.git";
+}
+
 describe("configuration paths", () => {
   it("honours XDG_CONFIG_HOME and falls back to ~/.config", () => {
     expect(configHome({ XDG_CONFIG_HOME: "/xdg" }, "/home/u")).toBe("/xdg/reviewer");
@@ -129,22 +149,49 @@ describe("configuration paths", () => {
     expect(configHome({ XDG_CONFIG_HOME: "~/cfg" }, "/home/u")).toBe("/home/u/cfg/reviewer");
   });
 
-  it("lets --config beat REVIEWER_CONFIG beat the config home", () => {
-    expect(configPath("/explicit.json", { REVIEWER_CONFIG: "/env.json" }, "/home/u")).toBe(
-      "/explicit.json",
+  it("lets --config beat REVIEWER_CONFIG beat the repository's own beat the config home", () => {
+    expect(
+      configPath(
+        "/explicit.json",
+        { REVIEWER_CONFIG: "/env.json" },
+        "/home/u",
+        isRepoLocalOnly,
+        "/work/repo/src",
+      ),
+    ).toBe("/explicit.json");
+    expect(
+      configPath(
+        null,
+        { REVIEWER_CONFIG: "/env.json" },
+        "/home/u",
+        isRepoLocalOnly,
+        "/work/repo/src",
+      ),
+    ).toBe("/env.json");
+    // The repository's own wins over the machine's, and is found from any
+    // subdirectory -- the way git finds its repository.
+    expect(configPath(null, {}, "/home/u", isRepoLocalOnly, "/work/repo/src/deep")).toBe(
+      "/work/repo/.review/config.yaml",
     );
-    expect(configPath(null, { REVIEWER_CONFIG: "/env.json" }, "/home/u")).toBe("/env.json");
-    expect(configPath(null, {}, "/home/u")).toBe("/home/u/.config/reviewer/config.yaml");
+    expect(configPath(null, {}, "/home/u", isNowhere, "/work/repo")).toBe(
+      "/home/u/.config/reviewer/config.yaml",
+    );
+  });
+
+  it("does not mistake the home directory for a repository", () => {
+    // `~/.review/config.yaml` would be found by the walk if the walk went
+    // through the home directory; a repository search must not.
+    expect(findRepoConfig("/home/u/work/repo", isHomeOnly)).toBe("/home/u/.review/config.yaml");
+    // ...so `init` never writes there: it asks for a git root, not a `.review/`.
+    expect(findGitRoot("/home/u/work/repo", isRepoGitOnly)).toBe("/home/u/work/repo");
+    expect(findGitRoot("/home/u/work/repo", isNowhere)).toBeNull();
   });
 
   it("falls back to a config.json from before the format change when config.yaml is absent", () => {
-    expect(configPath(null, {}, "/home/u", isLegacyOnly)).toBe(
+    expect(configPath(null, {}, "/home/u", isLegacyOnly, "/work")).toBe(
       "/home/u/.config/reviewer/config.json",
     );
-    expect(configPath(null, {}, "/home/u", () => true)).toBe(
-      "/home/u/.config/reviewer/config.yaml",
-    );
-    expect(configPath(null, {}, "/home/u", () => false)).toBe(
+    expect(configPath(null, {}, "/home/u", isNowhere, "/work")).toBe(
       "/home/u/.config/reviewer/config.yaml",
     );
   });
@@ -225,6 +272,27 @@ describe("secrets", () => {
     expect(() => load(s, { project: "app", configFile: s.catalogFile, env: environment })).toThrow(
       /ANTHROPIC_API_KEY/u,
     );
+  });
+
+  it("does not demand a key the catalogue names when the flow builds no model", () => {
+    // `--preview` decides scope and calls nobody; a pre-flight that refused to
+    // run without a key it would never send is a pre-flight nobody can run
+    // before they have one. The name is carried, the lookup is deferred.
+    const s = scratch();
+    const environment = cleanEnvironment(s);
+    delete environment["ANTHROPIC_API_KEY"];
+    const config = loadRunConfig({
+      project: "app",
+      configFile: s.catalogFile,
+      requiresModel: false,
+      providerNames: PROVIDERS,
+      cpuCount: 8,
+      environment,
+      cwd: s.cwd,
+      home: s.home,
+    });
+    expect(config.apiKey).toBe("");
+    expect(config.provider).toBe("claude"); // everything else still resolves
   });
 
   it("finds a key placed in the .env beside the catalogue", () => {

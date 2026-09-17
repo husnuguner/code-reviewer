@@ -12,10 +12,23 @@ import { pyLength, pySorted } from "../util/py";
 
 import { type Catalog } from "./catalog";
 
-/** Where the catalogue and its sibling policy file are written. */
+/**
+ * Which home a catalogue is: a repository's own, or this machine's.
+ *
+ * The distinction decides what `init` writes and what it says. A repository's
+ * `.review/` is committed and shared, so it gets a `.gitignore` for its
+ * secret and a README for the team; the machine's `~/.config/reviewer` is
+ * one person's, and gets neither.
+ */
+export type CatalogHome = "repo" | "machine";
+
+/** Where the catalogue and its sibling files are written. */
 export interface CatalogFiles {
   /** Where the catalogue goes (already resolved from `--config`/env/default). */
   readonly path: string;
+  readonly home: CatalogHome;
+  /** The directory holding the catalogue, for files that sit beside it. */
+  readonly directory: string;
   /** The config home, for the hint about where the `.env` belongs. */
   readonly configHome: string;
   /** Where the review policy goes: `prompts/system.md` beside the catalogue. */
@@ -41,6 +54,11 @@ export interface CatalogFiles {
 
   /** Create that directory; `true` when it was not already there. */
   createSkillsDirectory(project: string): boolean;
+
+  /** Write a file beside the catalogue (`relative` to its directory), creating parents. */
+  writeSidecar(relative: string, text: string): void;
+
+  sidecarExists(relative: string): boolean;
 }
 
 /**
@@ -50,10 +68,12 @@ export interface CatalogFiles {
  * definitions, and no scaffold is worth the chance of rewriting them.
  */
 
-/** The two files `init` installs: the starter catalogue and the review policy. */
+/** What `init` installs: a starter catalogue, the review policy, a skills README. */
 export interface StarterFiles {
   readonly catalog: string;
   readonly policy: string;
+  /** Explains, to whoever opens the skills folder, what a skill is. */
+  readonly skillsReadme: string;
 }
 
 /**
@@ -78,13 +98,58 @@ export function initCatalog(
     files.writePrompt(starter.policy);
     out.line(`Wrote ${files.promptPath}`);
   }
+  return files.home === "repo"
+    ? finishRepoInit(files, out, starter)
+    : finishMachineInit(files, out);
+}
+
+/**
+ * A repository's own `.review/`: everything the team and CI need, committed.
+ *
+ * The skills directory is created now, with a README, so the folder exists
+ * to be found and the first person who opens it learns what goes there. The
+ * `.gitignore` is not optional: `.review/.env` is where a project-specific
+ * key may live, and a committed key is the one mistake `init` must make
+ * impossible by default.
+ */
+function finishRepoInit(files: CatalogFiles, out: ConsoleOutput, starter: StarterFiles): number {
+  if (!files.sidecarExists("skills/README.md")) {
+    files.writeSidecar("skills/README.md", starter.skillsReadme);
+    out.line(`Wrote ${files.directory}/skills/README.md`);
+  }
+  if (!files.sidecarExists(".gitignore")) {
+    files.writeSidecar(
+      ".gitignore",
+      "# The model's key, if this project carries its own. Never commit it.\n.env\n",
+    );
+    out.line(`Wrote ${files.directory}/.gitignore`);
+  }
+  out.line();
+  out.line(
+    "This repository now carries its own review setup. Commit .review/ so the team and CI share it.",
+  );
   out.line();
   out.line("Next:");
-  out.line(`  1. Edit ${files.path} -- set local-path, llm, and the key's name.`);
-  out.line(`  2. Put LLM_API_KEY in ${files.configHome}/.env`);
-  out.line(`  3. Edit ${files.promptPath} to change what the reviewer looks for.`);
-  out.line("  4. reviewer projects        # check what is defined");
-  out.line("  5. reviewer --project example --base main");
+  out.line(
+    `  1. Put the model's key in ~/.config/reviewer/.env (or ${files.directory}/.env, gitignored).`,
+  );
+  out.line(
+    `  2. Add this project's review skills to ${files.directory}/skills/ -- see the README there.`,
+  );
+  out.line(`  3. Map each skill to the paths it reviews: skills.mappings in ${files.path}.`);
+  out.line("  4. reviewer --preview --base main    # what would be reviewed; no model call");
+  out.line("  5. reviewer --base main");
+  return 0;
+}
+
+/** The machine-wide catalogue: one person's projects, none of them committed. */
+function finishMachineInit(files: CatalogFiles, out: ConsoleOutput): number {
+  out.line();
+  out.line("Next:");
+  out.line(`  1. Put LLM_API_KEY in ${files.configHome}/.env`);
+  out.line(`  2. Edit ${files.promptPath} to change what the reviewer looks for.`);
+  out.line("  3. cd <a checkout> && reviewer add <name>    # define a project");
+  out.line("  4. reviewer projects                          # check what is defined");
   return 0;
 }
 

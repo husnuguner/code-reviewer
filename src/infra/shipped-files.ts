@@ -48,7 +48,12 @@ export type ShippedFile =
   | "prompts/system.md"
   | "prompts/output-contract.md"
   | "prompts/verify.md"
-  | "templates/config.yaml";
+  /** The machine-wide catalogue `reviewer init` writes outside a repository. */
+  | "templates/config.yaml"
+  /** The repository's own `.review/config.yaml`, written by `init` inside one. */
+  | "templates/repo-config.yaml"
+  /** What a skill is, for whoever opens `.review/skills/` first. */
+  | "templates/skills-README.md";
 
 /** One shipped text file, by its package-relative path. */
 export function shippedFile(name: ShippedFile): string {

@@ -15,23 +15,18 @@ Every changed file is reviewed through four lenses (bug, security, performance, 
 **Prerequisites:** Node.js ≥ 24 · an LLM endpoint or API key. No GitHub token.
 
 ```bash
-# 1. install, from GitHub (a `prepare` step builds it on install)
-npm install -g github:husnuguner/code-reviewer        # or: npm install -D github:husnuguner/code-reviewer
+# 1. install (a `prepare` step builds it on install)
+npm install -g github:husnuguner/code-reviewer
 
-# 2. the model's key, and nothing else
+# 2. the model's key -- once, on this machine
 mkdir -p ~/.config/reviewer
 printf 'ANTHROPIC_API_KEY=sk-ant-...\n' > ~/.config/reviewer/.env && chmod 600 ~/.config/reviewer/.env
 
-# 3. a catalogue, then the project you want reviewed
-reviewer init                                      # writes ~/.config/reviewer/config.yaml + the review policy
+# 3. in the repository you want reviewed
 cd ~/work/my-repo
-reviewer add my-repo                               # this checkout; skills read from ./.review/skills
-
-# 4. see what would be reviewed — no model call, no cost
-reviewer --project my-repo --preview --base main
-
-# 5. the real thing
-reviewer --project my-repo --base main
+reviewer init            # writes ./.review/ -- config, policy, skills folder
+reviewer --preview --base main   # what would be reviewed; no model call, no cost
+reviewer --base main             # the real thing
 ```
 
 ```text
@@ -46,19 +41,33 @@ src/api/admin/subscription/rules/route.ts:41
 
 The `(skills: …)` line names the guideline skills that were in the prompt for that file — which is the whole point of the skills pipeline.
 
-> Working on this repository itself? `npm install && npm run build && npm link` gives you the same two executables from `src/`.
+### Where a project's rules live: `.review/`
 
-### Where a project's rules live
+`reviewer init`, run inside a git checkout, writes the project's whole review setup **into that checkout**:
 
-Each reviewed project has two things of its own: **skills** (its conventions, as Markdown) and **a catalogue entry** (which checkout, which skill applies to which paths). `reviewer add` puts the skills **inside the reviewed repository**, at `.review/skills/`, by default — and that is the recommendation, for three reasons:
+```text
+my-repo/
+└── .review/
+    ├── config.yaml        which skill applies to which paths, the model, excludes
+    ├── prompts/system.md  the review policy -- who the reviewer is, what it looks for
+    ├── skills/            one Markdown file per convention (README explains the format)
+    │   └── README.md
+    └── .gitignore         keeps .review/.env (a project-specific key) out of git
+```
 
-- they are versioned with the code they govern, so a change to a convention ships in the same pull request as the code that follows it;
-- a CI runner has no `~/.config/reviewer`, so anything not in the checkout is invisible to it;
-- the team reviews the rules the same way it reviews everything else.
+**Commit `.review/`.** That is the point of putting it there:
 
-`reviewer add <name> --skills ~/.config/reviewer/skills/<name>` keeps them on this machine instead, for rules you do not want committed. The catalogue entry (`local-path`, `skills.mappings`) stays in `~/.config/reviewer/config.yaml` either way; in CI it is not needed — the action's inputs say the same things.
+- the rules are versioned with the code they govern — a change to a convention ships in the same pull request as the code that follows it;
+- the team reviews the rules the same way it reviews everything else;
+- a CI runner, which has no `~/.config/reviewer`, reads them from the checkout like any other file.
 
-`.env` is read from `~/.config/reviewer/.env` (beside `config.yaml`) and, as a fallback, from the working directory. Real environment variables win over both.
+`reviewer` finds `.review/config.yaml` from any subdirectory of the checkout, the way `git` finds its repository, so no `--project` and no `--config` are needed. Precedence, when more than one could apply: `--config` › `REVIEWER_CONFIG` › the repository's `.review/config.yaml` › the machine's `~/.config/reviewer/config.yaml`.
+
+The key stays out of the repository: `~/.config/reviewer/.env` for every project, or `.review/.env` (gitignored by `init`) for one.
+
+**Machine-wide catalogue.** For repositories that carry no rules of their own, or for one person's rules that are not the team's, `reviewer init` run _outside_ a checkout writes `~/.config/reviewer/config.yaml` instead, and `reviewer add <name>` (from inside a checkout) defines a project in it. Everything below applies to both homes.
+
+Working on this repository itself? `npm install && npm run build && npm link` gives you the same two executables from `src/`.
 
 ## Usage
 
@@ -87,7 +96,7 @@ The NDJSON stream is the machine contract. One `{"type":"finding", …}` record 
 
 ### Flags
 
-Three commands review nothing: `reviewer init` writes a starter `config.yaml` and the review policy (refusing to overwrite one); `reviewer add <name> [--path <dir>] [--skills <path>]` defines a project in it (the current directory by default, skills at `.review/skills` inside it; an existing name is refused, comments in the file are kept); `reviewer projects` lists what it defines.
+Three commands review nothing. `reviewer init` writes the review setup — inside a git checkout, to its `.review/` (config, policy, skills folder, a `.gitignore` for the key); outside one, to `~/.config/reviewer/` — and refuses to overwrite an existing config. `reviewer add <name> [--path <dir>] [--skills <path>]` defines a project in the machine-wide catalogue (the current directory by default; an existing name is refused, comments in the file are kept). `reviewer projects` lists what the catalogue in force defines.
 
 | Flag                            | Effect                                                                                                                |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------- |

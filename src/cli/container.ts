@@ -12,7 +12,7 @@
  * be a complete run.
  */
 
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
 import { availableParallelism } from "node:os";
 
 import {
@@ -184,7 +184,12 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
       buildBranchReporter(r, reportFormats),
     ).singleton(),
     configHomePath: asFunction(() => configHome()).singleton(),
-    catalogPath: asFunction(({ request: r }: RunCradle) => configPath(r.configFile)).singleton(),
+    // `existsSync` makes the lookup real: a repository's own `.review/` is
+    // found from the working directory upwards, and only its absence falls
+    // through to the machine-wide catalogue.
+    catalogPath: asFunction(({ request: r }: RunCradle) =>
+      configPath(r.configFile, process.env, undefined, existsSync),
+    ).singleton(),
   });
   return container;
 }

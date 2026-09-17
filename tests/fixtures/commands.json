@@ -54,7 +54,7 @@
       "input": {},
       "expected": {
         "code": 0,
-        "out": "Wrote <CONFIG_PATH>\nWrote <PROMPT_PATH>\n\nNext:\n  1. Edit <CONFIG_PATH> -- set local-path, llm, and the key's name.\n  2. Put LLM_API_KEY in <CONFIG_HOME>/.env\n  3. Edit <PROMPT_PATH> to change what the reviewer looks for.\n  4. reviewer projects        # check what is defined\n  5. reviewer --project example --base main\n"
+        "out": "Wrote <CONFIG_PATH>\nWrote <PROMPT_PATH>\n\nNext:\n  1. Put LLM_API_KEY in <CONFIG_HOME>/.env\n  2. Edit <PROMPT_PATH> to change what the reviewer looks for.\n  3. cd <a checkout> && reviewer add <name>    # define a project\n  4. reviewer projects                          # check what is defined\n"
       }
     },
     {

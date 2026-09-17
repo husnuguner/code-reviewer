@@ -42,16 +42,18 @@ inputs:
     default: "en"
   skills-path:
     description: >-
-      Where this repository's review skills live, relative to the checkout
-      (e.g. .review/skills). Each changed file is reviewed under the skills
-      whose globs match its path, on top of the standing lenses. Empty
-      disables skills.
+      Where this repository's review skills live, relative to the checkout.
+      Unnecessary when the checkout has a .review/config.yaml: that file
+      already says. Each changed file is reviewed under the skills whose
+      globs match its path, on top of the standing lenses.
     required: false
     default: ""
   config:
     description: >-
-      Path to a catalogue (config.yaml) inside the checkout, when the project's
-      rules are versioned with the code. Empty runs from these inputs alone.
+      Path to a catalogue. Usually unnecessary: a checkout that carries its own
+      .review/config.yaml (written by `reviewer init`) is found automatically,
+      and its skills, policy and mappings apply. Set this only to point at a
+      different file. Empty with no .review/ runs from these inputs alone.
     required: false
     default: ""
   project:

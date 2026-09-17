@@ -140,6 +140,13 @@ export interface ProjectValuesOptions {
   readonly environment: Readonly<Record<string, string>>;
   /** Where `config.json` and its sibling `.env` live, for error messages. */
   readonly configHome: string;
+  /**
+   * False for a flow that builds no model (`--preview`), so a key the
+   * catalogue *names* is not demanded of an environment that lacks it. The
+   * name is still carried through; only the lookup is deferred to the run
+   * that will actually send it.
+   */
+  readonly requiresModel?: boolean;
   readonly logger?: Logger;
 }
 
@@ -154,6 +161,7 @@ export function projectValues({
   project,
   environment,
   configHome,
+  requiresModel = true,
   logger = NULL_LOGGER,
 }: ProjectValuesOptions): Partial<Record<ConfigField, unknown>> {
   const spec = catalog.project(project);
@@ -178,7 +186,7 @@ export function projectValues({
     const raw = llm[key];
     values[LLM_FIELDS[key]] =
       key === "api-key" && typeof raw === "string"
-        ? resolveSecret(raw, environment, "llm.api-key", `${configHome}/.env`)
+        ? resolveSecret(raw, environment, "llm.api-key", `${configHome}/.env`, requiresModel)
         : raw;
   }
   // A shared path may name the project's own folder: `skills/{{project}}`.
@@ -214,6 +222,7 @@ export function resolveConfig(options: ResolveOptions): Config {
       project,
       environment,
       configHome: options.configHome,
+      ...(options.requiresModel !== undefined && { requiresModel: options.requiresModel }),
       ...(options.logger && { logger: options.logger }),
     });
     fromProject = Object.fromEntries(

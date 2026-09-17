@@ -30,7 +30,13 @@ import { SkillRegistry } from "../core/skills/registry";
 import { CatalogError, GitError } from "../core/util/errors";
 import { FsCatalogFiles } from "../infra/config/catalog-files";
 import { loadCatalog } from "../infra/config/loader";
-import { expandUser } from "../infra/config/paths";
+import {
+  expandUser,
+  findGitRoot,
+  isRepoConfig,
+  repoConfigPath,
+  repoRootOf,
+} from "../infra/config/paths";
 import { GitCodeContext } from "../infra/git/git-code-context";
 import { LocalGitReader, worktree } from "../infra/git/local-git";
 import { builtinReportFormatRegistry } from "../infra/reporters/index";
@@ -305,6 +311,33 @@ export function cliOverrides(arguments_: CliArguments): Partial<Record<ConfigFie
 }
 
 /**
+ * `reviewer init`: write the review setup where it belongs.
+ *
+ * Inside a git checkout that is the checkout's own `.review/` -- committed,
+ * shared with the team, readable by CI. Outside one (or with `--config`), it
+ * is the machine-wide catalogue. The two get different starters: a
+ * repository holds one project and already knows where it is; a machine
+ * holds many and has to be told.
+ */
+function initialise(
+  arguments_: CliArguments,
+  catalogPath: string,
+  configHomePath: string,
+  out: ConsoleOutput,
+): number {
+  const gitRoot = arguments_.config === null ? findGitRoot() : null;
+  const target = gitRoot === null ? catalogPath : repoConfigPath(gitRoot);
+  const files = new FsCatalogFiles(target, configHomePath);
+  return initCatalog(files, out, {
+    catalog: shippedFile(
+      files.home === "repo" ? "templates/repo-config.yaml" : "templates/config.yaml",
+    ),
+    policy: shippedFile("prompts/system.md"),
+    skillsReadme: shippedFile("templates/skills-README.md"),
+  });
+}
+
+/**
  * `reviewer add <name>`: define a project in the catalogue.
  *
  * The checkout defaults to the current directory, because the natural way to
@@ -336,6 +369,21 @@ function addNewProject(
   });
 }
 
+/**
+ * The checkout a run reviews.
+ *
+ * A project's `local-path` wins. Without one, a repository's own catalogue
+ * (`<repo>/.review/config.yaml`) names its repository, so `reviewer` run from
+ * any subdirectory of a checkout reviews that checkout -- the way `git`
+ * finds its repository. Only a machine-wide catalogue falls back to the
+ * current directory.
+ */
+function checkoutOf(cradle: RunCradle): string {
+  const { config, catalogPath } = cradle;
+  const fallback = isRepoConfig(catalogPath) ? repoRootOf(catalogPath) : "";
+  return worktree(config.localPath === "" ? fallback : config.localPath);
+}
+
 /** Skills from a directory on this machine, `~` expanded. */
 function localSkillSource(path: string, logger: Logger): DirectorySkillSource {
   return new DirectorySkillSource(expandUser(path.trim()), { logger });
@@ -360,7 +408,7 @@ export function hasFailingFinding(
 /** Branch review: local git in, a reporter out. */
 async function runBranchReview(arguments_: CliArguments, cradle: RunCradle): Promise<number> {
   const { config, logger } = cradle;
-  const root = worktree(config.localPath);
+  const root = checkoutOf(cradle);
   const git = new LocalGitReader(root, undefined, logger);
   // An empty skills path yields an empty registry; the source handles it.
   const skillSettings = config.skillSettings();
@@ -405,7 +453,7 @@ async function runBranchReview(arguments_: CliArguments, cradle: RunCradle): Pro
  */
 async function runPreview(arguments_: CliArguments, cradle: RunCradle): Promise<void> {
   const { config, logger } = cradle;
-  const root = worktree(config.localPath);
+  const root = checkoutOf(cradle);
   const { report } = await previewBranch({
     base: arguments_.base,
     branch: arguments_.branch,
@@ -465,12 +513,8 @@ export async function main(argv: readonly string[]): Promise<number> {
   const { console: out, catalogPath, configHomePath, logger } = cradle;
 
   try {
-    if (arguments_.command === "init") {
-      return initCatalog(new FsCatalogFiles(catalogPath, configHomePath), out, {
-        catalog: shippedFile("templates/config.yaml"),
-        policy: shippedFile("prompts/system.md"),
-      });
-    }
+    if (arguments_.command === "init")
+      return initialise(arguments_, catalogPath, configHomePath, out);
     if (arguments_.command === "add") {
       return addNewProject(
         arguments_,

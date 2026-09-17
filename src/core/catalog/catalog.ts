@@ -239,17 +239,24 @@ const ENVIRONMENT_NAME = /^[A-Z_][A-Z0-9_]*$/u;
  * operator described an intent the environment does not satisfy, and failing
  * now beats a confusing 401 later. `environmentFile` names where the value
  * should have been, for the message.
+ *
+ * The one exception is a flow that will never send the secret. `--preview`
+ * decides scope and calls nobody, and a pre-flight that refused to run
+ * without a key it would never use would be a pre-flight nobody could run
+ * before they had one. With `isRequired` false, an unset variable resolves
+ * to `""` and the run that does need it fails at *its* boundary instead.
  */
 export function resolveSecret(
   value: string,
   lookup: Readonly<Record<string, string | undefined>>,
   what: string,
   environmentFile: string,
+  isRequired = true,
 ): string {
   const spelled = pyStrip(value);
   if (!ENVIRONMENT_NAME.test(spelled)) return spelled;
   const resolved = pyStrip(lookup[spelled] ?? "");
-  if (resolved === "") {
+  if (resolved === "" && isRequired) {
     throw new CatalogError(
       `${what} names ${pyRepr(spelled)}, which is not set. Put it in ${environmentFile} or export it.`,
     );
