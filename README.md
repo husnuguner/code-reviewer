@@ -136,7 +136,7 @@ jobs:
     permissions:
       contents: read # note: no write, anywhere
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # the reviewer diffs locally and needs the merge-base
           ref: ${{ github.event.pull_request.head.sha }}
@@ -156,8 +156,8 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4 # the poster is this repository's own code
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5 # the poster is this repository's own code
+      - uses: actions/download-artifact@v7
         id: findings
         with: { name: code-review-findings }
         continue-on-error: true
