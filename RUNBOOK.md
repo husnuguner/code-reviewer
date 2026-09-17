@@ -39,7 +39,7 @@ Everything lives under `~/.config/reviewer/`. Nothing is committed anywhere.
 ├── config.yaml            the model, review policy, projects
 ├── .env                   the one secret the catalogue names (chmod 600)
 ├── prompts/system.md      the review policy you own
-└── skills/dfs-backend/    the 11 Medusa skills
+└── skills/shop/    the 11 Medusa skills
 ```
 
 ### `config.yaml`
@@ -56,8 +56,8 @@ defaults:
   skills: { path: ~/.config/reviewer/skills/{{project}} }
   exclude: ["**/*.md", "**/*.tsx", "**/__tests__/**", "..."]
 projects:
-  dfs-backend:
-    local-path: ~/Documents/workspace/togg-trumore/dfs-backend       # the checkout this project reviews
+  shop:
+    local-path: ~/work/shop       # the checkout this project reviews
     skills:
       mappings: { medusa-route: ["src/api/**/route.ts"], "...": ["one entry per skill"] }
 ```
@@ -104,10 +104,10 @@ this repository; `reviewer init` copies it once and never overwrites it.
 A skill is a Markdown file with a frontmatter (`name`, optional `description`)
 and a body of rules. **Two halves, two places, both under `~/.config/reviewer`:**
 
-| Half                           | Where                                                   |
-| ------------------------------ | ------------------------------------------------------- |
-| the rules (the `.md` files)    | `~/.config/reviewer/skills/` (`defaults.skills.path`)   |
-| which files each skill reviews | `projects.dfs-backend.skills.mappings` in `config.yaml` |
+| Half                           | Where                                                 |
+| ------------------------------ | ----------------------------------------------------- |
+| the rules (the `.md` files)    | `~/.config/reviewer/skills/` (`defaults.skills.path`) |
+| which files each skill reviews | `projects.shop.skills.mappings` in `config.yaml`      |
 
 Your 11 Medusa skills are already there; they apply to every project, with
 nothing committed to the reviewed repository. (A relative `skills.path` would
@@ -126,7 +126,7 @@ The library they came from lives in this repository:
 To refresh the live copy after editing the library:
 
 ```bash
-cp docs/example-skills/medusa/*.md ~/.config/reviewer/skills/dfs-backend/
+cp docs/example-skills/medusa/*.md ~/.config/reviewer/skills/shop/
 ```
 
 A new project is one command, run from inside its checkout:
@@ -157,7 +157,7 @@ DEBUG logs (stderr); stdout stays clean.
 ### Look before you spend anything
 
 ```bash
-npm run reviewer -- --project dfs-backend --preview --base develop
+npm run reviewer -- --project shop --preview --base develop
 ```
 
 `--preview` calls no model: it prints the file selection (and why each other
@@ -167,9 +167,9 @@ diff, a lockfile you forgot. It needs no credentials at all.
 ### Review a branch
 
 ```bash
-npm run reviewer -- --project dfs-backend --base develop                      # HEAD vs develop, text
-npm run reviewer -- --project dfs-backend --branch feature/TDFS-3796-x --base develop
-npm run reviewer -- --project dfs-backend --base develop --format ndjson > out.ndjson
+npm run reviewer -- --project shop --base develop                      # HEAD vs develop, text
+npm run reviewer -- --project shop --branch feature/checkout-v2 --base develop
+npm run reviewer -- --project shop --base develop --format ndjson > out.ndjson
 ```
 
 Reads `local-path` (or the current directory when unset), diffs
@@ -209,7 +209,7 @@ npm run review-comment -- --findings out.ndjson --repo owner/name --pr 7 --dry-r
 ### Gate a build on findings
 
 ```bash
-npm run reviewer -- --project dfs-backend --base develop --fail-on bug,security
+npm run reviewer -- --project shop --base develop --fail-on bug,security
 ```
 
 Exit `3` when a reported finding has one of those severities. Reporting is
@@ -219,7 +219,7 @@ unaffected — this only decides the exit code. The default is `none`.
 
 ```bash
 npm run reviewer -- --exclude "**/generated/**" --base develop     # add globs for this run only
-npm run reviewer -- --project dfs-backend --base develop           # explicit when >1 project
+npm run reviewer -- --project shop --base develop           # explicit when >1 project
 npm run reviewer -- --config /path/other-config.yaml projects      # a different catalogue
 npm run reviewer -- --help
 ```
@@ -252,7 +252,7 @@ error · `3` findings matched `--fail-on`.
 
 ```bash
 npm run reviewer -- projects                                        # the catalogue is read
-npm run reviewer -- --project dfs-backend --preview --base develop --verbose
+npm run reviewer -- --project shop --preview --base develop --verbose
 ```
 
 The second one resolves the config, opens local git, computes the merge-base

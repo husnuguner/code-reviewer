@@ -1,6 +1,6 @@
 # Complete Notification Module Example
 
-This document provides a real-world example of workflows and steps from the TDFS notification module.
+This document provides a real-world example of workflows and steps from a production notification module.
 
 ## Module Structure
 

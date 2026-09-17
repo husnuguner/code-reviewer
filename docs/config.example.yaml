@@ -130,17 +130,17 @@ defaults:
 
 # Reviewable targets. With exactly one project, --project may be omitted.
 projects:
-  dfs-backend:
+  shop:
     # Any key from defaults may be overridden here (a section such as llm
     # merges key by key; prompts replaces the list, it does not append).
     llm:
       model: claude-sonnet-5
     language: tr
-    prompts: [prompts/system.md, prompts/dfs-backend.md]
+    prompts: [prompts/system.md, prompts/shop.md]
     verify: true
     # The checkout this project reviews. Omit to review the current
     # directory, which is what a CI job does after actions/checkout.
-    local-path: ~/Documents/workspace/togg-trumore/dfs-backend
+    local-path: ~/work/shop
     exclude: ["**/*.md"]
     max-findings-per-file: 2
     max-file-chars: 8000
