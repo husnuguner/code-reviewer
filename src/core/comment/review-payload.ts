@@ -24,6 +24,8 @@ import { severityLabel, severityRankOf } from "../review/severity";
 import { type JsonObject, type JsonValue, isJsonArray, isJsonObject } from "../util/json";
 import { compareCodePoints } from "../util/py";
 
+import { type ReviewEvent } from "./review-poster";
+
 /** One finding as the record stream carries it (no `type` discriminator). */
 export type Finding = Omit<FindingRecord, "type">;
 
@@ -50,6 +52,11 @@ export interface ReviewPayload {
   readonly comments: readonly InlineComment[];
   /** Anchored findings the inline cap left out; they are named in the body. */
   readonly overflow: number;
+  /**
+   * What kind of review these findings amount to: `request-changes` when any
+   * finding carries a severity in `requestChangesOn`, `comment` otherwise.
+   */
+  readonly event: ReviewEvent;
 }
 
 /**
@@ -190,6 +197,21 @@ function bySeverityThenPlace(a: Finding, b: Finding): number {
 export interface BuildReviewOptions {
   /** Cap on inline comments; the rest are named in the body. Default `MAX_INLINE`. */
   readonly maxInline?: number;
+  /**
+   * Severities that turn the review into a request for changes. Empty (the
+   * default) posts a comment whatever was found: the review informs, the
+   * humans decide.
+   */
+  readonly requestChangesOn?: readonly string[];
+}
+
+/** Which of the port's events these findings call for, under the given gate. */
+export function reviewEventFor(
+  findings: readonly Finding[],
+  requestChangesOn: readonly string[],
+): ReviewEvent {
+  const gate = new Set(requestChangesOn.map((name) => name.toLowerCase()));
+  return findings.some((finding) => gate.has(finding.severity)) ? "request-changes" : "comment";
 }
 
 /**
@@ -226,6 +248,7 @@ export function buildReview(
     body: reviewBody(records, loose, spilled),
     comments,
     overflow: spilled.length,
+    event: reviewEventFor(ordered, options.requestChangesOn ?? []),
   };
 }
 

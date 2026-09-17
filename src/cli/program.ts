@@ -15,7 +15,9 @@
  * survives to be read.
  */
 
-import { Command, CommanderError } from "commander";
+import { Command, CommanderError, InvalidArgumentError } from "commander";
+
+import { SEVERITIES } from "../core/review/severity";
 
 export const USAGE_EXIT_CODE = 1;
 export const OPERATOR_EXIT_CODE = 2;
@@ -107,4 +109,28 @@ export async function runCommand(
     }
     throw error;
   }
+}
+
+/**
+ * A comma-separated list of severities, validated against the vocabulary.
+ *
+ * Shared by every flag that gates on severity (`--fail-on`,
+ * `--request-changes-on`), so "which words are allowed" is decided once.
+ * `none` is spelled out rather than left to an empty string: `--fail-on ''`
+ * reads like a mistake, and a gate nobody meant to disable is the one that
+ * silently stops failing builds.
+ */
+export function severityList(value: string): string[] {
+  const names = value
+    .split(",")
+    .map((name) => name.trim().toLowerCase())
+    .filter((name) => name !== "");
+  if (names.length === 1 && names[0] === "none") return [];
+  const allowed: ReadonlySet<string> = new Set(SEVERITIES);
+  for (const name of names) {
+    if (!allowed.has(name)) {
+      throw new InvalidArgumentError(`Allowed severities are ${SEVERITIES.join(", ")}, or none.`);
+    }
+  }
+  return names;
 }

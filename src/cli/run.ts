@@ -25,7 +25,6 @@ import {
   previewBranch,
   streamBranchReview,
 } from "../core/review/branch-review";
-import { SEVERITIES } from "../core/review/severity";
 import { CatalogError, GitError } from "../core/util/errors";
 import { FsCatalogFiles } from "../infra/config/catalog-files";
 import { loadCatalog } from "../infra/config/loader";
@@ -36,6 +35,9 @@ import { shippedFile } from "../infra/shipped-files";
 import { isLocalSkillsPath } from "../infra/skills/sources";
 
 import { type ReportFormat, type RunCradle, type RunRequest, buildContainer } from "./container";
+import { UsageError, severityList } from "./program";
+
+export { UsageError } from "./program";
 
 export type CliCommand = "review" | "init" | "projects" | "add";
 
@@ -86,18 +88,6 @@ export interface CliArguments {
   readonly verbose: boolean;
 }
 
-/** A usage error, surfaced as a message and exit code instead of a thrown `CommanderError`. */
-export class UsageError extends Error {
-  override readonly name = "UsageError";
-
-  constructor(
-    message: string,
-    readonly exitCode: number,
-  ) {
-    super(message);
-  }
-}
-
 /** Exit code for a run that found something `--fail-on` named. */
 export const FINDINGS_EXIT_CODE = 3;
 
@@ -121,25 +111,6 @@ function choice<T extends string>(allowed: readonly T[]): (value: string) => T {
     }
     return value as T;
   };
-}
-
-/** `--fail-on bug,security`, validated against the severity vocabulary. */
-function severityList(value: string): string[] {
-  const names = value
-    .split(",")
-    .map((name) => name.trim().toLowerCase())
-    .filter((name) => name !== "");
-  // `none` is spelled out rather than left to an empty string: "--fail-on ''"
-  // reads like a mistake, and a gate nobody meant to disable is the one that
-  // silently stops failing builds.
-  if (names.length === 1 && names[0] === "none") return [];
-  const allowed: ReadonlySet<string> = new Set(SEVERITIES);
-  for (const name of names) {
-    if (!allowed.has(name)) {
-      throw new InvalidArgumentError(`Allowed severities are ${SEVERITIES.join(", ")}, or none.`);
-    }
-  }
-  return names;
 }
 
 /** The command line as a `Command`; exposed so `--help` output can be tested. */

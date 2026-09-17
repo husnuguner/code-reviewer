@@ -9,11 +9,14 @@
 
 import { describe, expect, it } from "vitest";
 
+import { parseArguments } from "../src/cli/comment";
+import { UsageError } from "../src/cli/program";
 import {
   type Finding,
   buildReview,
   commentBody,
   parseRecords,
+  reviewEventFor,
 } from "../src/core/comment/review-payload";
 import { PostingError } from "../src/core/comment/review-poster";
 import { type SummaryRecord } from "../src/core/ports/review-reporter";
@@ -25,6 +28,8 @@ import {
   parseRepository,
 } from "../src/infra/github/review-client";
 import { builtinReviewPosterRegistry } from "../src/infra/posters/index";
+
+import { recordingLogger } from "./helpers/logging";
 
 function finding(over: Partial<Finding> = {}): Finding {
   return {
@@ -62,14 +67,21 @@ function ndjson(...records: unknown[]): string {
 
 /** One request the client made, as the fake `fetch` recorded it. */
 interface RecordedCall {
+  readonly method: string;
   readonly url: string;
+  /** The JSON body, or `null` for a request that carried none (a GET). */
   readonly body: unknown;
 }
 
 /** A client whose `fetch` answers from `responder` and records every call. */
-function clientWith(responder: () => Response, calls: RecordedCall[] = []): GithubReviewClient {
+function clientWith(
+  responder: (call: RecordedCall) => Response,
+  calls: RecordedCall[] = [],
+  identity?: string,
+): GithubReviewClient {
   return new GithubReviewClient({
     token: "t",
+    ...(identity !== undefined && { identity }),
     // The client hands over a `URL` it produced after its origin allowlist;
     // recording it as text is only for the assertions below.
     fetch: (target, init) => {
@@ -78,11 +90,23 @@ function clientWith(responder: () => Response, calls: RecordedCall[] = []): Gith
       // sending something else should fail loudly rather than record
       // "[object Object]".
       const raw = typeof init.body === "string" ? init.body : "";
-      calls.push({ url, body: JSON.parse(raw) as unknown });
-      return Promise.resolve(responder());
+      const call: RecordedCall = {
+        method: init.method ?? "GET",
+        url,
+        body: raw === "" ? null : (JSON.parse(raw) as unknown),
+      };
+      calls.push(call);
+      return Promise.resolve(responder(call));
     },
   });
 }
+
+/** One review as `GET /pulls/{n}/reviews` lists it, as far as the client reads. */
+function listed(id: number, state: string, login = "github-actions[bot]"): unknown {
+  return { id, state, user: { login } };
+}
+
+const ok = (): Response => new Response("{}", { status: 200 });
 
 describe("reading a record stream", () => {
   it("splits findings from the summary", () => {
@@ -196,6 +220,29 @@ describe("building the review", () => {
     expect(review.body).toContain("1 unreadable record(s)");
   });
 
+  it("posts a comment unless a finding's severity is in the gate", () => {
+    const records = parseRecords(
+      ndjson(
+        { type: "finding", ...finding({ severity: "bug" }) },
+        { type: "finding", ...finding({ severity: "readability", line: 20 }) },
+      ),
+    );
+    // No gate: the review informs, the humans decide.
+    expect(buildReview(records).event).toBe("comment");
+    expect(buildReview(records, { requestChangesOn: [] }).event).toBe("comment");
+    // A gate the findings do not meet.
+    expect(buildReview(records, { requestChangesOn: ["security"] }).event).toBe("comment");
+    // A gate they do; spelled however the caller spelled it.
+    expect(buildReview(records, { requestChangesOn: ["Bug"] }).event).toBe("request-changes");
+    expect(buildReview(records, { requestChangesOn: ["security", "bug"] }).event).toBe(
+      "request-changes",
+    );
+  });
+
+  it("asks for nothing when nothing was found, whatever the gate", () => {
+    expect(reviewEventFor([], ["bug", "security"])).toBe("comment");
+  });
+
   it("offers the example as a plain fence, never a one-click suggestion", () => {
     // A ```suggestion would let someone commit text nobody checked against
     // the surrounding lines.
@@ -225,15 +272,150 @@ describe("posting the review", () => {
 
   it("posts one COMMENT review to the pull request's endpoint", async () => {
     const calls: RecordedCall[] = [];
-    const result = await clientWith(() => new Response("{}", { status: 200 }), calls).submit({
+    const result = await clientWith(ok, calls).submit({
       repository: repo,
       pullNumber: 7,
       body: "b",
       comments: [{ path: "a.ts", line: 1, body: "c" }],
     });
-    expect(result.inline).toBe(1);
+    expect(result).toEqual({ inline: 1, superseded: 0 });
+    // Without `supersede`, nothing is listed or dismissed: one request.
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.method).toBe("POST");
     expect(calls[0]?.url).toBe("https://api.github.com/repos/acme/app/pulls/7/reviews");
     expect(calls[0]?.body).toMatchObject({ event: "COMMENT", body: "b" });
+  });
+
+  it("posts REQUEST_CHANGES when the review asks for changes", async () => {
+    const calls: RecordedCall[] = [];
+    await clientWith(ok, calls).submit({
+      repository: repo,
+      pullNumber: 7,
+      body: "b",
+      comments: [],
+      event: "request-changes",
+    });
+    expect(calls[0]?.body).toMatchObject({ event: "REQUEST_CHANGES" });
+  });
+
+  it("keeps the event on the retry without inline comments", async () => {
+    const calls: RecordedCall[] = [];
+    const responder = (call: RecordedCall): Response =>
+      calls.length === 1 && call.method === "POST"
+        ? new Response('{"message":"line must be part of the diff"}', { status: 422 })
+        : ok();
+    await clientWith(responder, calls).submit({
+      repository: repo,
+      pullNumber: 7,
+      body: "b",
+      comments: [{ path: "a.ts", line: 999, body: "c" }],
+      event: "request-changes",
+    });
+    // The verdict does not soften because an anchor was refused.
+    expect(calls[1]?.body).toMatchObject({ event: "REQUEST_CHANGES", comments: [] });
+  });
+
+  it("dismisses its own pending reviews first when superseding, and only those", async () => {
+    const calls: RecordedCall[] = [];
+    const responder = (call: RecordedCall): Response =>
+      call.method === "GET"
+        ? Response.json(
+            [
+              listed(1, "CHANGES_REQUESTED"),
+              listed(2, "COMMENTED"), // cannot be dismissed; GitHub would refuse
+              listed(3, "APPROVED"),
+              listed(4, "CHANGES_REQUESTED", "a-human"), // not ours to dismiss
+              listed(5, "DISMISSED"),
+            ],
+            { status: 200 },
+          )
+        : ok();
+    const result = await clientWith(responder, calls).submit({
+      repository: repo,
+      pullNumber: 7,
+      body: "b",
+      comments: [],
+      supersede: true,
+    });
+    expect(result.superseded).toBe(2);
+    expect(
+      calls.map((call) => `${call.method} ${call.url.replace("https://api.github.com", "")}`),
+    ).toEqual([
+      "GET /repos/acme/app/pulls/7/reviews?per_page=100",
+      "PUT /repos/acme/app/pulls/7/reviews/1/dismissals",
+      "PUT /repos/acme/app/pulls/7/reviews/3/dismissals",
+      "POST /repos/acme/app/pulls/7/reviews",
+    ]);
+    expect(calls[1]?.body).toMatchObject({
+      message: expect.stringContaining("Superseded") as string,
+    });
+  });
+
+  it("dismisses as the identity it was given, not always the Actions bot", async () => {
+    const calls: RecordedCall[] = [];
+    const responder = (call: RecordedCall): Response =>
+      call.method === "GET"
+        ? Response.json(
+            [
+              listed(1, "CHANGES_REQUESTED"), // github-actions[bot]: not ours this time
+              listed(2, "CHANGES_REQUESTED", "review-bot"),
+            ],
+            { status: 200 },
+          )
+        : ok();
+    const result = await clientWith(responder, calls, "review-bot").submit({
+      repository: repo,
+      pullNumber: 7,
+      body: "b",
+      comments: [],
+      supersede: true,
+    });
+    expect(result.superseded).toBe(1);
+    expect(calls[1]?.url).toContain("/reviews/2/dismissals");
+  });
+
+  it("still posts when a dismissal is refused, and says so", async () => {
+    // Housekeeping around the review must not cost the review.
+    const calls: RecordedCall[] = [];
+    const lines: string[] = [];
+    const client = new GithubReviewClient({
+      token: "t",
+      logger: recordingLogger(lines),
+      fetch: (target, init) => {
+        const method = init.method ?? "GET";
+        calls.push({ method, url: target.toString(), body: null });
+        if (method === "GET")
+          return Promise.resolve(Response.json([listed(1, "CHANGES_REQUESTED")]));
+        return method === "PUT"
+          ? Promise.resolve(new Response("forbidden", { status: 403 }))
+          : Promise.resolve(ok());
+      },
+    });
+    const result = await client.submit({
+      repository: repo,
+      pullNumber: 7,
+      body: "b",
+      comments: [],
+      supersede: true,
+    });
+    expect(result.superseded).toBe(0);
+    expect(calls.map((call) => call.method)).toEqual(["GET", "PUT", "POST"]);
+    expect(lines.join("\n")).toContain("WARNING Could not dismiss review 1");
+  });
+
+  it("supersedes nothing when there is nothing pending, and still posts", async () => {
+    const calls: RecordedCall[] = [];
+    const responder = (call: RecordedCall): Response =>
+      call.method === "GET" ? new Response("[]", { status: 200 }) : ok();
+    const result = await clientWith(responder, calls).submit({
+      repository: repo,
+      pullNumber: 7,
+      body: "b",
+      comments: [],
+      supersede: true,
+    });
+    expect(result.superseded).toBe(0);
+    expect(calls.map((call) => call.method)).toEqual(["GET", "POST"]);
   });
 
   it("retries without inline comments when GitHub refuses them", async () => {
@@ -254,6 +436,7 @@ describe("posting the review", () => {
       comments: [{ path: "a.ts", line: 999, body: "c" }],
     });
     expect(result.inline).toBe(0);
+    expect(result.superseded).toBe(0);
     expect(calls).toHaveLength(2);
     expect(calls[1]?.body).toMatchObject({ comments: [] });
     expect(JSON.stringify(calls[1]?.body)).toContain("would not accept the inline comments");
@@ -287,6 +470,35 @@ describe("posting the review", () => {
       }),
     ).rejects.toThrow(GithubError);
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe("the command line", () => {
+  const required = ["--findings", "f.ndjson", "--repo", "acme/app", "--pr", "7"];
+
+  it("comments, and supersedes nothing, unless asked", () => {
+    const parsed = parseArguments(required);
+    expect(parsed.requestChangesOn).toEqual([]);
+    expect(parsed.supersede).toBe(false);
+  });
+
+  it("takes the severities that make a review a request for changes", () => {
+    const parsed = parseArguments([...required, "--request-changes-on", "Bug, security"]);
+    expect(parsed.requestChangesOn).toEqual(["bug", "security"]);
+    // `none` is the spelled-out way to say "never", and it is the default.
+    expect(parseArguments([...required, "--request-changes-on", "none"]).requestChangesOn).toEqual(
+      [],
+    );
+  });
+
+  it("refuses a severity the vocabulary does not have", () => {
+    expect(() => parseArguments([...required, "--request-changes-on", "blocker"])).toThrow(
+      UsageError,
+    );
+  });
+
+  it("supersedes when asked", () => {
+    expect(parseArguments([...required, "--supersede"]).supersede).toBe(true);
   });
 });
 

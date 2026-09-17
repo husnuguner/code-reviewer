@@ -166,6 +166,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           findings: code-review.ndjson
+          request-changes-on: bug,security # a real review: red badge, merge block where protection asks
+          supersede: true # one current verdict per PR; a clean run lifts the block
 ```
 
 What the `review` job produces, without posting anything:
@@ -215,15 +217,17 @@ review-comment --findings code-review.ndjson --repo acme/app --pr 7 --dry-run
 review-comment --findings code-review.ndjson --repo acme/app --pr 7   # needs GITHUB_TOKEN
 ```
 
-| Flag           | Effect                                                                                                                  |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `--findings`   | The NDJSON stream `reviewer --out` wrote.                                                                               |
-| `--provider`   | The hosting system (`github`, the default). A second one is a registered adapter, and its token variable comes with it. |
-| `--repo`       | The repository as the provider names it — `owner/name` on GitHub; a bad slug is refused before a request is made.       |
-| `--pr`         | The pull request number.                                                                                                |
-| `--max-inline` | Cap on inline comments (default 50); the rest are listed in the body.                                                   |
-| `--base-url`   | REST root, for GitHub Enterprise.                                                                                       |
-| `--dry-run`    | Print the review instead of posting it. Needs no token.                                                                 |
+| Flag                   | Effect                                                                                                                  |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `--findings`           | The NDJSON stream `reviewer --out` wrote.                                                                               |
+| `--provider`           | The hosting system (`github`, the default). A second one is a registered adapter, and its token variable comes with it. |
+| `--repo`               | The repository as the provider names it — `owner/name` on GitHub; a bad slug is refused before a request is made.       |
+| `--pr`                 | The pull request number.                                                                                                |
+| `--max-inline`         | Cap on inline comments (default 50); the rest are listed in the body.                                                   |
+| `--request-changes-on` | Severities that make the review a **request for changes** (`bug,security`, or `none`, the default).                     |
+| `--supersede`          | Dismiss this identity's earlier pending reviews on the PR first, so it shows one current verdict.                       |
+| `--base-url`           | REST root, for GitHub Enterprise.                                                                                       |
+| `--dry-run`            | Print the review instead of posting it. Needs no token.                                                                 |
 
 It reads the token from the variable the provider names (`GITHUB_TOKEN` for GitHub), never from a flag. What it does
 with a stream:
@@ -234,6 +238,19 @@ with a stream:
 - if GitHub refuses the inline comments (a stale anchor after a force-push, say),
   it **retries with the body alone** rather than losing every finding;
 - a malformed line costs that line and is counted in the body.
+
+**A comment or a real review.** By default the review is posted as a `COMMENT`: it informs, it blocks nothing, and it
+shows under _Reviewers_ with no badge. With `--request-changes-on bug,security` a run that found either posts as
+`REQUEST_CHANGES` instead — a red badge, and a merge block wherever branch protection requires a passing review. With
+`--supersede`, each run first dismisses the bot's own earlier `CHANGES_REQUESTED` reviews on that pull request, so the
+PR shows one current verdict rather than a history of them, and a run that finds nothing lifts the block. Only the
+bot's own reviews are touched, never a human's; only a review that stands in the way can be dismissed, so plain
+comments stay (GitHub marks them _outdated_ on the next push). **The bot never approves**: a merge gate a
+prompt-injected diff could talk its way past is not a gate, so that word stays a human's to give.
+
+**Reviewing again.** A push to the PR is the normal trigger. For a review without a push — the prompt changed, the
+skills changed — give the workflow a `workflow_dispatch` with a `pr` input and run it from the _Actions_ tab. GitHub's
+_Re-request review_ button appears only for reviewers that were requested, which a bot posting on its own cannot be.
 
 ## Review skills
 
@@ -495,6 +512,7 @@ The choices with a real trade-off behind them, and what was given up:
 - **The review policy is a file the operator owns; the output contract is not.** A policy can say anything about what to review and nothing about how to answer, so it can never break the parser.
 - **Pre-context is deterministic.** The reviewer decides what surrounding code to fetch; the model asks for nothing. The review stays one call and the output contract stays fixed.
 - **Nothing is dropped in silence.** Refuted, capped, unanchored, skipped — each is counted or listed, never merely omitted.
+- **The bot may request changes; it may not approve.** A `REQUEST_CHANGES` review is a machine saying "look here"; an `APPROVE` would be a machine saying "this is safe", on the word of a model that read untrusted text. The first is useful and reversible; the second is a merge gate with a hole in it. Given up: a fully automated green tick.
 - **Three things vary, and each varies the same way.** The model (`LLM_PROVIDER`), the rendering (`--format`), the hosting system (`--provider`) are each a registry of strategies: adding one is a file and a line, and no `switch` anywhere has to learn the new name.
 
 ## License

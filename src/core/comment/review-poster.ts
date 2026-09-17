@@ -31,6 +31,17 @@ export class PostingError extends Error {
   }
 }
 
+/**
+ * What kind of review this is, in the change request's own workflow.
+ *
+ * `comment` says something; `request-changes` asks for something and stands
+ * in the way until it is answered or dismissed. There is deliberately no
+ * `approve`: a bot's approval is a human's word given by a machine, and a
+ * merge gate that a prompt-injected diff could talk its way past is not a
+ * gate.
+ */
+export type ReviewEvent = "comment" | "request-changes";
+
 /** What one review submission carries, in the port's own terms. */
 export interface ReviewSubmission {
   /** The repository as the provider names it -- `owner/name` on GitHub. */
@@ -41,12 +52,23 @@ export interface ReviewSubmission {
   readonly body: string;
   /** Inline comments, already capped and ordered by the payload builder. */
   readonly comments: readonly InlineComment[];
+  /** Default `comment`. */
+  readonly event?: ReviewEvent;
+  /**
+   * Dismiss this identity's earlier pending reviews on the change request
+   * before posting. Each run then leaves one current verdict rather than a
+   * history of them, and a clean run lifts a block an earlier run raised.
+   * Default `false`.
+   */
+  readonly supersede?: boolean;
 }
 
 /** What the port reports back: how much of the review landed as intended. */
 export interface PostingResult {
   /** Inline comments the provider accepted; fewer than sent means a fallback ran. */
   readonly inline: number;
+  /** Earlier reviews dismissed by `supersede`; `0` when none were, or it was off. */
+  readonly superseded: number;
 }
 
 /** Posts one review per call. */

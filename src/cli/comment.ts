@@ -21,7 +21,7 @@ import { errorMessage } from "../core/util/errors";
 import { PinoLogger } from "../infra/logging/pino-logger";
 import { builtinReviewPosterRegistry } from "../infra/posters/index";
 
-import { OperatorError, commandLine, parseCommandLine, runCommand } from "./program";
+import { OperatorError, commandLine, parseCommandLine, runCommand, severityList } from "./program";
 
 // The shared scaffolding owns these; re-exported so a caller of this module
 // need not know where a usage error is defined.
@@ -44,6 +44,10 @@ export interface CommentArguments {
   readonly repo: string;
   readonly pr: number;
   readonly maxInline: number;
+  /** Severities that make the review a request for changes; empty means never. */
+  readonly requestChangesOn: readonly string[];
+  /** Dismiss this identity's earlier pending reviews before posting. */
+  readonly supersede: boolean;
   readonly baseUrl: string | null;
   /** Print the review instead of posting it; needs no token. */
   readonly dryRun: boolean;
@@ -87,6 +91,17 @@ export function buildProgram(): Command {
       MAX_INLINE,
     )
     .option(
+      "--request-changes-on <severities>",
+      "Post as a request for changes when a finding has one of these severities (comma-separated, or none). Default none: comment only.",
+      severityList,
+      [] as string[],
+    )
+    .option(
+      "--supersede",
+      "Dismiss this identity's earlier pending reviews on the pull request first, so it shows one current verdict. A clean run then lifts an earlier block.",
+      false,
+    )
+    .option(
       "--base-url <url>",
       "API root, for a self-hosted instance (default: the provider's public endpoint).",
     )
@@ -104,6 +119,8 @@ export function parseArguments(argv: readonly string[]): CommentArguments {
     repo: string;
     pr: number;
     maxInline: number;
+    requestChangesOn: string[];
+    supersede: boolean;
     baseUrl?: string;
     dryRun: boolean;
     verbose: boolean;
@@ -114,6 +131,8 @@ export function parseArguments(argv: readonly string[]): CommentArguments {
     repo: options.repo,
     pr: options.pr,
     maxInline: options.maxInline,
+    requestChangesOn: options.requestChangesOn,
+    supersede: options.supersede,
     baseUrl: options.baseUrl ?? null,
     dryRun: options.dryRun,
     verbose: options.verbose,
@@ -147,16 +166,19 @@ async function post(arguments_: CommentArguments): Promise<number> {
   }
 
   const records = parseRecords(text);
-  const review = buildReview(records, { maxInline: arguments_.maxInline });
+  const review = buildReview(records, {
+    maxInline: arguments_.maxInline,
+    requestChangesOn: arguments_.requestChangesOn,
+  });
   log.info(
-    `${String(records.findings.length)} finding(s) read; ${String(review.comments.length)} inline, ${String(review.overflow)} in the body.`,
+    `${String(records.findings.length)} finding(s) read; ${String(review.comments.length)} inline, ${String(review.overflow)} in the body; posting as ${review.event}.`,
   );
   if (records.unreadable > 0) {
     log.warn(`${String(records.unreadable)} line(s) of ${arguments_.findings} were not records.`);
   }
 
   if (arguments_.dryRun) {
-    process.stdout.write(`${review.body}\n`);
+    process.stdout.write(`[${review.event}]\n${review.body}\n`);
     for (const comment of review.comments) {
       process.stdout.write(`\n--- ${comment.path}:${String(comment.line)}\n${comment.body}\n`);
     }
@@ -172,13 +194,18 @@ async function post(arguments_: CommentArguments): Promise<number> {
   }
 
   const poster = posters.create(provider.name, { token, baseUrl: arguments_.baseUrl });
-  const { inline } = await poster.submit({
+  const { inline, superseded } = await poster.submit({
     repository: arguments_.repo,
     pullNumber: arguments_.pr,
     body: review.body,
     comments: review.comments,
+    event: review.event,
+    supersede: arguments_.supersede,
   });
-  log.info(`Posted one review with ${String(inline)} inline comment(s).`);
+  const dismissed = superseded > 0 ? `; dismissed ${String(superseded)} earlier review(s)` : "";
+  log.info(
+    `Posted one ${review.event} review with ${String(inline)} inline comment(s)${dismissed}.`,
+  );
   return 0;
 }
 

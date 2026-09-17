@@ -107,7 +107,26 @@ export interface ReviewClientOptions {
   readonly baseUrl?: string;
   /** The transport. Required: see `FetchLike`. */
   readonly fetch: FetchLike;
+  /**
+   * The login this token posts as, so `supersede` dismisses only this
+   * identity's earlier reviews and never a human's. Given rather than looked
+   * up: the Actions token may not call `GET /user`. Default: the Actions bot.
+   */
+  readonly identity?: string;
   readonly logger?: Logger;
+}
+
+/** What GitHub calls a review's kind, for each of the port's events. */
+const GITHUB_EVENT = { comment: "COMMENT", "request-changes": "REQUEST_CHANGES" } as const;
+
+/** The login `GITHUB_TOKEN` posts as inside GitHub Actions. */
+const ACTIONS_BOT = "github-actions[bot]";
+
+/** The shape of one review in `GET /pulls/{n}/reviews`, as far as this client reads it. */
+interface ReviewRecord {
+  readonly id: number;
+  readonly state: string;
+  readonly user?: { readonly login?: string } | null;
 }
 
 const DEFAULT_BASE_URL = "https://api.github.com";
@@ -118,6 +137,7 @@ export class GithubReviewClient implements ReviewPoster {
   private readonly baseUrl: string;
   private readonly origin: string;
   private readonly fetch: FetchLike;
+  private readonly identity: string;
   private readonly log: Logger;
 
   constructor(options: ReviewClientOptions) {
@@ -125,6 +145,7 @@ export class GithubReviewClient implements ReviewPoster {
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/u, "");
     this.origin = allowedOrigin(this.baseUrl);
     this.fetch = options.fetch;
+    this.identity = options.identity ?? ACTIONS_BOT;
     this.log = (options.logger ?? NULL_LOGGER).child("comment.github");
   }
 
@@ -139,22 +160,78 @@ export class GithubReviewClient implements ReviewPoster {
    */
   async submit(submission: ReviewSubmission): Promise<PostingResult> {
     const { pullNumber, body, comments } = submission;
+    const event = GITHUB_EVENT[submission.event ?? "comment"];
     // The port carries the slug as written; splitting and validating it is
     // this provider's reading, made here and nowhere upstream.
     const { owner, repo } = parseRepository(submission.repository);
-    const path = `/repos/${owner}/${repo}/pulls/${String(pullNumber)}/reviews`;
+    const reviews = `/repos/${owner}/${repo}/pulls/${String(pullNumber)}/reviews`;
+
+    // Dismiss before posting, so the PR never shows two verdicts from the
+    // same identity at once -- and a clean run lifts an earlier block even
+    // though it posts only a comment.
+    const superseded = submission.supersede === true ? await this.dismissPending(reviews) : 0;
+
     try {
-      await this.post(path, { event: "COMMENT", body, comments });
-      return { inline: comments.length };
+      await this.request("POST", reviews, { event, body, comments });
+      return { inline: comments.length, superseded };
     } catch (error) {
       if (comments.length === 0 || !(error instanceof GithubError)) throw error;
       this.log.warn(
         `GitHub refused the review with ${String(comments.length)} inline comment(s) (${error.message}); retrying with the body alone.`,
       );
       const note = `\n\n> ⚠️ GitHub would not accept the inline comments for this review (${error.detail}); the findings are listed above instead.`;
-      await this.post(path, { event: "COMMENT", body: body + note, comments: [] });
-      return { inline: 0 };
+      await this.request("POST", reviews, { event, body: body + note, comments: [] });
+      return { inline: 0, superseded };
     }
+  }
+
+  /**
+   * Dismiss this identity's pending reviews on the change request.
+   *
+   * Only a review that *stands in the way* can be dismissed -- GitHub allows
+   * it for CHANGES_REQUESTED and APPROVED, never for a plain comment -- and
+   * only ours are touched: dismissing a human's review would be speaking for
+   * them. Returns how many were dismissed.
+   */
+  private async dismissPending(reviews: string): Promise<number> {
+    // Superseding is housekeeping around the review, not the review itself:
+    // a listing or a dismissal GitHub refuses (a dismissal restriction on the
+    // branch, say) is said out loud and the new review is still posted.
+    // Failing here would lose every finding to keep the PR tidy.
+    let listed: unknown;
+    try {
+      listed = await this.request("GET", `${reviews}?per_page=100`);
+    } catch (error) {
+      if (!(error instanceof GithubError)) throw error;
+      this.log.warn(
+        `Could not list earlier reviews to supersede (${error.message}); posting anyway.`,
+      );
+      return 0;
+    }
+    if (!Array.isArray(listed)) return 0;
+    const pending = (listed as ReviewRecord[]).filter(
+      (review) =>
+        review.user?.login === this.identity &&
+        (review.state === "CHANGES_REQUESTED" || review.state === "APPROVED"),
+    );
+    let dismissed = 0;
+    for (const review of pending) {
+      try {
+        await this.request("PUT", `${reviews}/${String(review.id)}/dismissals`, {
+          message: "Superseded by a newer automated review.",
+        });
+        dismissed++;
+      } catch (error) {
+        if (!(error instanceof GithubError)) throw error;
+        this.log.warn(
+          `Could not dismiss review ${String(review.id)} (${error.message}); it stays.`,
+        );
+      }
+    }
+    if (dismissed > 0) {
+      this.log.info(`Dismissed ${String(dismissed)} earlier review(s) by ${this.identity}.`);
+    }
+    return dismissed;
   }
 
   /**
@@ -179,9 +256,14 @@ export class GithubReviewClient implements ReviewPoster {
     return target;
   }
 
-  private async post(path: string, payload: unknown): Promise<void> {
+  /** One request; the parsed JSON body on success, a `GithubError` otherwise. */
+  private async request(
+    method: "GET" | "POST" | "PUT",
+    path: string,
+    payload?: unknown,
+  ): Promise<unknown> {
     const response = await this.fetch(this.allowedUrl(path), {
-      method: "POST",
+      method,
       headers: {
         authorization: `Bearer ${this.token}`,
         accept: "application/vnd.github+json",
@@ -189,9 +271,17 @@ export class GithubReviewClient implements ReviewPoster {
         "x-github-api-version": "2022-11-28",
         "user-agent": "code-reviewer",
       },
-      body: JSON.stringify(payload),
+      ...(payload !== undefined && { body: JSON.stringify(payload) }),
     });
-    if (response.ok) return;
+    if (response.ok) {
+      // A dismissal answers with a body; a listing does too. Neither is fatal
+      // when unreadable -- the call succeeded.
+      try {
+        return await response.json();
+      } catch {
+        return null;
+      }
+    }
     // The body is where GitHub says *which* comment it disliked, so it is
     // carried into the error rather than reduced to a status code. A body
     // that cannot be read must not replace the status with a stack trace.

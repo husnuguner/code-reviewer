@@ -38,6 +38,22 @@ inputs:
     description: "Cap on inline comments; the rest are listed in the review body."
     required: false
     default: "50"
+  request-changes-on:
+    description: >-
+      Severities that make the review a request for changes (comma-separated,
+      or none). A REQUEST_CHANGES review shows as a red badge under Reviewers
+      and blocks the merge where branch protection asks for it; a COMMENT
+      review only informs. The bot never approves. Default none.
+    required: false
+    default: "none"
+  supersede:
+    description: >-
+      Dismiss this identity's earlier pending reviews on the pull request
+      before posting, so it shows one current verdict rather than a history of
+      them -- and a clean run lifts a block an earlier run raised. Only
+      CHANGES_REQUESTED and APPROVED reviews can be dismissed; comments stay.
+    required: false
+    default: "false"
   base-url:
     description: "API root, for a self-hosted instance (default: the provider's public endpoint)."
     required: false
@@ -80,6 +96,8 @@ runs:
         REPO: ${{ inputs.repo }}
         PR: ${{ inputs.pr }}
         MAX_INLINE: ${{ inputs.max-inline }}
+        REQUEST_CHANGES_ON: ${{ inputs.request-changes-on }}
+        SUPERSEDE: ${{ inputs.supersede }}
         BASE_URL: ${{ inputs.base-url }}
         DRY_RUN: ${{ inputs.dry-run }}
         ACTION_PATH: ${{ github.action_path }}
@@ -90,6 +108,8 @@ runs:
           exit 0
         fi
         args=(--findings "${FINDINGS}" --provider "${PROVIDER}" --repo "${REPO}" --pr "${PR}" --max-inline "${MAX_INLINE}")
+        [ -n "${REQUEST_CHANGES_ON}" ] && args+=(--request-changes-on "${REQUEST_CHANGES_ON}")
+        [ "${SUPERSEDE}" = "true" ] && args+=(--supersede)
         [ -n "${BASE_URL}" ] && args+=(--base-url "${BASE_URL}")
         [ "${DRY_RUN}" = "true" ] && args+=(--dry-run)
         node "${ACTION_PATH}/../dist/cli/comment.js" "${args[@]}"
