@@ -1,6 +1,6 @@
 {
   "name": "code-reviewer",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "On-demand code-review agent for one repository: reviews a change set with an LLM and reports anchored inline findings.",
   "license": "MIT",
   "repository": {
