@@ -113,10 +113,13 @@ outputs:
 runs:
   using: composite
   steps:
-    # The reviewer reads local git, so the base ref has to exist locally. A
-    # `pull_request` checkout is shallow by default and knows only the head,
-    # which would make every file look new.
-    - name: Fetch the base ref
+    # The reviewer reads local git, so the base ref has to exist locally. With
+    # `actions/checkout` at `fetch-depth: 0` it already does -- and that is the
+    # only arrangement this step relies on. A fetch is attempted as a courtesy
+    # when the ref is missing, but a checkout with `persist-credentials: false`
+    # (the right default for a job that never pushes) has no credential to
+    # fetch with, so the diagnosis names the fix rather than the symptom.
+    - name: Resolve the base ref
       id: base
       shell: bash
       env:
@@ -134,8 +137,13 @@ runs:
           echo "::error::Refusing a base ref that is not a plain git ref name."
           exit 1
         fi
-        git -C "${GITHUB_WORKSPACE}" fetch --no-tags --depth=0 origin "+${BASE_REF}:refs/remotes/origin/${BASE_REF}" \
-          || git -C "${GITHUB_WORKSPACE}" fetch --no-tags origin "${BASE_REF}"
+        if ! git -C "${GITHUB_WORKSPACE}" rev-parse --verify --quiet "refs/remotes/origin/${BASE_REF}" >/dev/null; then
+          echo "origin/${BASE_REF} is not in the checkout; fetching it."
+          if ! git -C "${GITHUB_WORKSPACE}" fetch --no-tags origin "+${BASE_REF}:refs/remotes/origin/${BASE_REF}"; then
+            echo "::error::Could not resolve origin/${BASE_REF}. Check out with 'fetch-depth: 0' so the base branch is present, or leave 'persist-credentials' on so it can be fetched."
+            exit 1
+          fi
+        fi
         # A step output, never GITHUB_ENV: an environment variable written
         # from untrusted text is an injection surface for the whole job.
         echo "ref=${BASE_REF}" >> "${GITHUB_OUTPUT}"
