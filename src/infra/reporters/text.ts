@@ -12,36 +12,24 @@
  * play.
  */
 
-import {
-  type BranchReviewRecord,
-  type BranchReviewReporter,
-  type FindingRecord,
-  type SummaryRecord,
-} from "../../core/ports/review-reporter";
+import { type SummaryRecord } from "../../core/ports/review-reporter";
 import { type LineWriter } from "../../core/reporting/format-registry";
 import { branchReviewText } from "../../core/review/branch-review";
 
+import { CollectingReporter } from "./collecting";
+
 /** Collects a run and prints `branchReviewText` when the summary arrives. */
-export class TextReporter implements BranchReviewReporter {
-  private readonly findings: Omit<FindingRecord, "type">[] = [];
-
-  constructor(private readonly write: LineWriter) {}
-
-  report(record: BranchReviewRecord): void {
-    if (record.type === "finding") {
-      const { type: _type, ...finding } = record;
-      this.findings.push(finding);
-      return;
-    }
-    this.flush(record);
+export class TextReporter extends CollectingReporter {
+  constructor(private readonly write: LineWriter) {
+    super();
   }
 
   /**
-   * Print the report. `base` and `branch` come from the summary record rather
-   * than from the command line, so the heading can only ever name the refs
-   * the run actually compared.
+   * `base` and `branch` come from the summary record rather than from the
+   * command line, so the heading can only ever name the refs the run
+   * actually compared.
    */
-  private flush(summary: SummaryRecord): void {
+  protected onSummary(summary: SummaryRecord): void {
     const lines = branchReviewText(summary.base, summary.branch, {
       findings: this.findings,
       anchors: summary.anchors,

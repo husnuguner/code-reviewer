@@ -26,26 +26,14 @@ import {
   streamBranchReview,
 } from "../core/review/branch-review";
 import { SEVERITIES } from "../core/review/severity";
-import { SkillRegistry } from "../core/skills/registry";
 import { CatalogError, GitError } from "../core/util/errors";
 import { FsCatalogFiles } from "../infra/config/catalog-files";
 import { loadCatalog } from "../infra/config/loader";
-import {
-  expandUser,
-  findGitRoot,
-  isRepoConfig,
-  repoConfigPath,
-  repoRootOf,
-} from "../infra/config/paths";
+import { expandUser, findGitRoot, repoConfigPath } from "../infra/config/paths";
 import { GitCodeContext } from "../infra/git/git-code-context";
-import { LocalGitReader, worktree } from "../infra/git/local-git";
 import { builtinReportFormatRegistry } from "../infra/reporters/index";
 import { shippedFile } from "../infra/shipped-files";
-import {
-  DirectorySkillSource,
-  WorktreeSkillSource,
-  isLocalSkillsPath,
-} from "../infra/skills/sources";
+import { isLocalSkillsPath } from "../infra/skills/sources";
 
 import { type ReportFormat, type RunCradle, type RunRequest, buildContainer } from "./container";
 
@@ -370,26 +358,6 @@ function addNewProject(
 }
 
 /**
- * The checkout a run reviews.
- *
- * A project's `local-path` wins. Without one, a repository's own catalogue
- * (`<repo>/.review/config.yaml`) names its repository, so `reviewer` run from
- * any subdirectory of a checkout reviews that checkout -- the way `git`
- * finds its repository. Only a machine-wide catalogue falls back to the
- * current directory.
- */
-function checkoutOf(cradle: RunCradle): string {
-  const { config, catalogPath } = cradle;
-  const fallback = isRepoConfig(catalogPath) ? repoRootOf(catalogPath) : "";
-  return worktree(config.localPath === "" ? fallback : config.localPath);
-}
-
-/** Skills from a directory on this machine, `~` expanded. */
-function localSkillSource(path: string, logger: Logger): DirectorySkillSource {
-  return new DirectorySkillSource(expandUser(path.trim()), { logger });
-}
-
-/**
  * Whether the run found something `--fail-on` named.
  *
  * Asked of the reported findings, not of everything the model said: a finding
@@ -407,31 +375,20 @@ export function hasFailingFinding(
 
 /** Branch review: local git in, a reporter out. */
 async function runBranchReview(arguments_: CliArguments, cradle: RunCradle): Promise<number> {
-  const { config, logger } = cradle;
-  const root = checkoutOf(cradle);
-  const git = new LocalGitReader(root, undefined, logger);
-  // An empty skills path yields an empty registry; the source handles it.
-  const skillSettings = config.skillSettings();
-  const skills = await SkillRegistry.build(
-    [
-      isLocalSkillsPath(skillSettings.path)
-        ? localSkillSource(skillSettings.path, logger)
-        : new WorktreeSkillSource(root, skillSettings.path, { logger }),
-    ],
-    logger,
-    skillSettings.mappings,
-  );
+  const { config, logger, checkoutRoot, gitReader } = cradle;
   const options = {
     base: arguments_.base,
     branch: arguments_.branch,
     reviewer: cradle.fileReviewer,
     verifier: cradle.verifier,
-    git,
+    git: gitReader,
     settings: config.fileReviewSettings(arguments_.exclude),
-    skills,
+    skills: await cradle.skills,
     maxConcurrentFiles: config.concurrency().files,
     maxFindingsPerFile: config.reportPolicy().maxFindingsPerFile,
-    codeContext: new GitCodeContext(root, arguments_.branch, undefined, logger),
+    // The one collaborator built here rather than in the container: it is
+    // bound to the branch under review, which only the arguments know.
+    codeContext: new GitCodeContext(checkoutRoot, arguments_.branch, undefined, logger),
     logger,
   };
 
@@ -452,12 +409,11 @@ async function runBranchReview(arguments_: CliArguments, cradle: RunCradle): Pro
  * whole point of a free pre-flight.
  */
 async function runPreview(arguments_: CliArguments, cradle: RunCradle): Promise<void> {
-  const { config, logger } = cradle;
-  const root = checkoutOf(cradle);
+  const { config, logger, gitReader } = cradle;
   const { report } = await previewBranch({
     base: arguments_.base,
     branch: arguments_.branch,
-    git: new LocalGitReader(root, undefined, logger),
+    git: gitReader,
     settings: config.fileReviewSettings(arguments_.exclude),
     logger,
   });

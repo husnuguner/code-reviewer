@@ -17,6 +17,7 @@ import {
   type LlmSectionKey,
   PROJECT_SETTING_KEYS,
   type ProjectSettingKey,
+  type ProjectSettings,
   SKILLS_SECTION_KEYS,
   type SkillsSectionKey,
   resolveSecret,
@@ -203,11 +204,105 @@ export interface ProjectValuesOptions {
   readonly logger?: Logger;
 }
 
+/** Field values as they accumulate through the steps below. */
+type Values = Partial<Record<ConfigField, unknown>>;
+
+/**
+ * The scalar settings of a project, over the catalogue's `defaults`.
+ *
+ * `skills` and `llm` are sections, read by their own functions below. A list
+ * the file may spell as a YAML list is carried as CSV, which is what the
+ * settings schema reads for those fields.
+ */
+function flattenedSettings(settings: ProjectSettings): Values {
+  const values: Values = {};
+  for (const key of PROJECT_SETTING_KEYS) {
+    if (key === "skills" || key === "llm" || !Object.hasOwn(settings, key)) continue;
+    const field = PROJECT_FIELDS[key];
+    const raw = settings[key];
+    values[field] = LIST_FIELDS.has(field) && Array.isArray(raw) ? raw.map(String).join(",") : raw;
+  }
+  return values;
+}
+
+/** The `skills` section: one section in the file, two settings in the run. */
+function skillsValues(settings: ProjectSettings): Values {
+  const skills = isDict(settings.skills) ? settings.skills : {};
+  const values: Values = {};
+  for (const key of SKILLS_SECTION_KEYS) {
+    if (Object.hasOwn(skills, key)) values[SKILLS_FIELDS[key]] = skills[key];
+  }
+  return values;
+}
+
+/** What resolving the model's key needs to know about this run. */
+interface SecretContext {
+  readonly environment: Readonly<Record<string, string>>;
+  readonly configHome: string;
+  /** Whether an unset named variable is an error: false for `--preview`. */
+  readonly requiresModel: boolean;
+  /** Whether `LLM_API_KEY` is already supplied, answering the catalogue's name. */
+  readonly hasApiKey: boolean;
+}
+
+/**
+ * The `llm` section. `api-key` is the one secret: it may be a variable's
+ * name (read from the merged environment, so a key in the `.env` beside the
+ * catalogue is found) or the value itself.
+ */
+function llmValues(settings: ProjectSettings, secret: SecretContext): Values {
+  const llm = isDict(settings.llm) ? settings.llm : {};
+  const values: Values = {};
+  for (const key of LLM_SECTION_KEYS) {
+    if (!Object.hasOwn(llm, key)) continue;
+    const raw = llm[key];
+    values[LLM_FIELDS[key]] =
+      key === "api-key" && typeof raw === "string"
+        ? resolveSecret(
+            raw,
+            secret.environment,
+            "llm.api-key",
+            `${secret.configHome}/.env`,
+            secret.requiresModel && !secret.hasApiKey,
+          )
+        : raw;
+  }
+  return values;
+}
+
+/** `{{project}}` spelled out wherever a shared path may carry it. */
+function withProjectPlaceholders(values: Values, projectName: string): Values {
+  const out: Values = { ...values };
+  for (const field of ["skillsPath", "localPath"] as const) {
+    const path = out[field];
+    if (typeof path === "string") out[field] = withProjectName(path, projectName);
+  }
+  if (Array.isArray(out.promptFiles)) {
+    out.promptFiles = out.promptFiles.map((file: unknown) =>
+      typeof file === "string" ? withProjectName(file, projectName) : file,
+    );
+  }
+  return out;
+}
+
+/**
+ * The catalogue's skills directory is beside the catalogue, like its prompts:
+ * a relative path is anchored here, once, and the flow that reads it never
+ * has to ask which base a path meant.
+ */
+function withAnchoredSkillsPath(values: Values, catalogDirectory: string): Values {
+  return typeof values.skillsPath === "string"
+    ? { ...values, skillsPath: besideCatalog(values.skillsPath, catalogDirectory) }
+    : values;
+}
+
 /**
  * One project flattened into `Config` field values.
  *
- * Also where the model's key is read, from the same merged environment the
- * settings see, so a key placed in the `.env` beside the catalogue is found.
+ * A pipeline of small, named steps -- settings, skills, model, placeholders,
+ * path anchoring -- each of which answers one question about the file. The
+ * order is the order the questions depend on each other: a placeholder is
+ * spelled out before the path it is in is anchored.
  */
 export function projectValues({
   catalog,
@@ -218,54 +313,19 @@ export function projectValues({
   requiresModel = true,
   hasApiKey = false,
   logger = NULL_LOGGER,
-}: ProjectValuesOptions): Partial<Record<ConfigField, unknown>> {
+}: ProjectValuesOptions): Values {
   const spec = catalog.project(project);
-  const values: Partial<Record<ConfigField, unknown>> = {};
-  // The project's settings over the catalogue's `defaults`.
   const settings = catalog.settingsFor(spec);
-  for (const key of PROJECT_SETTING_KEYS) {
-    if (key === "skills" || key === "llm" || !Object.hasOwn(settings, key)) continue;
-    const field = PROJECT_FIELDS[key];
-    const raw = settings[key];
-    values[field] = LIST_FIELDS.has(field) && Array.isArray(raw) ? raw.map(String).join(",") : raw;
-  }
-  // `skills` is one section in the file and two settings in the run.
-  const skills = isDict(settings.skills) ? settings.skills : {};
-  for (const key of SKILLS_SECTION_KEYS) {
-    if (Object.hasOwn(skills, key)) values[SKILLS_FIELDS[key]] = skills[key];
-  }
-  // `llm`: the model knobs; the key may be named (an environment variable) or given.
-  const llm = isDict(settings.llm) ? settings.llm : {};
-  for (const key of LLM_SECTION_KEYS) {
-    if (!Object.hasOwn(llm, key)) continue;
-    const raw = llm[key];
-    values[LLM_FIELDS[key]] =
-      key === "api-key" && typeof raw === "string"
-        ? resolveSecret(
-            raw,
-            environment,
-            "llm.api-key",
-            `${configHome}/.env`,
-            requiresModel && !hasApiKey,
-          )
-        : raw;
-  }
-  // A shared path may name the project's own folder: `skills/{{project}}`.
-  for (const field of ["skillsPath", "localPath"] as const) {
-    const path = values[field];
-    if (typeof path === "string") values[field] = withProjectName(path, spec.name);
-  }
-  // The catalogue's skills directory is beside the catalogue, like its
-  // prompts -- so a relative path is anchored here, once, and the flow that
-  // reads it never has to ask which base a path meant.
-  if (typeof values.skillsPath === "string") {
-    values.skillsPath = besideCatalog(values.skillsPath, catalogDirectory);
-  }
-  if (Array.isArray(values.promptFiles)) {
-    values.promptFiles = values.promptFiles.map((file: unknown) =>
-      typeof file === "string" ? withProjectName(file, spec.name) : file,
-    );
-  }
+  const merged: Values = {
+    ...flattenedSettings(settings),
+    ...skillsValues(settings),
+    ...llmValues(settings, { environment, configHome, requiresModel, hasApiKey }),
+  };
+  const values = withAnchoredSkillsPath(
+    withProjectPlaceholders(merged, spec.name),
+    catalogDirectory,
+  );
+
   const where = typeof values.localPath === "string" ? values.localPath : "the current directory";
   logger.child("config_resolver").info(`Project ${pyRepr(spec.name)}: reviewing ${where}.`);
   return values;

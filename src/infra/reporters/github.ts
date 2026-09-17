@@ -23,15 +23,12 @@
  * unescaped newline would silently truncate a finding to its first line.
  */
 
-import {
-  type BranchReviewRecord,
-  type BranchReviewReporter,
-  type FindingRecord,
-  type SummaryRecord,
-} from "../../core/ports/review-reporter";
+import { type FindingRecord, type SummaryRecord } from "../../core/ports/review-reporter";
 import { type LineWriter, type SummaryWriter } from "../../core/reporting/format-registry";
 import { severityLabel, severityRankOf } from "../../core/review/severity";
 import { compareCodePoints } from "../../core/util/py";
+
+import { type CollectedFinding, CollectingReporter } from "./collecting";
 
 /**
  * Severities the runner should show as errors rather than warnings.
@@ -134,30 +131,23 @@ export type SummarySink = SummaryWriter;
  * immediately -- while the summary is held until the closing record, because
  * a table cannot be written before its rows are known.
  */
-export class GithubReporter implements BranchReviewReporter {
-  private readonly findings: Omit<FindingRecord, "type">[] = [];
-  private summary: SummaryRecord | null = null;
-
+export class GithubReporter extends CollectingReporter {
   constructor(
     private readonly write: LineWriter,
     private readonly writeSummary: SummarySink | null = null,
-  ) {}
+  ) {
+    super();
+  }
 
-  report(record: BranchReviewRecord): void {
-    if (record.type === "summary") {
-      this.summary = record;
-      this.flush();
-      return;
-    }
-    const { type: _type, ...finding } = record;
-    this.findings.push(finding);
+  /** Each finding goes out as an annotation the moment it arrives. */
+  protected override onFinding(finding: CollectedFinding): void {
     const annotation = annotationFor(finding);
     if (annotation !== null) this.write(annotation);
   }
 
-  /** Write the job summary. Called on the closing record; safe to call again. */
-  flush(): void {
+  /** The job summary, once the rows are known; nowhere to write outside a runner. */
+  protected onSummary(summary: SummaryRecord): void {
     if (this.writeSummary === null) return;
-    this.writeSummary(summaryFor(this.findings, this.summary));
+    this.writeSummary(summaryFor(this.findings, summary));
   }
 }
