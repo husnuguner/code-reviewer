@@ -1,0 +1,69 @@
+{
+  "module": "commands",
+  "schema": "Catalogue schema v3 (local git only): no repositories/providers, no per-project repository, no posting settings. Maintained by hand.",
+  "cases": [
+    {
+      "name": "list_projects/valid",
+      "input": {
+        "catalog": {
+          "version": 3,
+          "_readme": [
+            "ignored at the root"
+          ],
+          "projects": {
+            "app": {
+              "local-path": "~/src/app",
+              "language": "tr",
+              "exclude": [
+                "**/*.spec.ts",
+                "**/migrations/*.ts"
+              ],
+              "max-findings-per-file": 2,
+              "max-file-chars": 4000,
+              "max-skill-chars": 100,
+              "max-skills-total-chars": 200,
+              "max-concurrent-files": 3,
+              "skills": {
+                "path": ".review/skills"
+              }
+            },
+            "legacy": {
+              "local-path": "~/src/legacy"
+            },
+            "here": {}
+          }
+        }
+      },
+      "expected": {
+        "code": 0,
+        "out": "<CONFIG_PATH>\n  app          ~/src/app\n  csv-strings  (current directory)\n  legacy       ~/src/legacy\n"
+      }
+    },
+    {
+      "name": "list_projects/no_projects",
+      "input": {
+        "catalog": {}
+      },
+      "expected": {
+        "code": 1,
+        "out": "<CONFIG_PATH>\n  (no projects defined)\n"
+      }
+    },
+    {
+      "name": "init/writes_skeleton",
+      "input": {},
+      "expected": {
+        "code": 0,
+        "out": "Wrote <CONFIG_PATH>\nWrote <PROMPT_PATH>\n\nNext:\n  1. Edit <CONFIG_PATH> -- set local-path, llm, and the key's name.\n  2. Put LLM_API_KEY in <CONFIG_HOME>/.env\n  3. Edit <PROMPT_PATH> to change what the reviewer looks for.\n  4. reviewer projects        # check what is defined\n  5. reviewer --project example --base main\n"
+      }
+    },
+    {
+      "name": "init/refuses_existing",
+      "input": {},
+      "expected": {
+        "code": 1,
+        "out": "<CONFIG_PATH> already exists; leaving it untouched.\n"
+      }
+    }
+  ]
+}

@@ -1,0 +1,913 @@
+{
+  "module": "file_reviewer",
+  "cases": [
+    {
+      "name": "extract_json/plain",
+      "input": {
+        "text": "{\"findings\": []}"
+      },
+      "expected": {
+        "findings": []
+      }
+    },
+    {
+      "name": "extract_json/fenced_json",
+      "input": {
+        "text": "```json\n{\"findings\": [{\"line\": 2}]}\n```"
+      },
+      "expected": {
+        "findings": [
+          {
+            "line": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "extract_json/fenced_bare",
+      "input": {
+        "text": "```\n{\"findings\": [{\"line\": 2}]}\n```"
+      },
+      "expected": {
+        "findings": [
+          {
+            "line": 2
+          }
+        ]
+      }
+    },
+    {
+      "name": "extract_json/fenced_with_spaces",
+      "input": {
+        "text": "  ```json  \n {\"findings\": []} \n```  "
+      },
+      "expected": {
+        "findings": []
+      }
+    },
+    {
+      "name": "extract_json/prose_around",
+      "input": {
+        "text": "Here you go:\n{\"findings\": [{\"line\": 2, \"body\": \"x\"}]}\nHope that helps!"
+      },
+      "expected": {
+        "findings": [
+          {
+            "line": 2,
+            "body": "x"
+          }
+        ]
+      }
+    },
+    {
+      "name": "extract_json/prose_with_braces_in_prose",
+      "input": {
+        "text": "Note {this} first. {\"findings\": []} trailing"
+      },
+      "expected": {
+        "error": "JSONDecodeError"
+      }
+    },
+    {
+      "name": "extract_json/nested_objects",
+      "input": {
+        "text": "{\"findings\": [{\"line\": 2, \"meta\": {\"a\": {\"b\": 1}}}]}"
+      },
+      "expected": {
+        "findings": [
+          {
+            "line": 2,
+            "meta": {
+              "a": {
+                "b": 1
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "extract_json/broken_missing_comma",
+      "input": {
+        "text": "{\"findings\": [{\"line\": 2 \"severity\": \"bug\", \"body\": \"Unbounded list.\"}]}"
+      },
+      "expected": {
+        "error": "JSONDecodeError"
+      }
+    },
+    {
+      "name": "extract_json/empty",
+      "input": {
+        "text": ""
+      },
+      "expected": {
+        "error": "JSONDecodeError"
+      }
+    },
+    {
+      "name": "extract_json/only_prose",
+      "input": {
+        "text": "I could not find any issues."
+      },
+      "expected": {
+        "error": "JSONDecodeError"
+      }
+    },
+    {
+      "name": "extract_json/array_not_object",
+      "input": {
+        "text": "[1, 2, 3]"
+      },
+      "expected": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "name": "extract_json/closing_before_opening",
+      "input": {
+        "text": "} { not json"
+      },
+      "expected": {
+        "error": "JSONDecodeError"
+      }
+    },
+    {
+      "name": "extract_json/fence_unterminated",
+      "input": {
+        "text": "```json\n{\"findings\": []}"
+      },
+      "expected": {
+        "findings": []
+      }
+    },
+    {
+      "name": "extract_json/two_objects",
+      "input": {
+        "text": "{\"a\": 1} {\"b\": 2}"
+      },
+      "expected": {
+        "error": "JSONDecodeError"
+      }
+    },
+    {
+      "name": "extract_json/unicode",
+      "input": {
+        "text": "{\"findings\": [{\"body\": \"şehir İstanbul 🚀\"}]}"
+      },
+      "expected": {
+        "findings": [
+          {
+            "body": "şehir İstanbul 🚀"
+          }
+        ]
+      }
+    },
+    {
+      "name": "extract_json/trailing_comma_invalid",
+      "input": {
+        "text": "{\"findings\": [],}"
+      },
+      "expected": {
+        "error": "JSONDecodeError"
+      }
+    },
+    {
+      "name": "extract_json/single_quotes_invalid",
+      "input": {
+        "text": "{'findings': []}"
+      },
+      "expected": {
+        "error": "JSONDecodeError"
+      }
+    },
+    {
+      "name": "response_text/dict_blocks",
+      "input": {},
+      "expected": "ab"
+    },
+    {
+      "name": "response_text/object_blocks",
+      "input": {},
+      "expected": "only"
+    },
+    {
+      "name": "response_text/none_content",
+      "input": {},
+      "expected": ""
+    },
+    {
+      "name": "response_text/missing_text",
+      "input": {},
+      "expected": ""
+    },
+    {
+      "name": "review_file/valid_exact",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 2, \"severity\": \"bug\", \"body\": \"Unbounded query.\", \"existing_code\": \"const rows = await repo.find();\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 2,
+            "severity": "bug",
+            "body": "Unbounded query.",
+            "example": "",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": "const rows = await repo.find();"
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/repaired_from_quote",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 1, \"severity\": \"bug\", \"body\": \"Unbounded query.\", \"existing_code\": \"const rows = await repo.find();\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 2,
+            "severity": "bug",
+            "body": "Unbounded query.",
+            "example": "",
+            "start_line": null,
+            "anchor": "repaired",
+            "existing_code": "const rows = await repo.find();"
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/missing_line_repaired",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"severity\": \"bug\", \"body\": \"Unbounded query.\", \"existing_code\": \"const rows = await repo.find();\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 2,
+            "severity": "bug",
+            "body": "Unbounded query.",
+            "example": "",
+            "start_line": null,
+            "anchor": "repaired",
+            "existing_code": "const rows = await repo.find();"
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/string_line_repaired",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": \"2\", \"severity\": \"bug\", \"body\": \"Unbounded query.\", \"existing_code\": \"return rows;\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 3,
+            "severity": "bug",
+            "body": "Unbounded query.",
+            "example": "",
+            "start_line": null,
+            "anchor": "repaired",
+            "existing_code": "return rows;"
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/multi_line_span",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"severity\": \"bug\", \"body\": \"Fetch then return.\", \"existing_code\": \"const rows = await repo.find();\\nreturn rows;\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 3,
+            "severity": "bug",
+            "body": "Fetch then return.",
+            "example": "",
+            "start_line": 2,
+            "anchor": "repaired",
+            "existing_code": "const rows = await repo.find();\nreturn rows;"
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/conflict",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 2, \"severity\": \"bug\", \"body\": \"Unbounded query.\", \"existing_code\": \"return rows;\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 2,
+            "severity": "bug",
+            "body": "Unbounded query.",
+            "example": "",
+            "start_line": null,
+            "anchor": "conflict",
+            "existing_code": "return rows;"
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/failed_survives",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 99, \"severity\": \"bug\", \"body\": \"Something is off.\", \"existing_code\": \"nothing like this exists\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": null,
+            "severity": "bug",
+            "body": "Something is off.",
+            "example": "",
+            "start_line": null,
+            "anchor": "failed",
+            "existing_code": "nothing like this exists"
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/blank_body_dropped",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 2, \"severity\": \"bug\", \"body\": \"   \", \"existing_code\": \"return rows;\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": []
+      }
+    },
+    {
+      "name": "review_file/missing_body_dropped",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 2, \"severity\": \"bug\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": []
+      }
+    },
+    {
+      "name": "review_file/non_dict_items_skipped",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [5, \"x\", null, {\"line\": 2, \"severity\": \"bug\", \"body\": \"ok\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 2,
+            "severity": "bug",
+            "body": "ok",
+            "example": "",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/unknown_severity_defaults_readability",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 2, \"severity\": \"critical\", \"body\": \"x\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 2,
+            "severity": "readability",
+            "body": "x",
+            "example": "",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/missing_severity_defaults_readability",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 2, \"body\": \"x\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 2,
+            "severity": "readability",
+            "body": "x",
+            "example": "",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/severity_case_and_space",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 2, \"severity\": \" Security \", \"body\": \"x\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 2,
+            "severity": "security",
+            "body": "x",
+            "example": "",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/example_trimmed_and_null",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 2, \"severity\": \"bug\", \"body\": \"x\", \"example\": \"  fix();  \"}, {\"line\": 3, \"severity\": \"bug\", \"body\": \"y\", \"example\": null}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 2,
+            "severity": "bug",
+            "body": "x",
+            "example": "fix();",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": ""
+          },
+          {
+            "line": 3,
+            "severity": "bug",
+            "body": "y",
+            "example": "",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/body_trimmed_and_numeric",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 2, \"severity\": \"bug\", \"body\": \"  spaced  \"}, {\"line\": 3, \"severity\": \"bug\", \"body\": 42}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 2,
+            "severity": "bug",
+            "body": "spaced",
+            "example": "",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": ""
+          },
+          {
+            "line": 3,
+            "severity": "bug",
+            "body": "42",
+            "example": "",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/existing_code_null",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 2, \"severity\": \"bug\", \"body\": \"x\", \"existing_code\": null}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 2,
+            "severity": "bug",
+            "body": "x",
+            "example": "",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/findings_missing_key",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"results\": []}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": []
+      }
+    },
+    {
+      "name": "review_file/findings_not_a_list",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": \"nope\"}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": []
+      }
+    },
+    {
+      "name": "review_file/payload_is_array",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "[]"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": []
+      }
+    },
+    {
+      "name": "review_file/empty_findings",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": []}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": []
+      }
+    },
+    {
+      "name": "review_file/fenced_payload",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "```json\n{\"findings\": [{\"line\": 2, \"severity\": \"bug\", \"body\": \"fenced\"}]}\n```"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 2,
+            "severity": "bug",
+            "body": "fenced",
+            "example": "",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/prose_then_json",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "Sure!\n{\"findings\": [{\"line\": 2, \"severity\": \"bug\", \"body\": \"prose\"}]}\nDone."
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 2,
+            "severity": "bug",
+            "body": "prose",
+            "example": "",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/broken_then_good",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 2 \"severity\": \"bug\", \"body\": \"Unbounded list.\"}]}",
+          "{\"findings\": [{\"line\": 2, \"severity\": \"bug\", \"body\": \"Unbounded list.\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 2,
+        "last_message_content_has_json_word": true,
+        "message_counts": [
+          2,
+          3
+        ],
+        "findings": [
+          {
+            "line": 2,
+            "severity": "bug",
+            "body": "Unbounded list.",
+            "example": "",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/broken_twice_gives_up",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 2 \"severity\": \"bug\"}]}",
+          "{\"findings\": [{\"line\": 2 \"severity\": \"bug\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 2,
+        "last_message_content_has_json_word": true,
+        "message_counts": [
+          2,
+          3
+        ],
+        "findings": []
+      }
+    },
+    {
+      "name": "review_file/two_findings_same_line",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 2, \"severity\": \"bug\", \"body\": \"a\"}, {\"line\": 2, \"severity\": \"security\", \"body\": \"b\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 2,
+            "severity": "bug",
+            "body": "a",
+            "example": "",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": ""
+          },
+          {
+            "line": 2,
+            "severity": "security",
+            "body": "b",
+            "example": "",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "review_file/float_line_is_not_int_in_python",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 2.0, \"severity\": \"bug\", \"body\": \"x\", \"existing_code\": \"return rows;\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 1,
+        "last_message_content_has_json_word": null,
+        "message_counts": [
+          2
+        ],
+        "findings": [
+          {
+            "line": 3,
+            "severity": "bug",
+            "body": "x",
+            "example": "",
+            "start_line": null,
+            "anchor": "repaired",
+            "existing_code": "return rows;"
+          }
+        ]
+      },
+      "divergence": "JSON.parse(\"2.0\") is the integer 2; the Node port anchors it as line 2"
+    },
+    {
+      "name": "review_file/no_allowed_lines_skips_model",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 2, \"severity\": \"bug\", \"body\": \"Unbounded query.\", \"existing_code\": \"const rows = await repo.find();\"}]}"
+        ]
+      },
+      "expected": {
+        "calls": 0,
+        "findings": []
+      }
+    },
+    {
+      "name": "review_file/model_error_returns_empty",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n"
+      },
+      "expected": {
+        "calls": 0,
+        "findings": []
+      }
+    },
+    {
+      "name": "review_file/no_anchor_index_uses_line_only",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
+        "responses": [
+          "{\"findings\": [{\"line\": 1, \"severity\": \"bug\", \"body\": \"Unbounded query.\", \"existing_code\": \"const rows = await repo.find();\"}]}"
+        ]
+      },
+      "expected": [
+        {
+          "line": null,
+          "severity": "bug",
+          "body": "Unbounded query.",
+          "example": "",
+          "start_line": null,
+          "anchor": "failed",
+          "existing_code": "const rows = await repo.find();"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+name: "code-reviewer: post comments"
+description: >-
+  Post a review run's findings to a pull request, reading the NDJSON that the
+  review action produced. Runs no language model; this is the half of the
+  split that holds a repository token.
+author: "Hüsnü Güner"
+
+branding:
+  icon: "message-square"
+  color: "purple"
+
+inputs:
+  findings:
+    description: "The NDJSON record stream to post."
+    required: false
+    default: "code-review.ndjson"
+  repo:
+    description: "The repository the pull request belongs to, as owner/name."
+    required: false
+    default: ${{ github.repository }}
+  pr:
+    description: "The pull request number."
+    required: false
+    default: ${{ github.event.pull_request.number }}
+  token:
+    description: "A token with `pull-requests: write`. This is the only thing here that can write."
+    required: true
+  max-inline:
+    description: "Cap on inline comments; the rest are listed in the review body."
+    required: false
+    default: "50"
+  base-url:
+    description: "REST root, for GitHub Enterprise (default api.github.com)."
+    required: false
+    default: ""
+  dry-run:
+    description: "Print the review instead of posting it. Needs no token."
+    required: false
+    default: "false"
+  node-version:
+    description: "Node.js the poster runs on."
+    required: false
+    default: "24"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    # `${{ github.action_path }}` is this repository's checkout, not the
+    # reviewed one, so the build never touches the caller's node_modules.
+    - name: Build the poster
+      shell: bash
+      working-directory: ${{ github.action_path }}/..
+      run: |
+        set -euo pipefail
+        npm ci --no-audit --no-fund
+        npm run build
+
+    - name: Post the review
+      shell: bash
+      env:
+        # The token reaches the process as an environment variable, never as
+        # a command-line argument, where it would show up in a process list.
+        GITHUB_TOKEN: ${{ inputs.token }}
+        FINDINGS: ${{ inputs.findings }}
+        REPO: ${{ inputs.repo }}
+        PR: ${{ inputs.pr }}
+        MAX_INLINE: ${{ inputs.max-inline }}
+        BASE_URL: ${{ inputs.base-url }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        if [ ! -f "${FINDINGS}" ]; then
+          echo "::notice::No ${FINDINGS}; the review produced nothing to post."
+          exit 0
+        fi
+        args=(--findings "${FINDINGS}" --repo "${REPO}" --pr "${PR}" --max-inline "${MAX_INLINE}")
+        [ -n "${BASE_URL}" ] && args+=(--base-url "${BASE_URL}")
+        [ "${DRY_RUN}" = "true" ] && args+=(--dry-run)
+        node "${ACTION_PATH}/../dist/cli/comment.js" "${args[@]}"

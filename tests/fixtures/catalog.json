@@ -1,0 +1,576 @@
+{
+  "module": "catalog",
+  "schema": "Catalogue schema v3: local git only. No repositories/providers, no per-project repository, no posting settings. Expectations for parse/* and project/* are regenerated from the parser; the removed-key cases below are hand-written.",
+  "cases": [
+    {
+      "name": "parse/valid",
+      "input": {
+        "payload": {
+          "version": 2,
+          "_readme": [
+            "ignored at the root"
+          ],
+          "projects": {
+            "app": {
+              "language": "tr",
+              "exclude": [
+                "**/*.spec.ts",
+                "**/migrations/*.ts"
+              ],
+              "max-findings-per-file": 2,
+              "max-file-chars": 4000,
+              "max-skill-chars": 100,
+              "max-skills-total-chars": 200,
+              "max-concurrent-files": 3,
+              "skills": {
+                "path": ".review/skills"
+              },
+              "local-path": "~/src/app"
+            },
+            "legacy": {
+              "local-path": "~/src/legacy"
+            },
+            "csv-strings": {
+              "exclude": "**/*.md,**/*.lock"
+            }
+          }
+        }
+      },
+      "expected": {
+        "source": "/x/config.yaml",
+        "projects": {
+          "app": {
+            "name": "app",
+            "settings": {
+              "language": "tr",
+              "skills": {
+                "path": ".review/skills"
+              },
+              "local-path": "~/src/app",
+              "exclude": [
+                "**/*.spec.ts",
+                "**/migrations/*.ts"
+              ],
+              "max-findings-per-file": 2,
+              "max-file-chars": 4000,
+              "max-skill-chars": 100,
+              "max-skills-total-chars": 200,
+              "max-concurrent-files": 3
+            }
+          },
+          "legacy": {
+            "name": "legacy",
+            "settings": {
+              "local-path": "~/src/legacy"
+            }
+          },
+          "csv-strings": {
+            "name": "csv-strings",
+            "settings": {
+              "exclude": "**/*.md,**/*.lock"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "parse/empty_object",
+      "input": {
+        "payload": {}
+      },
+      "expected": {
+        "source": "/x/config.yaml",
+        "projects": {}
+      }
+    },
+    {
+      "name": "parse/no_version_defaults",
+      "input": {
+        "payload": {
+          "projects": {
+            "x": {}
+          }
+        }
+      },
+      "expected": {
+        "source": "/x/config.yaml",
+        "projects": {
+          "x": {
+            "name": "x",
+            "settings": {}
+          }
+        }
+      }
+    },
+    {
+      "name": "parse/version_99",
+      "input": {
+        "payload": {
+          "version": 99
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "/x/config.yaml declares schema version 99, but this build understands up to 3. Upgrade the reviewer."
+      }
+    },
+    {
+      "name": "parse/version_string",
+      "input": {
+        "payload": {
+          "version": "1"
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "/x/config.yaml declares schema version '1', but this build understands up to 3. Upgrade the reviewer."
+      }
+    },
+    {
+      "name": "parse/version_zero",
+      "input": {
+        "payload": {
+          "version": 0
+        }
+      },
+      "expected": {
+        "source": "/x/config.yaml",
+        "projects": {}
+      }
+    },
+    {
+      "name": "parse/version_bool",
+      "input": {
+        "payload": {
+          "version": true
+        }
+      },
+      "expected": {
+        "source": "/x/config.yaml",
+        "projects": {}
+      }
+    },
+    {
+      "name": "parse/version_null",
+      "input": {
+        "payload": {
+          "version": null
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "/x/config.yaml declares schema version None, but this build understands up to 3. Upgrade the reviewer."
+      }
+    },
+    {
+      "name": "parse/root_not_object",
+      "input": {
+        "payload": [
+          "not",
+          "an",
+          "object"
+        ]
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "config.yaml must be an object, got list"
+      }
+    },
+    {
+      "name": "parse/root_null",
+      "input": {
+        "payload": null
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "config.yaml must be an object, got NoneType"
+      }
+    },
+    {
+      "name": "parse/projects_not_object",
+      "input": {
+        "payload": {
+          "projects": []
+        }
+      },
+      "expected": {
+        "source": "/x/config.yaml",
+        "projects": {}
+      }
+    },
+    {
+      "name": "parse/project_entry_not_object",
+      "input": {
+        "payload": {
+          "projects": {
+            "x": 5
+          }
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "projects.x must be an object, got int"
+      }
+    },
+    {
+      "name": "parse/project_unknown_key_parses_in_python",
+      "input": {
+        "payload": {
+          "projects": {
+            "x": {
+              "exlude": [
+                "*.md"
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "Project 'x' has unrecognised setting(s) ['exlude']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'prompts', 'skills', 'verify']"
+      },
+      "divergence": "node rejects unknown project keys at parse time (zod strict)"
+    },
+    {
+      "name": "project/'app'",
+      "input": {
+        "name": "app"
+      },
+      "expected": {
+        "name": "app",
+        "settings": {
+          "language": "tr",
+          "skills": {
+            "path": ".review/skills"
+          },
+          "local-path": "~/src/app",
+          "exclude": [
+            "**/*.spec.ts",
+            "**/migrations/*.ts"
+          ],
+          "max-findings-per-file": 2,
+          "max-file-chars": 4000,
+          "max-skill-chars": 100,
+          "max-skills-total-chars": 200,
+          "max-concurrent-files": 3
+        }
+      }
+    },
+    {
+      "name": "project/'legacy'",
+      "input": {
+        "name": "legacy"
+      },
+      "expected": {
+        "name": "legacy",
+        "settings": {
+          "local-path": "~/src/legacy"
+        }
+      }
+    },
+    {
+      "name": "project/'csv-strings'",
+      "input": {
+        "name": "csv-strings"
+      },
+      "expected": {
+        "name": "csv-strings",
+        "settings": {
+          "exclude": "**/*.md,**/*.lock"
+        }
+      }
+    },
+    {
+      "name": "project/None",
+      "input": {
+        "name": null
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "/x/config.yaml defines 3 projects (['app', 'csv-strings', 'legacy']); choose one with --project."
+      }
+    },
+    {
+      "name": "project/'nope'",
+      "input": {
+        "name": "nope"
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "No project named 'nope' in /x/config.yaml. Defined: ['app', 'csv-strings', 'legacy']"
+      }
+    },
+    {
+      "name": "project/''",
+      "input": {
+        "name": ""
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "/x/config.yaml defines 3 projects (['app', 'csv-strings', 'legacy']); choose one with --project."
+      }
+    },
+    {
+      "name": "project/single_without_name",
+      "input": {
+        "name": null
+      },
+      "expected": "only"
+    },
+    {
+      "name": "project/none_defined",
+      "input": {
+        "name": null
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "/x/config.yaml defines 0 projects ([]); choose one with --project."
+      }
+    },
+    {
+      "name": "project_values/app",
+      "input": {
+        "project": "app"
+      },
+      "expected": {
+        "pr_review_repo": "acme/app",
+        "repo_provider_kind": "github",
+        "repo_provider_base_url": null,
+        "repo_provider_scheme": "bearer",
+        "repo_provider_username": null,
+        "review_lang": "tr",
+        "skills_path": ".review/skills",
+        "exclude_paths": "**/*.spec.ts,**/migrations/*.ts",
+        "inline_severities_raw": "bug,security",
+        "max_findings_per_file": 2,
+        "max_file_chars": 4000,
+        "max_prior_comment_chars": 0,
+        "max_skill_chars": 100,
+        "max_skills_total_chars": 200,
+        "max_concurrent_prs": 1,
+        "max_concurrent_files": 3
+      }
+    },
+    {
+      "name": "project_values/legacy",
+      "input": {
+        "project": "legacy"
+      },
+      "expected": {
+        "pr_review_repo": "acme/legacy",
+        "repo_provider_kind": "github",
+        "repo_provider_base_url": "https://ghe.acme.internal/api/v3",
+        "repo_provider_scheme": "basic",
+        "repo_provider_username": "ci-bot"
+      }
+    },
+    {
+      "name": "project_values/csv-strings",
+      "input": {
+        "project": "csv-strings"
+      },
+      "expected": {
+        "pr_review_repo": "acme/csv",
+        "repo_provider_kind": "github",
+        "repo_provider_base_url": null,
+        "repo_provider_scheme": "bearer",
+        "repo_provider_username": null,
+        "exclude_paths": "**/*.md,**/*.lock",
+        "inline_severities_raw": "bug, security"
+      }
+    },
+    {
+      "name": "project_values/unknown_key",
+      "input": {
+        "project": "x"
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "Project 'x' has unrecognised setting(s) ['exlude']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'prompts', 'skills', 'verify']"
+      },
+      "divergence": "node raises the same CatalogError message at parse time"
+    },
+    {
+      "name": "project_values/renamed_key_hint",
+      "input": {
+        "payload": {
+          "version": 1,
+          "projects": {
+            "x": {}
+          }
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "Project 'x': 'inline_severities' was renamed to 'severities' in schema version 2."
+      }
+    },
+    {
+      "name": "parse/skills_section_unknown_key",
+      "input": {
+        "payload": {
+          "projects": {
+            "x": {
+              "skills": {
+                "path": ".s",
+                "globs": {}
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "Project 'x' skills has unrecognised key(s) ['globs']; known: ['mappings', 'path']"
+      }
+    },
+    {
+      "name": "parse/skills_path_renamed_hint",
+      "input": {
+        "payload": {
+          "projects": {
+            "x": {
+              "skills_path": ".s"
+            }
+          }
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "Project 'x': 'skills_path' was renamed to 'skills.path' in schema version 3."
+      }
+    },
+    {
+      "name": "parse/lang_renamed_hint",
+      "input": {
+        "payload": {
+          "projects": {
+            "x": {
+              "lang": "tr"
+            }
+          }
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "Project 'x': 'lang' was renamed to 'language' in schema version 3."
+      }
+    },
+    {
+      "name": "parse/snake_setting_renamed_hint",
+      "input": {
+        "payload": {
+          "projects": {
+            "x": {
+              "max_findings_per_file": 2
+            }
+          }
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "Project 'x': 'max_findings_per_file' was renamed to 'max-findings-per-file' in schema version 3."
+      }
+    },
+    {
+      "name": "parse/defaults_unknown_key",
+      "input": {
+        "payload": {
+          "defaults": {
+            "languge": "tr"
+          },
+          "projects": {}
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "defaults has unrecognised setting(s) ['languge']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'prompts', 'skills', 'verify']"
+      }
+    },
+    {
+      "name": "parse/defaults_not_object",
+      "input": {
+        "payload": {
+          "defaults": 3,
+          "projects": {}
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "defaults must be an object, got int"
+      }
+    },
+    {
+      "name": "parse/defaults_skills_mappings_rejected",
+      "input": {
+        "payload": {
+          "defaults": {
+            "skills": {
+              "path": "~/x",
+              "mappings": {
+                "a": [
+                  "**"
+                ]
+              }
+            }
+          },
+          "projects": {}
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "defaults.skills.mappings: which files a skill reviews is set per project (projects.<name>.skills.mappings); defaults only names the directory (skills.path)."
+      }
+    },
+    {
+      "name": "parse/camel_setting_renamed_hint",
+      "input": {
+        "payload": {
+          "projects": {
+            "x": {
+              "maxFindingsPerFile": 2
+            }
+          }
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "Project 'x': 'maxFindingsPerFile' was renamed to 'max-findings-per-file' in schema version 3."
+      }
+    },
+    {
+      "name": "parse/llm_unknown_key",
+      "input": {
+        "payload": {
+          "defaults": {
+            "llm": {
+              "provider": "local",
+              "apiKey": "K"
+            }
+          },
+          "projects": {}
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "defaults llm: 'apiKey' was renamed to 'api-key' in schema version 3."
+      }
+    },
+    {
+      "name": "parse/llm_not_object",
+      "input": {
+        "payload": {
+          "projects": {
+            "x": {
+              "llm": "claude"
+            }
+          }
+        }
+      },
+      "expected": {
+        "error": "CatalogError",
+        "message": "Project 'x'.llm must be an object, got str"
+      }
+    }
+  ]
+}

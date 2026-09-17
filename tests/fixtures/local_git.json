@@ -1,0 +1,134 @@
+{
+  "module": "local_git",
+  "cases": [
+    {
+      "name": "modified_and_added",
+      "input": {
+        "raw": "diff --git a/a.py b/a.py\nindex 1111111..2222222 100644\n--- a/a.py\n+++ b/a.py\n@@ -1,1 +1,2 @@\n keep = 1\n+added = 2\ndiff --git a/new.py b/new.py\nnew file mode 100644\nindex 0000000..3333333\n--- /dev/null\n+++ b/new.py\n@@ -0,0 +1,1 @@\n+fresh = True\n"
+      },
+      "expected": [
+        {
+          "filename": "a.py",
+          "status": "modified",
+          "patch": "diff --git a/a.py b/a.py\nindex 1111111..2222222 100644\n--- a/a.py\n+++ b/a.py\n@@ -1,1 +1,2 @@\n keep = 1\n+added = 2\n"
+        },
+        {
+          "filename": "new.py",
+          "status": "added",
+          "patch": "diff --git a/new.py b/new.py\nnew file mode 100644\nindex 0000000..3333333\n--- /dev/null\n+++ b/new.py\n@@ -0,0 +1,1 @@\n+fresh = True\n"
+        }
+      ]
+    },
+    {
+      "name": "test_style_minimal_headers",
+      "input": {
+        "raw": "diff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n@@ -1,1 +1,2 @@\n keep = 1\n+added = 2\ndiff --git a/new.py b/new.py\nnew file mode 100644\n--- /dev/null\n+++ b/new.py\n@@ -0,0 +1,1 @@\n+fresh = True\n"
+      },
+      "expected": [
+        {
+          "filename": "a.py",
+          "status": "modified",
+          "patch": "diff --git a/a.py b/a.py\n--- a/a.py\n+++ b/a.py\n@@ -1,1 +1,2 @@\n keep = 1\n+added = 2\n"
+        },
+        {
+          "filename": "new.py",
+          "status": "added",
+          "patch": "diff --git a/new.py b/new.py\nnew file mode 100644\n--- /dev/null\n+++ b/new.py\n@@ -0,0 +1,1 @@\n+fresh = True\n"
+        }
+      ]
+    },
+    {
+      "name": "pure_rename",
+      "input": {
+        "raw": "diff --git a/old.py b/renamed.py\nsimilarity index 100%\nrename from old.py\nrename to renamed.py\n"
+      },
+      "expected": []
+    },
+    {
+      "name": "rename_with_hunk",
+      "input": {
+        "raw": "diff --git a/old.py b/renamed.py\nsimilarity index 90%\nrename from old.py\nrename to renamed.py\nindex 1111111..2222222 100644\n--- a/old.py\n+++ b/renamed.py\n@@ -1 +1,2 @@\n x = 1\n+y = 2\n"
+      },
+      "expected": [
+        {
+          "filename": "renamed.py",
+          "status": "renamed",
+          "patch": "diff --git a/old.py b/renamed.py\nsimilarity index 90%\nrename from old.py\nrename to renamed.py\nindex 1111111..2222222 100644\n--- a/old.py\n+++ b/renamed.py\n@@ -1,1 +1,2 @@\n x = 1\n+y = 2\n"
+        }
+      ]
+    },
+    {
+      "name": "deleted_file",
+      "input": {
+        "raw": "diff --git a/gone.py b/gone.py\ndeleted file mode 100644\nindex 1111111..0000000\n--- a/gone.py\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-doomed = True\n"
+      },
+      "expected": []
+    },
+    {
+      "name": "binary_new_file",
+      "input": {
+        "raw": "diff --git a/bin.png b/bin.png\nnew file mode 100644\nindex 0000000..1111111\nBinary files /dev/null and b/bin.png differ\n"
+      },
+      "expected": []
+    },
+    {
+      "name": "mode_change_only",
+      "input": {
+        "raw": "diff --git a/mode.sh b/mode.sh\nold mode 100644\nnew mode 100755\n"
+      },
+      "expected": []
+    },
+    {
+      "name": "mixed_everything",
+      "input": {
+        "raw": "diff --git a/a.py b/a.py\nindex 1111111..2222222 100644\n--- a/a.py\n+++ b/a.py\n@@ -1,1 +1,2 @@ def foo():\n keep = 1\n+added = 2\n\\ No newline at end of file\ndiff --git a/old.py b/renamed.py\nsimilarity index 90%\nrename from old.py\nrename to renamed.py\n--- a/old.py\n+++ b/renamed.py\n@@ -1 +1,2 @@\n x = 1\n+y = 2\ndiff --git a/bin.png b/bin.png\nnew file mode 100644\nBinary files /dev/null and b/bin.png differ\ndiff --git a/mode.sh b/mode.sh\nold mode 100644\nnew mode 100755\ndiff --git a/gone.py b/gone.py\ndeleted file mode 100644\n--- a/gone.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-doomed = True\n"
+      },
+      "expected": [
+        {
+          "filename": "a.py",
+          "status": "modified",
+          "patch": "diff --git a/a.py b/a.py\nindex 1111111..2222222 100644\n--- a/a.py\n+++ b/a.py\n@@ -1,1 +1,2 @@ def foo():\n keep = 1\n+added = 2\n\\ No newline at end of file\n"
+        },
+        {
+          "filename": "renamed.py",
+          "status": "renamed",
+          "patch": "diff --git a/old.py b/renamed.py\nsimilarity index 90%\nrename from old.py\nrename to renamed.py\n--- a/old.py\n+++ b/renamed.py\n@@ -1,1 +1,2 @@\n x = 1\n+y = 2\n"
+        }
+      ]
+    },
+    {
+      "name": "nested_path_and_two_hunks",
+      "input": {
+        "raw": "diff --git a/src/api/admin/route.ts b/src/api/admin/route.ts\nindex aaaaaaa..bbbbbbb 100644\n--- a/src/api/admin/route.ts\n+++ b/src/api/admin/route.ts\n@@ -1,3 +1,4 @@\n import x from 'y';\n+import z from 'w';\n \n export const GET = () => {};\n@@ -10,2 +11,3 @@ export const POST\n   const body = req.body;\n+  validate(body);\n   return body;\n"
+      },
+      "expected": [
+        {
+          "filename": "src/api/admin/route.ts",
+          "status": "modified",
+          "patch": "diff --git a/src/api/admin/route.ts b/src/api/admin/route.ts\nindex aaaaaaa..bbbbbbb 100644\n--- a/src/api/admin/route.ts\n+++ b/src/api/admin/route.ts\n@@ -1,3 +1,4 @@\n import x from 'y';\n+import z from 'w';\n \n export const GET = () => {};\n@@ -10,2 +11,3 @@ export const POST\n   const body = req.body;\n+  validate(body);\n   return body;\n"
+        }
+      ]
+    },
+    {
+      "name": "empty",
+      "input": {
+        "raw": ""
+      },
+      "expected": []
+    },
+    {
+      "name": "whitespace_only",
+      "input": {
+        "raw": "   \n"
+      },
+      "expected": []
+    },
+    {
+      "name": "not_a_diff",
+      "input": {
+        "raw": "hello world\n"
+      },
+      "expected": []
+    }
+  ]
+}

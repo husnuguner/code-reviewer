@@ -1,0 +1,38 @@
+{
+  "module": "render",
+  "cases": [
+    {
+      "name": "text_body/'bug'",
+      "input": {
+        "severity": "bug",
+        "body": "x"
+      },
+      "expected": "**[Bug/correctness]** x"
+    },
+    {
+      "name": "text_body/'Security'",
+      "input": {
+        "severity": "Security",
+        "body": "y"
+      },
+      "expected": "**[Security]** y"
+    },
+    {
+      "name": "text_body/'custom'",
+      "input": {
+        "severity": "custom",
+        "body": "z"
+      },
+      "expected": "**[Custom]** z"
+    },
+    {
+      "name": "text_body/''",
+      "input": {
+        "severity": "",
+        "body": "w"
+      },
+      "expected": "**[]** w"
+    }
+  ],
+  "schema": "Local-git rendering only: the posting-side cases (comment_body, review_body, one_line, dry_run_report, max_listed) moved to backup/ with the posting flow."
+}

@@ -1,0 +1,79 @@
+{
+  "module": "guards",
+  "cases": [
+    { "name": "secret/.env", "input": { "path": ".env" }, "expected": true },
+    { "name": "secret/nested .env", "input": { "path": "services/api/.env" }, "expected": true },
+    { "name": "secret/.env.local", "input": { "path": ".env.local" }, "expected": true },
+    {
+      "name": "secret/.env.example is withheld too",
+      "input": { "path": ".env.example" },
+      "expected": true
+    },
+    { "name": "secret/staging.env", "input": { "path": "deploy/staging.env" }, "expected": true },
+    { "name": "secret/id_rsa", "input": { "path": "id_rsa" }, "expected": true },
+    { "name": "secret/nested id_ed25519", "input": { "path": "keys/id_ed25519" }, "expected": true },
+    {
+      "name": "secret/an upper-cased name is the same file",
+      "input": { "path": "keys/ID_RSA" },
+      "expected": true
+    },
+    { "name": "secret/.ssh directory", "input": { "path": ".ssh/config" }, "expected": true },
+    { "name": "secret/nested .aws", "input": { "path": "home/.aws/credentials" }, "expected": true },
+    { "name": "secret/.npmrc", "input": { "path": "packages/app/.npmrc" }, "expected": true },
+    { "name": "secret/.git-credentials", "input": { "path": ".git-credentials" }, "expected": true },
+    { "name": "secret/docker config", "input": { "path": ".docker/config.json" }, "expected": true },
+    { "name": "secret/pem", "input": { "path": "certs/server.pem" }, "expected": true },
+    { "name": "secret/uppercase extension", "input": { "path": "certs/SERVER.PEM" }, "expected": true },
+    { "name": "secret/key", "input": { "path": "tls/private.key" }, "expected": true },
+    { "name": "secret/keystore", "input": { "path": "android/app.keystore" }, "expected": true },
+
+    { "name": "secret/ordinary source is not", "input": { "path": "src/env.ts" }, "expected": false },
+    {
+      "name": "secret/a module named env is not",
+      "input": { "path": "src/config/env/index.ts" },
+      "expected": false
+    },
+    {
+      "name": "secret/a keys module is not",
+      "input": { "path": "src/keys.ts" },
+      "expected": false
+    },
+    {
+      "name": "secret/a file merely mentioning secret is not",
+      "input": { "path": "src/secret-rotation.ts" },
+      "expected": false
+    },
+    {
+      "name": "secret/an env reader is not",
+      "input": { "path": "src/read-dotenv.ts" },
+      "expected": false
+    },
+    { "name": "secret/a public key is not", "input": { "path": "keys/id_rsa.pub" }, "expected": false },
+
+    {
+      "name": "binary/git binary marker",
+      "input": { "patch": "diff --git a/x.png b/x.png\nBinary files a/x.png and b/x.png differ\n" },
+      "expected": true
+    },
+    {
+      "name": "binary/git binary patch block",
+      "input": { "patch": "GIT binary patch\nliteral 120\nzcmV..." },
+      "expected": true
+    },
+    {
+      "name": "binary/a NUL byte anywhere",
+      "input": { "patch": "@@ -1 +1,2 @@\n old\n+const a = \u0000;\n" },
+      "expected": true
+    },
+    {
+      "name": "binary/an ordinary patch is not",
+      "input": { "patch": "@@ -1 +1,2 @@\n old\n+const a = 1;\n" },
+      "expected": false
+    },
+    {
+      "name": "binary/prose about binary files in a diff line is not",
+      "input": { "patch": "@@ -1 +1,2 @@\n old\n+// Binary files are skipped by the reviewer\n" },
+      "expected": false
+    }
+  ]
+}

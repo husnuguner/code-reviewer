@@ -1,0 +1,776 @@
+{
+  "module": "pystr",
+  "cases": [
+    {
+      "name": "split/''",
+      "input": {
+        "s": ""
+      },
+      "expected": []
+    },
+    {
+      "name": "splitlines/''",
+      "input": {
+        "s": ""
+      },
+      "expected": []
+    },
+    {
+      "name": "strip/''",
+      "input": {
+        "s": ""
+      },
+      "expected": ""
+    },
+    {
+      "name": "title/''",
+      "input": {
+        "s": ""
+      },
+      "expected": ""
+    },
+    {
+      "name": "lower/''",
+      "input": {
+        "s": ""
+      },
+      "expected": ""
+    },
+    {
+      "name": "join_split/''",
+      "input": {
+        "s": ""
+      },
+      "expected": ""
+    },
+    {
+      "name": "split/'   '",
+      "input": {
+        "s": "   "
+      },
+      "expected": []
+    },
+    {
+      "name": "splitlines/'   '",
+      "input": {
+        "s": "   "
+      },
+      "expected": [
+        "   "
+      ]
+    },
+    {
+      "name": "strip/'   '",
+      "input": {
+        "s": "   "
+      },
+      "expected": ""
+    },
+    {
+      "name": "title/'   '",
+      "input": {
+        "s": "   "
+      },
+      "expected": "   "
+    },
+    {
+      "name": "lower/'   '",
+      "input": {
+        "s": "   "
+      },
+      "expected": "   "
+    },
+    {
+      "name": "join_split/'   '",
+      "input": {
+        "s": "   "
+      },
+      "expected": ""
+    },
+    {
+      "name": "split/'a b'",
+      "input": {
+        "s": "a b"
+      },
+      "expected": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "name": "splitlines/'a b'",
+      "input": {
+        "s": "a b"
+      },
+      "expected": [
+        "a b"
+      ]
+    },
+    {
+      "name": "strip/'a b'",
+      "input": {
+        "s": "a b"
+      },
+      "expected": "a b"
+    },
+    {
+      "name": "title/'a b'",
+      "input": {
+        "s": "a b"
+      },
+      "expected": "A B"
+    },
+    {
+      "name": "lower/'a b'",
+      "input": {
+        "s": "a b"
+      },
+      "expected": "a b"
+    },
+    {
+      "name": "join_split/'a b'",
+      "input": {
+        "s": "a b"
+      },
+      "expected": "a b"
+    },
+    {
+      "name": "split/'  a   b  '",
+      "input": {
+        "s": "  a   b  "
+      },
+      "expected": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "name": "splitlines/'  a   b  '",
+      "input": {
+        "s": "  a   b  "
+      },
+      "expected": [
+        "  a   b  "
+      ]
+    },
+    {
+      "name": "strip/'  a   b  '",
+      "input": {
+        "s": "  a   b  "
+      },
+      "expected": "a   b"
+    },
+    {
+      "name": "title/'  a   b  '",
+      "input": {
+        "s": "  a   b  "
+      },
+      "expected": "  A   B  "
+    },
+    {
+      "name": "lower/'  a   b  '",
+      "input": {
+        "s": "  a   b  "
+      },
+      "expected": "  a   b  "
+    },
+    {
+      "name": "join_split/'  a   b  '",
+      "input": {
+        "s": "  a   b  "
+      },
+      "expected": "a b"
+    },
+    {
+      "name": "split/'a\\tb\\nc\\r\\nd'",
+      "input": {
+        "s": "a\tb\nc\r\nd"
+      },
+      "expected": [
+        "a",
+        "b",
+        "c",
+        "d"
+      ]
+    },
+    {
+      "name": "splitlines/'a\\tb\\nc\\r\\nd'",
+      "input": {
+        "s": "a\tb\nc\r\nd"
+      },
+      "expected": [
+        "a\tb",
+        "c",
+        "d"
+      ]
+    },
+    {
+      "name": "strip/'a\\tb\\nc\\r\\nd'",
+      "input": {
+        "s": "a\tb\nc\r\nd"
+      },
+      "expected": "a\tb\nc\r\nd"
+    },
+    {
+      "name": "title/'a\\tb\\nc\\r\\nd'",
+      "input": {
+        "s": "a\tb\nc\r\nd"
+      },
+      "expected": "A\tB\nC\r\nD"
+    },
+    {
+      "name": "lower/'a\\tb\\nc\\r\\nd'",
+      "input": {
+        "s": "a\tb\nc\r\nd"
+      },
+      "expected": "a\tb\nc\r\nd"
+    },
+    {
+      "name": "join_split/'a\\tb\\nc\\r\\nd'",
+      "input": {
+        "s": "a\tb\nc\r\nd"
+      },
+      "expected": "a b c d"
+    },
+    {
+      "name": "split/'line1\\nline2\\n'",
+      "input": {
+        "s": "line1\nline2\n"
+      },
+      "expected": [
+        "line1",
+        "line2"
+      ]
+    },
+    {
+      "name": "splitlines/'line1\\nline2\\n'",
+      "input": {
+        "s": "line1\nline2\n"
+      },
+      "expected": [
+        "line1",
+        "line2"
+      ]
+    },
+    {
+      "name": "strip/'line1\\nline2\\n'",
+      "input": {
+        "s": "line1\nline2\n"
+      },
+      "expected": "line1\nline2"
+    },
+    {
+      "name": "title/'line1\\nline2\\n'",
+      "input": {
+        "s": "line1\nline2\n"
+      },
+      "expected": "Line1\nLine2\n"
+    },
+    {
+      "name": "lower/'line1\\nline2\\n'",
+      "input": {
+        "s": "line1\nline2\n"
+      },
+      "expected": "line1\nline2\n"
+    },
+    {
+      "name": "join_split/'line1\\nline2\\n'",
+      "input": {
+        "s": "line1\nline2\n"
+      },
+      "expected": "line1 line2"
+    },
+    {
+      "name": "split/'line1\\r\\nline2\\rline3\\n\\n'",
+      "input": {
+        "s": "line1\r\nline2\rline3\n\n"
+      },
+      "expected": [
+        "line1",
+        "line2",
+        "line3"
+      ]
+    },
+    {
+      "name": "splitlines/'line1\\r\\nline2\\rline3\\n\\n'",
+      "input": {
+        "s": "line1\r\nline2\rline3\n\n"
+      },
+      "expected": [
+        "line1",
+        "line2",
+        "line3",
+        ""
+      ]
+    },
+    {
+      "name": "strip/'line1\\r\\nline2\\rline3\\n\\n'",
+      "input": {
+        "s": "line1\r\nline2\rline3\n\n"
+      },
+      "expected": "line1\r\nline2\rline3"
+    },
+    {
+      "name": "title/'line1\\r\\nline2\\rline3\\n\\n'",
+      "input": {
+        "s": "line1\r\nline2\rline3\n\n"
+      },
+      "expected": "Line1\r\nLine2\rLine3\n\n"
+    },
+    {
+      "name": "lower/'line1\\r\\nline2\\rline3\\n\\n'",
+      "input": {
+        "s": "line1\r\nline2\rline3\n\n"
+      },
+      "expected": "line1\r\nline2\rline3\n\n"
+    },
+    {
+      "name": "join_split/'line1\\r\\nline2\\rline3\\n\\n'",
+      "input": {
+        "s": "line1\r\nline2\rline3\n\n"
+      },
+      "expected": "line1 line2 line3"
+    },
+    {
+      "name": "split/'x\\u2028y\\u2029z\\x85w\\x0bv\\x0cu\\x1ct\\x1ds\\x1er'",
+      "input": {
+        "s": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
+      },
+      "expected": [
+        "x",
+        "y",
+        "z",
+        "w",
+        "v",
+        "u",
+        "t",
+        "s",
+        "r"
+      ]
+    },
+    {
+      "name": "splitlines/'x\\u2028y\\u2029z\\x85w\\x0bv\\x0cu\\x1ct\\x1ds\\x1er'",
+      "input": {
+        "s": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
+      },
+      "expected": [
+        "x",
+        "y",
+        "z",
+        "w",
+        "v",
+        "u",
+        "t",
+        "s",
+        "r"
+      ]
+    },
+    {
+      "name": "strip/'x\\u2028y\\u2029z\\x85w\\x0bv\\x0cu\\x1ct\\x1ds\\x1er'",
+      "input": {
+        "s": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
+      },
+      "expected": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
+    },
+    {
+      "name": "title/'x\\u2028y\\u2029z\\x85w\\x0bv\\x0cu\\x1ct\\x1ds\\x1er'",
+      "input": {
+        "s": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
+      },
+      "expected": "X Y ZW\u000bV\fU\u001cT\u001dS\u001eR"
+    },
+    {
+      "name": "lower/'x\\u2028y\\u2029z\\x85w\\x0bv\\x0cu\\x1ct\\x1ds\\x1er'",
+      "input": {
+        "s": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
+      },
+      "expected": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
+    },
+    {
+      "name": "join_split/'x\\u2028y\\u2029z\\x85w\\x0bv\\x0cu\\x1ct\\x1ds\\x1er'",
+      "input": {
+        "s": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
+      },
+      "expected": "x y z w v u t s r"
+    },
+    {
+      "name": "split/'\\xa0nbsp\\xa0 padded\\u3000'",
+      "input": {
+        "s": " nbsp  padded　"
+      },
+      "expected": [
+        "nbsp",
+        "padded"
+      ]
+    },
+    {
+      "name": "splitlines/'\\xa0nbsp\\xa0 padded\\u3000'",
+      "input": {
+        "s": " nbsp  padded　"
+      },
+      "expected": [
+        " nbsp  padded　"
+      ]
+    },
+    {
+      "name": "strip/'\\xa0nbsp\\xa0 padded\\u3000'",
+      "input": {
+        "s": " nbsp  padded　"
+      },
+      "expected": "nbsp  padded"
+    },
+    {
+      "name": "title/'\\xa0nbsp\\xa0 padded\\u3000'",
+      "input": {
+        "s": " nbsp  padded　"
+      },
+      "expected": " Nbsp  Padded　"
+    },
+    {
+      "name": "lower/'\\xa0nbsp\\xa0 padded\\u3000'",
+      "input": {
+        "s": " nbsp  padded　"
+      },
+      "expected": " nbsp  padded　"
+    },
+    {
+      "name": "join_split/'\\xa0nbsp\\xa0 padded\\u3000'",
+      "input": {
+        "s": " nbsp  padded　"
+      },
+      "expected": "nbsp padded"
+    },
+    {
+      "name": "split/'\\ufeffbom'",
+      "input": {
+        "s": "﻿bom"
+      },
+      "expected": [
+        "﻿bom"
+      ]
+    },
+    {
+      "name": "splitlines/'\\ufeffbom'",
+      "input": {
+        "s": "﻿bom"
+      },
+      "expected": [
+        "﻿bom"
+      ]
+    },
+    {
+      "name": "strip/'\\ufeffbom'",
+      "input": {
+        "s": "﻿bom"
+      },
+      "expected": "﻿bom"
+    },
+    {
+      "name": "title/'\\ufeffbom'",
+      "input": {
+        "s": "﻿bom"
+      },
+      "expected": "﻿Bom"
+    },
+    {
+      "name": "lower/'\\ufeffbom'",
+      "input": {
+        "s": "﻿bom"
+      },
+      "expected": "﻿bom"
+    },
+    {
+      "name": "join_split/'\\ufeffbom'",
+      "input": {
+        "s": "﻿bom"
+      },
+      "expected": "﻿bom"
+    },
+    {
+      "name": "split/'hello world'",
+      "input": {
+        "s": "hello world"
+      },
+      "expected": [
+        "hello",
+        "world"
+      ]
+    },
+    {
+      "name": "splitlines/'hello world'",
+      "input": {
+        "s": "hello world"
+      },
+      "expected": [
+        "hello world"
+      ]
+    },
+    {
+      "name": "strip/'hello world'",
+      "input": {
+        "s": "hello world"
+      },
+      "expected": "hello world"
+    },
+    {
+      "name": "title/'hello world'",
+      "input": {
+        "s": "hello world"
+      },
+      "expected": "Hello World"
+    },
+    {
+      "name": "lower/'hello world'",
+      "input": {
+        "s": "hello world"
+      },
+      "expected": "hello world"
+    },
+    {
+      "name": "join_split/'hello world'",
+      "input": {
+        "s": "hello world"
+      },
+      "expected": "hello world"
+    },
+    {
+      "name": "split/'hello-world foo_bar'",
+      "input": {
+        "s": "hello-world foo_bar"
+      },
+      "expected": [
+        "hello-world",
+        "foo_bar"
+      ]
+    },
+    {
+      "name": "splitlines/'hello-world foo_bar'",
+      "input": {
+        "s": "hello-world foo_bar"
+      },
+      "expected": [
+        "hello-world foo_bar"
+      ]
+    },
+    {
+      "name": "strip/'hello-world foo_bar'",
+      "input": {
+        "s": "hello-world foo_bar"
+      },
+      "expected": "hello-world foo_bar"
+    },
+    {
+      "name": "title/'hello-world foo_bar'",
+      "input": {
+        "s": "hello-world foo_bar"
+      },
+      "expected": "Hello-World Foo_Bar"
+    },
+    {
+      "name": "lower/'hello-world foo_bar'",
+      "input": {
+        "s": "hello-world foo_bar"
+      },
+      "expected": "hello-world foo_bar"
+    },
+    {
+      "name": "join_split/'hello-world foo_bar'",
+      "input": {
+        "s": "hello-world foo_bar"
+      },
+      "expected": "hello-world foo_bar"
+    },
+    {
+      "name": "split/\"they're 2nd 3rd O'neil\"",
+      "input": {
+        "s": "they're 2nd 3rd O'neil"
+      },
+      "expected": [
+        "they're",
+        "2nd",
+        "3rd",
+        "O'neil"
+      ]
+    },
+    {
+      "name": "splitlines/\"they're 2nd 3rd O'neil\"",
+      "input": {
+        "s": "they're 2nd 3rd O'neil"
+      },
+      "expected": [
+        "they're 2nd 3rd O'neil"
+      ]
+    },
+    {
+      "name": "strip/\"they're 2nd 3rd O'neil\"",
+      "input": {
+        "s": "they're 2nd 3rd O'neil"
+      },
+      "expected": "they're 2nd 3rd O'neil"
+    },
+    {
+      "name": "title/\"they're 2nd 3rd O'neil\"",
+      "input": {
+        "s": "they're 2nd 3rd O'neil"
+      },
+      "expected": "They'Re 2Nd 3Rd O'Neil"
+    },
+    {
+      "name": "lower/\"they're 2nd 3rd O'neil\"",
+      "input": {
+        "s": "they're 2nd 3rd O'neil"
+      },
+      "expected": "they're 2nd 3rd o'neil"
+    },
+    {
+      "name": "join_split/\"they're 2nd 3rd O'neil\"",
+      "input": {
+        "s": "they're 2nd 3rd O'neil"
+      },
+      "expected": "they're 2nd 3rd O'neil"
+    },
+    {
+      "name": "split/'ÜNÎCÖDE şehir İstanbul'",
+      "input": {
+        "s": "ÜNÎCÖDE şehir İstanbul"
+      },
+      "expected": [
+        "ÜNÎCÖDE",
+        "şehir",
+        "İstanbul"
+      ]
+    },
+    {
+      "name": "splitlines/'ÜNÎCÖDE şehir İstanbul'",
+      "input": {
+        "s": "ÜNÎCÖDE şehir İstanbul"
+      },
+      "expected": [
+        "ÜNÎCÖDE şehir İstanbul"
+      ]
+    },
+    {
+      "name": "strip/'ÜNÎCÖDE şehir İstanbul'",
+      "input": {
+        "s": "ÜNÎCÖDE şehir İstanbul"
+      },
+      "expected": "ÜNÎCÖDE şehir İstanbul"
+    },
+    {
+      "name": "title/'ÜNÎCÖDE şehir İstanbul'",
+      "input": {
+        "s": "ÜNÎCÖDE şehir İstanbul"
+      },
+      "expected": "Ünîcöde Şehir İstanbul"
+    },
+    {
+      "name": "lower/'ÜNÎCÖDE şehir İstanbul'",
+      "input": {
+        "s": "ÜNÎCÖDE şehir İstanbul"
+      },
+      "expected": "ünîcöde şehir i̇stanbul"
+    },
+    {
+      "name": "join_split/'ÜNÎCÖDE şehir İstanbul'",
+      "input": {
+        "s": "ÜNÎCÖDE şehir İstanbul"
+      },
+      "expected": "ÜNÎCÖDE şehir İstanbul"
+    },
+    {
+      "name": "split/'already Title Case'",
+      "input": {
+        "s": "already Title Case"
+      },
+      "expected": [
+        "already",
+        "Title",
+        "Case"
+      ]
+    },
+    {
+      "name": "splitlines/'already Title Case'",
+      "input": {
+        "s": "already Title Case"
+      },
+      "expected": [
+        "already Title Case"
+      ]
+    },
+    {
+      "name": "strip/'already Title Case'",
+      "input": {
+        "s": "already Title Case"
+      },
+      "expected": "already Title Case"
+    },
+    {
+      "name": "title/'already Title Case'",
+      "input": {
+        "s": "already Title Case"
+      },
+      "expected": "Already Title Case"
+    },
+    {
+      "name": "lower/'already Title Case'",
+      "input": {
+        "s": "already Title Case"
+      },
+      "expected": "already title case"
+    },
+    {
+      "name": "join_split/'already Title Case'",
+      "input": {
+        "s": "already Title Case"
+      },
+      "expected": "already Title Case"
+    },
+    {
+      "name": "split/'a\\x1fb'",
+      "input": {
+        "s": "a\u001fb"
+      },
+      "expected": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "name": "splitlines/'a\\x1fb'",
+      "input": {
+        "s": "a\u001fb"
+      },
+      "expected": [
+        "a\u001fb"
+      ]
+    },
+    {
+      "name": "strip/'a\\x1fb'",
+      "input": {
+        "s": "a\u001fb"
+      },
+      "expected": "a\u001fb"
+    },
+    {
+      "name": "title/'a\\x1fb'",
+      "input": {
+        "s": "a\u001fb"
+      },
+      "expected": "A\u001fB"
+    },
+    {
+      "name": "lower/'a\\x1fb'",
+      "input": {
+        "s": "a\u001fb"
+      },
+      "expected": "a\u001fb"
+    },
+    {
+      "name": "join_split/'a\\x1fb'",
+      "input": {
+        "s": "a\u001fb"
+      },
+      "expected": "a b"
+    }
+  ]
+}

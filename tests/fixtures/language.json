@@ -1,0 +1,110 @@
+{
+  "module": "language",
+  "cases": [
+    {
+      "name": "'tr'",
+      "input": {
+        "value": "tr"
+      },
+      "expected": "Turkish"
+    },
+    {
+      "name": "' TUR '",
+      "input": {
+        "value": " TUR "
+      },
+      "expected": "Turkish"
+    },
+    {
+      "name": "'Türkçe'",
+      "input": {
+        "value": "Türkçe"
+      },
+      "expected": "Turkish"
+    },
+    {
+      "name": "'türkçe'",
+      "input": {
+        "value": "türkçe"
+      },
+      "expected": "Turkish"
+    },
+    {
+      "name": "'turkce'",
+      "input": {
+        "value": "turkce"
+      },
+      "expected": "Turkish"
+    },
+    {
+      "name": "'TURKISH'",
+      "input": {
+        "value": "TURKISH"
+      },
+      "expected": "Turkish"
+    },
+    {
+      "name": "'en'",
+      "input": {
+        "value": "en"
+      },
+      "expected": "English"
+    },
+    {
+      "name": "'ENG'",
+      "input": {
+        "value": "ENG"
+      },
+      "expected": "English"
+    },
+    {
+      "name": "'english'",
+      "input": {
+        "value": "english"
+      },
+      "expected": "English"
+    },
+    {
+      "name": "''",
+      "input": {
+        "value": ""
+      },
+      "expected": "English"
+    },
+    {
+      "name": "None",
+      "input": {
+        "value": null
+      },
+      "expected": "English"
+    },
+    {
+      "name": "'de'",
+      "input": {
+        "value": "de"
+      },
+      "expected": "English"
+    },
+    {
+      "name": "'  '",
+      "input": {
+        "value": "  "
+      },
+      "expected": "English"
+    },
+    {
+      "name": "'En glish'",
+      "input": {
+        "value": "En glish"
+      },
+      "expected": "English"
+    },
+    {
+      "name": "'TR\\n'",
+      "input": {
+        "value": "TR\n"
+      },
+      "expected": "Turkish"
+    }
+  ]
+}

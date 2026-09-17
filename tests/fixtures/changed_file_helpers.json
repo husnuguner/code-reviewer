@@ -1,0 +1,31 @@
+{
+  "module": "changed_file_helpers",
+  "schema": "Helpers the per-file review step owns: anchor tallies and the statuses never reviewed. The posting-side helpers (as_comments, log_counters) moved to backup/ with the posting flow.",
+  "cases": [
+    {
+      "name": "count_anchors",
+      "input": {},
+      "expected": {
+        "exact": 1,
+        "failed": 1,
+        "repaired": 1,
+        "conflict": 1
+      }
+    },
+    {
+      "name": "count_anchors/empty_anchor_counts_as_exact",
+      "input": {},
+      "expected": {
+        "exact": 1
+      }
+    },
+    {
+      "name": "skip_statuses",
+      "input": {},
+      "expected": [
+        "removed",
+        "renamed"
+      ]
+    }
+  ]
+}

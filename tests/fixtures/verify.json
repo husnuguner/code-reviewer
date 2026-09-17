@@ -1,0 +1,132 @@
+{
+  "module": "verify",
+  "cases": [
+    {
+      "name": "build_prompt/one_finding_with_quote",
+      "input": {
+        "path": "a.ts",
+        "annotated_patch": "@@ -1 +1,2 @@\n old\n[L2] +added",
+        "findings": [
+          {
+            "line": 2,
+            "severity": "bug",
+            "body": "Unbounded query.",
+            "example": "",
+            "start_line": null,
+            "anchor": "exact",
+            "existing_code": "const rows = await repo.find();"
+          }
+        ]
+      },
+      "expected": "File: a.ts\n\nUnified diff (added lines prefixed with [L<n>]):\n```diff\n@@ -1 +1,2 @@\n old\n[L2] +added\n```\n\nFindings to check:\n\n1. [bug] line 2\n   says: Unbounded query.\n   quotes:\n     const rows = await repo.find();\n\nReturn the removal JSON now."
+    },
+    {
+      "name": "build_prompt/span_unanchored_and_no_quote",
+      "input": {
+        "path": "b.ts",
+        "annotated_patch": "[L7] +x",
+        "findings": [
+          {
+            "line": 9,
+            "severity": "performance",
+            "body": "two\nlines",
+            "example": "",
+            "start_line": 7,
+            "anchor": "repaired",
+            "existing_code": ""
+          },
+          {
+            "line": null,
+            "severity": "security",
+            "body": "no line",
+            "example": "",
+            "start_line": null,
+            "anchor": "failed",
+            "existing_code": "a();\n  b();"
+          }
+        ]
+      },
+      "expected": "File: b.ts\n\nUnified diff (added lines prefixed with [L<n>]):\n```diff\n[L7] +x\n```\n\nFindings to check:\n\n1. [performance] lines 7-9\n   says: two lines\n2. [security] no line\n   says: no line\n   quotes:\n     a();\n       b();\n\nReturn the removal JSON now."
+    },
+    {
+      "name": "removals/nothing_removed",
+      "input": { "payload": { "remove": [] }, "count": 2 },
+      "expected": {}
+    },
+    {
+      "name": "removals/full_entry_uppercases_the_ground",
+      "input": {
+        "payload": { "remove": [{ "index": 2, "ground": "b", "reason": "line 4 uses it" }] },
+        "count": 3
+      },
+      "expected": { "2": { "index": 2, "ground": "B", "reason": "line 4 uses it" } }
+    },
+    {
+      "name": "removals/bare_integer_is_a_removal_without_a_ground",
+      "input": { "payload": { "remove": [1] }, "count": 2 },
+      "expected": { "1": { "index": 1, "ground": "", "reason": "" } }
+    },
+    {
+      "name": "removals/unknown_ground_is_recorded_as_none",
+      "input": {
+        "payload": { "remove": [{ "index": 1, "ground": "C", "reason": "x" }] },
+        "count": 1
+      },
+      "expected": { "1": { "index": 1, "ground": "", "reason": "x" } }
+    },
+    {
+      "name": "removals/reason_is_collapsed_to_one_line",
+      "input": {
+        "payload": { "remove": [{ "index": 1, "reason": "  a\n  b  " }] },
+        "count": 1
+      },
+      "expected": { "1": { "index": 1, "ground": "", "reason": "a b" } }
+    },
+    {
+      "name": "removals/an_index_naming_no_finding_is_ignored",
+      "input": { "payload": { "remove": [{ "index": 0 }, { "index": 3 }] }, "count": 2 },
+      "expected": {}
+    },
+    {
+      "name": "removals/a_non_integer_index_is_ignored",
+      "input": {
+        "payload": { "remove": [{ "index": "1" }, { "index": 1.5 }, { "index": true }] },
+        "count": 2
+      },
+      "expected": {}
+    },
+    {
+      "name": "removals/a_repeated_index_keeps_the_first_entry",
+      "input": {
+        "payload": {
+          "remove": [
+            { "index": 1, "reason": "first" },
+            { "index": 1, "reason": "second" }
+          ]
+        },
+        "count": 1
+      },
+      "expected": { "1": { "index": 1, "ground": "", "reason": "first" } }
+    },
+    {
+      "name": "removals/a_non_object_entry_is_ignored",
+      "input": { "payload": { "remove": [null, "2", [3], { "index": 2 }] }, "count": 2 },
+      "expected": { "2": { "index": 2, "ground": "", "reason": "" } }
+    },
+    {
+      "name": "removals/no_remove_key_removes_nothing",
+      "input": { "payload": { "findings": [] }, "count": 2 },
+      "expected": {}
+    },
+    {
+      "name": "removals/a_remove_that_is_not_a_list_removes_nothing",
+      "input": { "payload": { "remove": "all of them" }, "count": 2 },
+      "expected": {}
+    },
+    {
+      "name": "removals/a_payload_that_is_not_an_object_removes_nothing",
+      "input": { "payload": [1, 2], "count": 2 },
+      "expected": {}
+    }
+  ]
+}

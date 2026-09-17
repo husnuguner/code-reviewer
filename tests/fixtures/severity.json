@@ -1,0 +1,644 @@
+{
+  "module": "severity",
+  "cases": [
+    {
+      "name": "parse/'bug'",
+      "input": {
+        "value": "bug"
+      },
+      "expected": "bug"
+    },
+    {
+      "name": "parse_default/'bug'",
+      "input": {
+        "value": "bug"
+      },
+      "expected": "bug"
+    },
+    {
+      "name": "rank_of/'bug'",
+      "input": {
+        "value": "bug"
+      },
+      "expected": 0
+    },
+    {
+      "name": "label/'bug'",
+      "input": {
+        "value": "bug"
+      },
+      "expected": "Bug/correctness"
+    },
+    {
+      "name": "parse/' Security '",
+      "input": {
+        "value": " Security "
+      },
+      "expected": "security"
+    },
+    {
+      "name": "parse_default/' Security '",
+      "input": {
+        "value": " Security "
+      },
+      "expected": "security"
+    },
+    {
+      "name": "rank_of/' Security '",
+      "input": {
+        "value": " Security "
+      },
+      "expected": 1
+    },
+    {
+      "name": "label/' Security '",
+      "input": {
+        "value": " Security "
+      },
+      "expected": "Security"
+    },
+    {
+      "name": "parse/'PERFORMANCE'",
+      "input": {
+        "value": "PERFORMANCE"
+      },
+      "expected": "performance"
+    },
+    {
+      "name": "parse_default/'PERFORMANCE'",
+      "input": {
+        "value": "PERFORMANCE"
+      },
+      "expected": "performance"
+    },
+    {
+      "name": "rank_of/'PERFORMANCE'",
+      "input": {
+        "value": "PERFORMANCE"
+      },
+      "expected": 2
+    },
+    {
+      "name": "label/'PERFORMANCE'",
+      "input": {
+        "value": "PERFORMANCE"
+      },
+      "expected": "Performance"
+    },
+    {
+      "name": "parse/'readability'",
+      "input": {
+        "value": "readability"
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "parse_default/'readability'",
+      "input": {
+        "value": "readability"
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "rank_of/'readability'",
+      "input": {
+        "value": "readability"
+      },
+      "expected": 3
+    },
+    {
+      "name": "label/'readability'",
+      "input": {
+        "value": "readability"
+      },
+      "expected": "Readability"
+    },
+    {
+      "name": "parse/'Readability\\n'",
+      "input": {
+        "value": "Readability\n"
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "parse_default/'Readability\\n'",
+      "input": {
+        "value": "Readability\n"
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "rank_of/'Readability\\n'",
+      "input": {
+        "value": "Readability\n"
+      },
+      "expected": 3
+    },
+    {
+      "name": "label/'Readability\\n'",
+      "input": {
+        "value": "Readability\n"
+      },
+      "expected": "Readability"
+    },
+    {
+      "name": "parse/'nonsense'",
+      "input": {
+        "value": "nonsense"
+      },
+      "expected": {
+        "error": "ValueError",
+        "message": "'nonsense' is not a valid Severity"
+      }
+    },
+    {
+      "name": "parse_default/'nonsense'",
+      "input": {
+        "value": "nonsense"
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "rank_of/'nonsense'",
+      "input": {
+        "value": "nonsense"
+      },
+      "expected": 4
+    },
+    {
+      "name": "label/'nonsense'",
+      "input": {
+        "value": "nonsense"
+      },
+      "expected": "Nonsense"
+    },
+    {
+      "name": "parse/''",
+      "input": {
+        "value": ""
+      },
+      "expected": {
+        "error": "ValueError",
+        "message": "'' is not a valid Severity"
+      }
+    },
+    {
+      "name": "parse_default/''",
+      "input": {
+        "value": ""
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "rank_of/''",
+      "input": {
+        "value": ""
+      },
+      "expected": 4
+    },
+    {
+      "name": "label/''",
+      "input": {
+        "value": ""
+      },
+      "expected": ""
+    },
+    {
+      "name": "parse/None",
+      "input": {
+        "value": null
+      },
+      "expected": {
+        "error": "ValueError",
+        "message": "'' is not a valid Severity"
+      }
+    },
+    {
+      "name": "parse_default/None",
+      "input": {
+        "value": null
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "rank_of/None",
+      "input": {
+        "value": null
+      },
+      "expected": 4
+    },
+    {
+      "name": "label/None",
+      "input": {
+        "value": null
+      },
+      "expected": ""
+    },
+    {
+      "name": "parse/3",
+      "input": {
+        "value": 3
+      },
+      "expected": {
+        "error": "ValueError",
+        "message": "'3' is not a valid Severity"
+      }
+    },
+    {
+      "name": "parse_default/3",
+      "input": {
+        "value": 3
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "rank_of/3",
+      "input": {
+        "value": 3
+      },
+      "expected": 4
+    },
+    {
+      "name": "label/3",
+      "input": {
+        "value": 3
+      },
+      "expected": "3"
+    },
+    {
+      "name": "parse/0",
+      "input": {
+        "value": 0
+      },
+      "expected": {
+        "error": "ValueError",
+        "message": "'' is not a valid Severity"
+      }
+    },
+    {
+      "name": "parse_default/0",
+      "input": {
+        "value": 0
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "rank_of/0",
+      "input": {
+        "value": 0
+      },
+      "expected": 4
+    },
+    {
+      "name": "label/0",
+      "input": {
+        "value": 0
+      },
+      "expected": "0"
+    },
+    {
+      "name": "parse/'custom thing'",
+      "input": {
+        "value": "custom thing"
+      },
+      "expected": {
+        "error": "ValueError",
+        "message": "'custom thing' is not a valid Severity"
+      }
+    },
+    {
+      "name": "parse_default/'custom thing'",
+      "input": {
+        "value": "custom thing"
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "rank_of/'custom thing'",
+      "input": {
+        "value": "custom thing"
+      },
+      "expected": 4
+    },
+    {
+      "name": "label/'custom thing'",
+      "input": {
+        "value": "custom thing"
+      },
+      "expected": "Custom Thing"
+    },
+    {
+      "name": "parse/'foo-bar baz'",
+      "input": {
+        "value": "foo-bar baz"
+      },
+      "expected": {
+        "error": "ValueError",
+        "message": "'foo-bar baz' is not a valid Severity"
+      }
+    },
+    {
+      "name": "parse_default/'foo-bar baz'",
+      "input": {
+        "value": "foo-bar baz"
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "rank_of/'foo-bar baz'",
+      "input": {
+        "value": "foo-bar baz"
+      },
+      "expected": 4
+    },
+    {
+      "name": "label/'foo-bar baz'",
+      "input": {
+        "value": "foo-bar baz"
+      },
+      "expected": "Foo-Bar Baz"
+    },
+    {
+      "name": "parse/'Bug/Correctness'",
+      "input": {
+        "value": "Bug/Correctness"
+      },
+      "expected": {
+        "error": "ValueError",
+        "message": "'bug/correctness' is not a valid Severity"
+      }
+    },
+    {
+      "name": "parse_default/'Bug/Correctness'",
+      "input": {
+        "value": "Bug/Correctness"
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "rank_of/'Bug/Correctness'",
+      "input": {
+        "value": "Bug/Correctness"
+      },
+      "expected": 4
+    },
+    {
+      "name": "label/'Bug/Correctness'",
+      "input": {
+        "value": "Bug/Correctness"
+      },
+      "expected": "Bug/Correctness"
+    },
+    {
+      "name": "parse/'bugs'",
+      "input": {
+        "value": "bugs"
+      },
+      "expected": {
+        "error": "ValueError",
+        "message": "'bugs' is not a valid Severity"
+      }
+    },
+    {
+      "name": "parse_default/'bugs'",
+      "input": {
+        "value": "bugs"
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "rank_of/'bugs'",
+      "input": {
+        "value": "bugs"
+      },
+      "expected": 4
+    },
+    {
+      "name": "label/'bugs'",
+      "input": {
+        "value": "bugs"
+      },
+      "expected": "Bugs"
+    },
+    {
+      "name": "parse/'security '",
+      "input": {
+        "value": "security "
+      },
+      "expected": "security"
+    },
+    {
+      "name": "parse_default/'security '",
+      "input": {
+        "value": "security "
+      },
+      "expected": "security"
+    },
+    {
+      "name": "rank_of/'security '",
+      "input": {
+        "value": "security "
+      },
+      "expected": 1
+    },
+    {
+      "name": "label/'security '",
+      "input": {
+        "value": "security "
+      },
+      "expected": "Security"
+    },
+    {
+      "name": "parse/'PeRfOrMaNcE'",
+      "input": {
+        "value": "PeRfOrMaNcE"
+      },
+      "expected": "performance"
+    },
+    {
+      "name": "parse_default/'PeRfOrMaNcE'",
+      "input": {
+        "value": "PeRfOrMaNcE"
+      },
+      "expected": "performance"
+    },
+    {
+      "name": "rank_of/'PeRfOrMaNcE'",
+      "input": {
+        "value": "PeRfOrMaNcE"
+      },
+      "expected": 2
+    },
+    {
+      "name": "label/'PeRfOrMaNcE'",
+      "input": {
+        "value": "PeRfOrMaNcE"
+      },
+      "expected": "Performance"
+    },
+    {
+      "name": "parse/'readability;'",
+      "input": {
+        "value": "readability;"
+      },
+      "expected": {
+        "error": "ValueError",
+        "message": "'readability;' is not a valid Severity"
+      }
+    },
+    {
+      "name": "parse_default/'readability;'",
+      "input": {
+        "value": "readability;"
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "rank_of/'readability;'",
+      "input": {
+        "value": "readability;"
+      },
+      "expected": 4
+    },
+    {
+      "name": "label/'readability;'",
+      "input": {
+        "value": "readability;"
+      },
+      "expected": "Readability;"
+    },
+    {
+      "name": "parse/'under_score value'",
+      "input": {
+        "value": "under_score value"
+      },
+      "expected": {
+        "error": "ValueError",
+        "message": "'under_score value' is not a valid Severity"
+      }
+    },
+    {
+      "name": "parse_default/'under_score value'",
+      "input": {
+        "value": "under_score value"
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "rank_of/'under_score value'",
+      "input": {
+        "value": "under_score value"
+      },
+      "expected": 4
+    },
+    {
+      "name": "label/'under_score value'",
+      "input": {
+        "value": "under_score value"
+      },
+      "expected": "Under_Score Value"
+    },
+    {
+      "name": "parse/'ünïcode word'",
+      "input": {
+        "value": "ünïcode word"
+      },
+      "expected": {
+        "error": "ValueError",
+        "message": "'ünïcode word' is not a valid Severity"
+      }
+    },
+    {
+      "name": "parse_default/'ünïcode word'",
+      "input": {
+        "value": "ünïcode word"
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "rank_of/'ünïcode word'",
+      "input": {
+        "value": "ünïcode word"
+      },
+      "expected": 4
+    },
+    {
+      "name": "label/'ünïcode word'",
+      "input": {
+        "value": "ünïcode word"
+      },
+      "expected": "Ünïcode Word"
+    },
+    {
+      "name": "parse/'a1b2 c3'",
+      "input": {
+        "value": "a1b2 c3"
+      },
+      "expected": {
+        "error": "ValueError",
+        "message": "'a1b2 c3' is not a valid Severity"
+      }
+    },
+    {
+      "name": "parse_default/'a1b2 c3'",
+      "input": {
+        "value": "a1b2 c3"
+      },
+      "expected": "readability"
+    },
+    {
+      "name": "rank_of/'a1b2 c3'",
+      "input": {
+        "value": "a1b2 c3"
+      },
+      "expected": 4
+    },
+    {
+      "name": "label/'a1b2 c3'",
+      "input": {
+        "value": "a1b2 c3"
+      },
+      "expected": "A1B2 C3"
+    },
+    {
+      "name": "prompt_vocabulary",
+      "input": {},
+      "expected": "bug|security|performance|readability"
+    },
+    {
+      "name": "members_in_order",
+      "input": {},
+      "expected": [
+        "bug",
+        "security",
+        "performance",
+        "readability"
+      ]
+    },
+    {
+      "name": "labels",
+      "input": {},
+      "expected": {
+        "bug": "Bug/correctness",
+        "security": "Security",
+        "performance": "Performance",
+        "readability": "Readability"
+      }
+    },
+    {
+      "name": "ranks",
+      "input": {},
+      "expected": {
+        "bug": 0,
+        "security": 1,
+        "performance": 2,
+        "readability": 3
+      }
+    },
+    {
+      "name": "len",
+      "input": {},
+      "expected": 4
+    }
+  ]
+}

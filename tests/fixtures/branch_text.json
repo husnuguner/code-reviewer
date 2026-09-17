@@ -1,0 +1,194 @@
+{
+  "module": "branch_text",
+  "cases": [
+    {
+      "name": "no_findings",
+      "input": {
+        "base": "main",
+        "branch": "feature/x",
+        "result": {
+          "findings": [],
+          "files_changed": 3,
+          "files_reviewed": 2,
+          "anchors": {},
+          "unanchored": 0
+        }
+      },
+      "expected": "\n=== Branch review: feature/x vs main ===\nNo issues found.\n"
+    },
+    {
+      "name": "one_finding",
+      "input": {
+        "base": "main",
+        "branch": "feature/x",
+        "result": {
+          "findings": [
+            {
+              "path": "a.py",
+              "line": 3,
+              "start_line": null,
+              "anchor": "exact",
+              "severity": "bug",
+              "body": "boom",
+              "example": "",
+              "skills": []
+            }
+          ],
+          "files_changed": 2,
+          "files_reviewed": 2,
+          "anchors": {
+            "exact": 1
+          },
+          "unanchored": 0
+        }
+      },
+      "expected": "\n=== Branch review: feature/x vs main ===\n1 finding(s) across 1 file(s).\n\na.py:3\n  **[Bug/correctness]** boom\n\n"
+    },
+    {
+      "name": "sorted_with_unanchored_and_skills",
+      "input": {
+        "base": "main",
+        "branch": "feature/x",
+        "result": {
+          "findings": [
+            {
+              "path": "b.ts",
+              "line": 5,
+              "start_line": null,
+              "anchor": "exact",
+              "severity": "security",
+              "body": "sec body",
+              "example": "",
+              "skills": [
+                "medusa-auth",
+                "medusa-route"
+              ]
+            },
+            {
+              "path": "a.ts",
+              "line": null,
+              "start_line": null,
+              "anchor": "failed",
+              "severity": "bug",
+              "body": "lost body",
+              "example": "",
+              "skills": []
+            },
+            {
+              "path": "a.ts",
+              "line": 9,
+              "start_line": null,
+              "anchor": "exact",
+              "severity": "performance",
+              "body": "perf body\nsecond line",
+              "example": "fix();\nmore();",
+              "skills": []
+            },
+            {
+              "path": "a.ts",
+              "line": 2,
+              "start_line": 1,
+              "anchor": "repaired",
+              "severity": "readability",
+              "body": "read body",
+              "example": "",
+              "skills": []
+            }
+          ],
+          "files_changed": 4,
+          "files_reviewed": 3,
+          "anchors": {
+            "exact": 2,
+            "failed": 1,
+            "repaired": 1
+          },
+          "unanchored": 1
+        }
+      },
+      "expected": "\n=== Branch review: feature/x vs main ===\n4 finding(s) across 2 file(s).\nanchors: 1 failed, 1 repaired\n\na.ts  (no line anchor)\n  **[Bug/correctness]** lost body\n\na.ts:2\n  **[Readability]** read body\n\na.ts:9\n  **[Performance]** perf body\n  second line\n  ```\n  fix();\n  more();\n  ```\n\nb.ts:5\n  **[Security]** sec body\n  (skills: medusa-auth, medusa-route)\n\n"
+    },
+    {
+      "name": "notable_anchors_only_exact_hidden",
+      "input": {
+        "base": "main",
+        "branch": "feature/x",
+        "result": {
+          "findings": [
+            {
+              "path": "a.ts",
+              "line": 1,
+              "start_line": null,
+              "anchor": "exact",
+              "severity": "bug",
+              "body": "x",
+              "example": "",
+              "skills": []
+            }
+          ],
+          "files_changed": 1,
+          "files_reviewed": 1,
+          "anchors": {
+            "exact": 1,
+            "conflict": 0
+          },
+          "unanchored": 0
+        }
+      },
+      "expected": "\n=== Branch review: feature/x vs main ===\n1 finding(s) across 1 file(s).\n\na.ts:1\n  **[Bug/correctness]** x\n\n"
+    },
+    {
+      "name": "missing_anchors_key",
+      "input": {
+        "base": "main",
+        "branch": "feature/x",
+        "result": {
+          "findings": [
+            {
+              "path": "a.ts",
+              "line": 1,
+              "start_line": null,
+              "anchor": "exact",
+              "severity": "custom",
+              "body": "x",
+              "example": "",
+              "skills": []
+            }
+          ],
+          "files_changed": 1,
+          "files_reviewed": 1
+        }
+      },
+      "expected": "\n=== Branch review: feature/x vs main ===\n1 finding(s) across 1 file(s).\n\na.ts:1\n  **[Custom]** x\n\n"
+    },
+    {
+      "name": "unicode",
+      "input": {
+        "base": "main",
+        "branch": "feature/x",
+        "result": {
+          "findings": [
+            {
+              "path": "ş/ü.ts",
+              "line": 1,
+              "start_line": null,
+              "anchor": "exact",
+              "severity": "bug",
+              "body": "İstanbul şehir 🚀",
+              "example": "",
+              "skills": [
+                "türkçe"
+              ]
+            }
+          ],
+          "files_changed": 1,
+          "files_reviewed": 1,
+          "anchors": {
+            "exact": 1
+          },
+          "unanchored": 0
+        }
+      },
+      "expected": "\n=== Branch review: feature/x vs main ===\n1 finding(s) across 1 file(s).\n\nş/ü.ts:1\n  **[Bug/correctness]** İstanbul şehir 🚀\n  (skills: türkçe)\n\n"
+    }
+  ]
+}

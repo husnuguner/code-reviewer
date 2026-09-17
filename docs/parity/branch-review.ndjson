@@ -1,0 +1,10 @@
+{"type":"finding","path":"new.py","line":1,"start_line":null,"anchor":"exact","severity":"bug","body":"Padded body","example":"","skills":[]}
+{"type":"finding","path":"src/api/admin/route.ts","line":3,"start_line":null,"anchor":"exact","severity":"bug","body":"Unbounded query.","example":"","skills":["medusa-route"]}
+{"type":"finding","path":"src/api/admin/route.ts","line":8,"start_line":null,"anchor":"repaired","severity":"performance","body":"Repaired from quote.","example":"","skills":["medusa-route"]}
+{"type":"finding","path":"src/api/admin/route.ts","line":8,"start_line":null,"anchor":"repaired","severity":"security","body":"Quote points elsewhere.","example":"","skills":["medusa-route"]}
+{"type":"finding","path":"src/api/admin/route.ts","line":null,"start_line":null,"anchor":"failed","severity":"readability","body":"Nowhere to land.","example":"","skills":["medusa-route"]}
+{"type":"finding","path":"src/api/admin/route.ts","line":null,"start_line":null,"anchor":"failed","severity":"bug","body":"Ambiguous quote keeps the line.","example":"","skills":["medusa-route"]}
+{"type":"finding","path":"src/api/admin/route.ts","line":null,"start_line":null,"anchor":"failed","severity":"readability","body":"Unknown severity falls back.","example":"fix();","skills":["medusa-route"]}
+{"type":"finding","path":"src/modules/x/models/m.ts","line":3,"start_line":null,"anchor":"exact","severity":"bug","body":"Decrement quoted with marker.","example":"","skills":["medusa-model"]}
+{"type":"finding","path":"src/modules/x/models/m.ts","line":5,"start_line":null,"anchor":"repaired","severity":"security","body":"Missing line, multi-line quote.","example":"","skills":["medusa-model"]}
+{"type":"summary","base":"main","branch":"feature","files_changed":6,"files_reviewed":3,"findings":9,"files_with_findings":3,"anchors":{"exact":3,"failed":3,"repaired":3},"unanchored":3}

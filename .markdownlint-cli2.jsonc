@@ -1,0 +1,10 @@
+{
+  // Skill documents are prompt content, copied verbatim; linters must not touch them.
+  "ignores": [
+    "prompts/**",
+    "docs/example-skills/**",
+    "docs/medusa/**",
+    "node_modules/**",
+    "dist/**",
+  ],
+}

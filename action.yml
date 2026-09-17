@@ -1,0 +1,213 @@
+name: "code-reviewer"
+description: >-
+  Review a pull request's changed files with an LLM, reading the diff from the
+  checkout's own git. Reports annotations on the changed lines, a job summary
+  and an NDJSON artifact. Posts no comments and needs no repository write
+  permission -- a CI bot downstream turns the NDJSON into comments.
+author: "Hüsnü Güner"
+
+branding:
+  icon: "search"
+  color: "purple"
+
+inputs:
+  base-ref:
+    description: >-
+      The ref to compare against. Defaults to the pull request's base branch,
+      which is what `pull_request` events carry.
+    required: false
+    default: ""
+  head-ref:
+    description: "The ref to review. Defaults to the checked-out commit (HEAD)."
+    required: false
+    default: "HEAD"
+  api-key:
+    description: "The LLM key. Pass a secret; never a literal."
+    required: true
+  provider:
+    description: "LLM provider: claude, or local for an OpenAI-compatible server."
+    required: false
+    default: "claude"
+  model:
+    description: "Model name the provider expects. Empty uses the provider's default."
+    required: false
+    default: ""
+  base-url:
+    description: "OpenAI-compatible endpoint, for provider: local (or a Claude proxy)."
+    required: false
+    default: ""
+  language:
+    description: "Language of the findings' text, e.g. tr or en."
+    required: false
+    default: "en"
+  skills-path:
+    description: >-
+      Where this repository's review skills live, relative to the checkout
+      (e.g. .review/skills). Each changed file is reviewed under the skills
+      whose globs match its path, on top of the standing lenses. Empty
+      disables skills.
+    required: false
+    default: ""
+  config:
+    description: >-
+      Path to a catalogue (config.yaml) inside the checkout, when the project's
+      rules are versioned with the code. Empty runs from these inputs alone.
+    required: false
+    default: ""
+  project:
+    description: "Which project of the catalogue to use; only with config."
+    required: false
+    default: ""
+  exclude:
+    description: "Newline- or comma-separated globs to skip entirely."
+    required: false
+    default: ""
+  max-findings-per-file:
+    description: "Max findings reported per file; the most severe survive. 0 = no cap."
+    required: false
+    default: "3"
+  fail-on:
+    description: >-
+      Severities that fail the job, e.g. "bug,security". "none" (the default)
+      never fails it: the review informs, the humans decide.
+    required: false
+    default: "none"
+  verify:
+    description: >-
+      Check each file's findings against its own diff and drop the refuted
+      ones (one extra model call per file that found something).
+    required: false
+    default: "true"
+  preview:
+    description: >-
+      Print which files would be reviewed and stop. Calls no model, so it
+      costs nothing and needs no key -- useful for testing the wiring.
+    required: false
+    default: "false"
+  out:
+    description: "Where the NDJSON record stream is written, for a CI bot to read."
+    required: false
+    default: "code-review.ndjson"
+  upload-artifact:
+    description: "Upload the NDJSON as a workflow artifact."
+    required: false
+    default: "true"
+  node-version:
+    description: "Node.js the reviewer runs on."
+    required: false
+    default: "24"
+
+outputs:
+  findings-file:
+    description: "Path to the NDJSON record stream (findings, then one summary record)."
+    value: ${{ steps.review.outputs.findings-file }}
+  findings:
+    description: "How many findings were reported."
+    value: ${{ steps.review.outputs.findings }}
+
+runs:
+  using: composite
+  steps:
+    # The reviewer reads local git, so the base ref has to exist locally. A
+    # `pull_request` checkout is shallow by default and knows only the head,
+    # which would make every file look new.
+    - name: Fetch the base ref
+      id: base
+      shell: bash
+      env:
+        BASE_REF: ${{ inputs.base-ref || github.event.pull_request.base.ref }}
+      run: |
+        set -euo pipefail
+        if [ -z "${BASE_REF}" ]; then
+          echo "::error::No base ref: pass base-ref, or run this on a pull_request event."
+          exit 1
+        fi
+        # A branch name is attacker-influenceable, and this one reaches a
+        # shell and a step output. Only ordinary ref characters get through,
+        # so neither a newline nor a flag-looking value can be smuggled in.
+        if ! printf '%s' "${BASE_REF}" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._/-]*$'; then
+          echo "::error::Refusing a base ref that is not a plain git ref name."
+          exit 1
+        fi
+        git -C "${GITHUB_WORKSPACE}" fetch --no-tags --depth=0 origin "+${BASE_REF}:refs/remotes/origin/${BASE_REF}" \
+          || git -C "${GITHUB_WORKSPACE}" fetch --no-tags origin "${BASE_REF}"
+        # A step output, never GITHUB_ENV: an environment variable written
+        # from untrusted text is an injection surface for the whole job.
+        echo "ref=${BASE_REF}" >> "${GITHUB_OUTPUT}"
+
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    # The action's own directory is the reviewer's checkout, not the reviewed
+    # repository; it is built there so the two never share a node_modules.
+    - name: Build the reviewer
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        npm ci --no-audit --no-fund
+        npm run build
+
+    - name: Review
+      id: review
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        LLM_API_KEY: ${{ inputs.api-key }}
+        LLM_PROVIDER: ${{ inputs.provider }}
+        LLM_MODEL: ${{ inputs.model }}
+        LLM_BASE_URL: ${{ inputs.base-url }}
+        REVIEW_LANG: ${{ inputs.language }}
+        REVIEW_SKILLS_PATH: ${{ inputs.skills-path }}
+        REVIEW_EXCLUDE_PATHS: ${{ inputs.exclude }}
+        REVIEW_MAX_FINDINGS_PER_FILE: ${{ inputs.max-findings-per-file }}
+        REVIEW_VERIFY: ${{ inputs.verify }}
+        REVIEWER_CONFIG: ${{ inputs.config }}
+        HEAD_REF: ${{ inputs.head-ref }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        OUT_FILE: ${{ inputs.out }}
+        PROJECT: ${{ inputs.project }}
+        PREVIEW: ${{ inputs.preview }}
+        ACTION_PATH: ${{ github.action_path }}
+        BASE_REF: ${{ steps.base.outputs.ref }}
+      run: |
+        set -uo pipefail
+        args=(
+          --base "origin/${BASE_REF}"
+          --branch "${HEAD_REF}"
+          --fail-on "${FAIL_ON}"
+        )
+        # `--format github` prints the annotations; `--out` keeps the machine
+        # copy, so one model call serves both the humans and the CI bot.
+        if [ "${PREVIEW}" = "true" ]; then
+          args+=(--preview)
+        else
+          args+=(--format github --out "${OUT_FILE}")
+        fi
+        [ -n "${PROJECT}" ] && args+=(--project "${PROJECT}")
+        [ -n "${REVIEWER_CONFIG}" ] && args+=(--config "${REVIEWER_CONFIG}")
+
+        node "${ACTION_PATH}/dist/cli/index.js" "${args[@]}"
+        status=$?
+
+        echo "findings-file=${OUT_FILE}" >> "${GITHUB_OUTPUT}"
+        if [ -f "${OUT_FILE}" ]; then
+          count=$(grep -c '"type":"finding"' "${OUT_FILE}" || true)
+        else
+          count=0
+        fi
+        echo "findings=${count}" >> "${GITHUB_OUTPUT}"
+
+        # Exit 3 is "findings matched --fail-on", which is a verdict, not a
+        # crash; anything else is passed through as the failure it is.
+        exit $status
+
+    - name: Upload the findings
+      if: ${{ always() && inputs.upload-artifact == 'true' && inputs.preview != 'true' }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: code-review-findings
+        path: ${{ inputs.out }}
+        if-no-files-found: ignore

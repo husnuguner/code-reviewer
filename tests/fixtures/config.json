@@ -1,0 +1,546 @@
+{
+  "module": "config",
+  "schema": "REVIEW_MAX_FINDINGS_PER_FILE defaults to 3 here (Python: 0 = uncapped); the other values are generated snapshots.",
+  "cases": [
+    {
+      "name": "default_concurrency/None",
+      "input": {
+        "cpu": null
+      },
+      "expected": 4
+    },
+    {
+      "name": "default_concurrency/1",
+      "input": {
+        "cpu": 1
+      },
+      "expected": 2
+    },
+    {
+      "name": "default_concurrency/2",
+      "input": {
+        "cpu": 2
+      },
+      "expected": 2
+    },
+    {
+      "name": "default_concurrency/3",
+      "input": {
+        "cpu": 3
+      },
+      "expected": 3
+    },
+    {
+      "name": "default_concurrency/4",
+      "input": {
+        "cpu": 4
+      },
+      "expected": 4
+    },
+    {
+      "name": "default_concurrency/5",
+      "input": {
+        "cpu": 5
+      },
+      "expected": 5
+    },
+    {
+      "name": "default_concurrency/7",
+      "input": {
+        "cpu": 7
+      },
+      "expected": 7
+    },
+    {
+      "name": "default_concurrency/8",
+      "input": {
+        "cpu": 8
+      },
+      "expected": 8
+    },
+    {
+      "name": "default_concurrency/9",
+      "input": {
+        "cpu": 9
+      },
+      "expected": 8
+    },
+    {
+      "name": "default_concurrency/12",
+      "input": {
+        "cpu": 12
+      },
+      "expected": 8
+    },
+    {
+      "name": "default_concurrency/16",
+      "input": {
+        "cpu": 16
+      },
+      "expected": 8
+    },
+    {
+      "name": "default_concurrency/64",
+      "input": {
+        "cpu": 64
+      },
+      "expected": 8
+    },
+    {
+      "name": "config/minimal",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k"
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "provider": "local",
+        "model_name": null,
+        "api_key": "k",
+        "base_url": null,
+        "local_path": "",
+        "max_file_chars": 8000,
+        "skills_path": "",
+        "max_skill_chars": 10000,
+        "max_skills_total_chars": 18000,
+        "max_context_chars": 6000,
+        "max_findings_per_file": 3,
+        "verify_findings": true,
+        "review_lang": "English",
+        "exclude_paths": "",
+        "exclude_globs": [],
+        "max_concurrent_files": 8
+      }
+    },
+    {
+      "name": "config/csv_with_spaces_and_newlines",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k",
+          "REVIEW_EXCLUDE_PATHS": "**/*.md , **/*.lock\n**/dist/**,,"
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "provider": "local",
+        "model_name": null,
+        "api_key": "k",
+        "base_url": null,
+        "local_path": "",
+        "max_file_chars": 8000,
+        "skills_path": "",
+        "max_skill_chars": 10000,
+        "max_skills_total_chars": 18000,
+        "max_context_chars": 6000,
+        "max_findings_per_file": 3,
+        "verify_findings": true,
+        "review_lang": "English",
+        "exclude_paths": "**/*.md , **/*.lock\n**/dist/**,,",
+        "exclude_globs": [
+          "**/*.md",
+          "**/*.lock",
+          "**/dist/**"
+        ],
+        "max_concurrent_files": 8
+      }
+    },
+    {
+      "name": "config/blank_optional_strings",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k",
+          "LLM_MODEL": "   ",
+          "LLM_BASE_URL": ""
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "provider": "local",
+        "model_name": null,
+        "api_key": "k",
+        "base_url": null,
+        "local_path": "",
+        "max_file_chars": 8000,
+        "skills_path": "",
+        "max_skill_chars": 10000,
+        "max_skills_total_chars": 18000,
+        "max_context_chars": 6000,
+        "max_findings_per_file": 3,
+        "verify_findings": true,
+        "review_lang": "English",
+        "exclude_paths": "",
+        "exclude_globs": [],
+        "max_concurrent_files": 8
+      }
+    },
+    {
+      "name": "config/owner_repo_slug",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k"
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "provider": "local",
+        "model_name": null,
+        "api_key": "k",
+        "base_url": null,
+        "local_path": "",
+        "max_file_chars": 8000,
+        "skills_path": "",
+        "max_skill_chars": 10000,
+        "max_skills_total_chars": 18000,
+        "max_context_chars": 6000,
+        "max_findings_per_file": 3,
+        "verify_findings": true,
+        "review_lang": "English",
+        "exclude_paths": "",
+        "exclude_globs": [],
+        "max_concurrent_files": 8
+      }
+    },
+    {
+      "name": "config/bare_repo_with_owner",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k"
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "provider": "local",
+        "model_name": null,
+        "api_key": "k",
+        "base_url": null,
+        "local_path": "",
+        "max_file_chars": 8000,
+        "skills_path": "",
+        "max_skill_chars": 10000,
+        "max_skills_total_chars": 18000,
+        "max_context_chars": 6000,
+        "max_findings_per_file": 3,
+        "verify_findings": true,
+        "review_lang": "English",
+        "exclude_paths": "",
+        "exclude_globs": [],
+        "max_concurrent_files": 8
+      }
+    },
+    {
+      "name": "config/bare_repo_without_owner",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k"
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "provider": "local",
+        "model_name": null,
+        "api_key": "k",
+        "base_url": null,
+        "local_path": "",
+        "max_file_chars": 8000,
+        "skills_path": "",
+        "max_skill_chars": 10000,
+        "max_skills_total_chars": 18000,
+        "max_context_chars": 6000,
+        "max_findings_per_file": 3,
+        "verify_findings": true,
+        "review_lang": "English",
+        "exclude_paths": "",
+        "exclude_globs": [],
+        "max_concurrent_files": 8
+      }
+    },
+    {
+      "name": "config/slug_with_extra_slash",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k"
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "provider": "local",
+        "model_name": null,
+        "api_key": "k",
+        "base_url": null,
+        "local_path": "",
+        "max_file_chars": 8000,
+        "skills_path": "",
+        "max_skill_chars": 10000,
+        "max_skills_total_chars": 18000,
+        "max_context_chars": 6000,
+        "max_findings_per_file": 3,
+        "verify_findings": true,
+        "review_lang": "English",
+        "exclude_paths": "",
+        "exclude_globs": [],
+        "max_concurrent_files": 8
+      }
+    },
+    {
+      "name": "config/slug_missing_repo",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k"
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "provider": "local",
+        "model_name": null,
+        "api_key": "k",
+        "base_url": null,
+        "local_path": "",
+        "max_file_chars": 8000,
+        "skills_path": "",
+        "max_skill_chars": 10000,
+        "max_skills_total_chars": 18000,
+        "max_context_chars": 6000,
+        "max_findings_per_file": 3,
+        "verify_findings": true,
+        "review_lang": "English",
+        "exclude_paths": "",
+        "exclude_globs": [],
+        "max_concurrent_files": 8
+      }
+    },
+    {
+      "name": "config/provider_claude_upper",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k",
+          "LLM_PROVIDER": " Claude "
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "provider": "claude",
+        "model_name": null,
+        "api_key": "k",
+        "base_url": null,
+        "local_path": "",
+        "max_file_chars": 8000,
+        "skills_path": "",
+        "max_skill_chars": 10000,
+        "max_skills_total_chars": 18000,
+        "max_context_chars": 6000,
+        "max_findings_per_file": 3,
+        "verify_findings": true,
+        "review_lang": "English",
+        "exclude_paths": "",
+        "exclude_globs": [],
+        "max_concurrent_files": 8
+      }
+    },
+    {
+      "name": "config/provider_unknown",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k",
+          "LLM_PROVIDER": "gemini"
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "error": "ConfigError"
+      }
+    },
+    {
+      "name": "config/missing_api_key",
+      "input": {
+        "env": {},
+        "cpu": 8
+      },
+      "expected": {
+        "error": "ConfigError"
+      }
+    },
+    {
+      "name": "config/lang_variants",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k",
+          "REVIEW_LANG": "TUR"
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "provider": "local",
+        "model_name": null,
+        "api_key": "k",
+        "base_url": null,
+        "local_path": "",
+        "max_file_chars": 8000,
+        "skills_path": "",
+        "max_skill_chars": 10000,
+        "max_skills_total_chars": 18000,
+        "max_context_chars": 6000,
+        "max_findings_per_file": 3,
+        "verify_findings": true,
+        "review_lang": "Turkish",
+        "exclude_paths": "",
+        "exclude_globs": [],
+        "max_concurrent_files": 8
+      }
+    },
+    {
+      "name": "config/lang_unknown",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k",
+          "REVIEW_LANG": "de"
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "provider": "local",
+        "model_name": null,
+        "api_key": "k",
+        "base_url": null,
+        "local_path": "",
+        "max_file_chars": 8000,
+        "skills_path": "",
+        "max_skill_chars": 10000,
+        "max_skills_total_chars": 18000,
+        "max_context_chars": 6000,
+        "max_findings_per_file": 3,
+        "verify_findings": true,
+        "review_lang": "English",
+        "exclude_paths": "",
+        "exclude_globs": [],
+        "max_concurrent_files": 8
+      }
+    },
+    {
+      "name": "config/ints_from_strings",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k",
+          "PR_REVIEW_MAX_FILE_CHARS": "123",
+          "REVIEW_MAX_FINDINGS_PER_FILE": "2",
+          "REVIEW_MAX_CONCURRENT_FILES": "9"
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "provider": "local",
+        "model_name": null,
+        "api_key": "k",
+        "base_url": null,
+        "local_path": "",
+        "max_file_chars": 123,
+        "skills_path": "",
+        "max_skill_chars": 10000,
+        "max_skills_total_chars": 18000,
+        "max_context_chars": 6000,
+        "max_findings_per_file": 2,
+        "verify_findings": true,
+        "review_lang": "English",
+        "exclude_paths": "",
+        "exclude_globs": [],
+        "max_concurrent_files": 9
+      }
+    },
+    {
+      "name": "config/int_not_a_number",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k",
+          "PR_REVIEW_MAX_FILE_CHARS": "abc"
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "error": "ConfigError"
+      }
+    },
+    {
+      "name": "config/concurrency_zero_falls_back",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k",
+          "REVIEW_MAX_CONCURRENT_FILES": "-3"
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "provider": "local",
+        "model_name": null,
+        "api_key": "k",
+        "base_url": null,
+        "local_path": "",
+        "max_file_chars": 8000,
+        "skills_path": "",
+        "max_skill_chars": 10000,
+        "max_skills_total_chars": 18000,
+        "max_context_chars": 6000,
+        "max_findings_per_file": 3,
+        "verify_findings": true,
+        "review_lang": "English",
+        "exclude_paths": "",
+        "exclude_globs": [],
+        "max_concurrent_files": 8
+      }
+    },
+    {
+      "name": "config/repo_provider_fields",
+      "input": {
+        "env": {
+          "LLM_API_KEY": "k"
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "provider": "local",
+        "model_name": null,
+        "api_key": "k",
+        "base_url": null,
+        "local_path": "",
+        "max_file_chars": 8000,
+        "skills_path": "",
+        "max_skill_chars": 10000,
+        "max_skills_total_chars": 18000,
+        "max_context_chars": 6000,
+        "max_findings_per_file": 3,
+        "verify_findings": true,
+        "review_lang": "English",
+        "exclude_paths": "",
+        "exclude_globs": [],
+        "max_concurrent_files": 8
+      }
+    },
+    {
+      "name": "config/lowercase_env_names",
+      "input": {
+        "env": {
+          "llm_api_key": "k",
+          "review_lang": "tr"
+        },
+        "cpu": 8
+      },
+      "expected": {
+        "provider": "local",
+        "model_name": null,
+        "api_key": "k",
+        "base_url": null,
+        "local_path": "",
+        "max_file_chars": 8000,
+        "skills_path": "",
+        "max_skill_chars": 10000,
+        "max_skills_total_chars": 18000,
+        "max_context_chars": 6000,
+        "max_findings_per_file": 3,
+        "verify_findings": true,
+        "review_lang": "Turkish",
+        "exclude_paths": "",
+        "exclude_globs": [],
+        "max_concurrent_files": 8
+      }
+    }
+  ]
+}
