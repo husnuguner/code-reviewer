@@ -338,9 +338,31 @@ describe("resolution", () => {
     const s = scratch();
     const config = load(s, { project: "app", configFile: s.catalogFile });
     expect(config.skillSettings()).toEqual({
-      path: ".review/skills",
+      // Relative in the file, anchored to the file's own directory here.
+      path: join(s.root, ".review/skills"),
       mappings: { "api-routes": ["src/api/**/route.ts"], models: ["src/modules/**/models/*.ts"] },
     });
+  });
+
+  it("anchors every relative path the catalogue names to the catalogue's own directory", () => {
+    // One base, not two. `prompts: [prompts/system.md]` has always meant
+    // "beside this file"; `skills.path` now means the same, so a reader can
+    // check either against the other -- and a repository's .review/config.yaml
+    // says `skills: { path: skills }` without knowing where the checkout is.
+    const s = scratch();
+    const config = load(s, { project: "app", configFile: s.catalogFile });
+    expect(config.skillSettings().path).toBe(join(s.root, ".review/skills"));
+    // An anchored path is left alone: `~` and `/` already say where.
+    const legacy = load(s, { project: "legacy", configFile: s.catalogFile });
+    expect(legacy.skillSettings().path).toBe("~/.config/reviewer/skills/legacy");
+    // The environment's path comes from no file, so it is not re-anchored:
+    // the checkout is its natural base, as it always was.
+    const fromEnvironment = load(s, {
+      project: "app",
+      configFile: s.catalogFile,
+      env: cleanEnvironment(s, { REVIEW_SKILLS_PATH: "rules" }),
+    });
+    expect(fromEnvironment.skillSettings().path).toBe("rules");
   });
 
   it("lets the catalogue's defaults fill what a project leaves out, and the project win the rest", () => {
@@ -444,7 +466,7 @@ describe("resolution", () => {
       configFile: s.catalogFile,
       env: cleanEnvironment(s, { REVIEW_SKILLS_PATH: "", REVIEW_LANG: "  " }),
     });
-    expect(config.skillSettings().path).toBe(".review/skills");
+    expect(config.skillSettings().path).toBe(join(s.root, ".review/skills"));
     expect(config.reviewLang).toBe("Turkish");
   });
 

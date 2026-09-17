@@ -128,8 +128,12 @@ export function loadRunConfig(options: LoadRunConfigOptions): Config {
     processEnv: environment,
     envFiles: environmentFilePaths(environment, cwd, home).map(readEnvironmentFile),
   };
+  const catalog = loadCatalog(options.configFile, environment, logger, home, cwd);
   return resolveConfig({
-    catalog: loadCatalog(options.configFile, environment, logger, home, cwd),
+    catalog,
+    // Where the catalogue actually is -- a repository's `.review/` or the
+    // machine's home -- so every relative path it names is taken from there.
+    ...(catalog !== null && { catalogDirectory: dirname(catalog.source) }),
     project: options.project ?? null,
     ...(options.overrides && { overrides: options.overrides }),
     ...(options.requiresModel !== undefined && { requiresModel: options.requiresModel }),

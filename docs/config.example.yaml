@@ -73,10 +73,14 @@ defaults:
   # project. Omit for no skills (the four built-in lenses review alone).
   skills:
     # Where the skill documents (*.md with a `name:` frontmatter) are.
-    #   absolute or ~ path -> a directory on THIS machine; the usual home is
-    #                         ~/.config/reviewer/skills/<project>.
-    #   relative path      -> inside the REVIEWED repository, read from the
-    #                         local checkout.
+    #   absolute or ~ path -> that directory, as written; the machine-wide
+    #                         home is ~/.config/reviewer/skills/<project>.
+    #   relative path      -> beside THIS FILE, exactly like `prompts`. In a
+    #                         repository's .review/config.yaml that means
+    #                         `skills` for .review/skills. One base for every
+    #                         path the catalogue names.
+    # (REVIEW_SKILLS_PATH / --skills-path come from no file and are taken
+    # from the reviewed checkout instead.)
     # {{project}} stands for the project's name, so one shared path gives
     # every project its own folder. Default "": no skills.
     path: ~/.config/reviewer/skills/{{project}}

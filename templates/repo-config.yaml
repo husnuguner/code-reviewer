@@ -25,7 +25,8 @@ projects:
   # where it is, because this file is inside it.
   this-repo:
     skills:
-      # Relative to the repository root, like every relative skills path.
-      path: .review/skills
+      # Beside this file, like `prompts` above: every relative path in this
+      # catalogue is taken from the catalogue's own directory (.review/).
+      path: skills
       mappings: {} # skill name -> globs it reviews; a skill mapped nowhere never applies
       # api-rules: ["src/api/**/*.ts"]

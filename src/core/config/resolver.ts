@@ -67,6 +67,28 @@ function withProjectName(path: string, name: string): string {
   return path.replaceAll(PROJECT_PLACEHOLDER, () => name);
 }
 
+/** Whether a path already names a place on its own: absolute, or under `~`. */
+function isAnchored(path: string): boolean {
+  return path.startsWith("/") || path === "~" || path.startsWith("~/");
+}
+
+/**
+ * A catalogue's relative path, anchored to the catalogue's own directory.
+ *
+ * One rule for every path the catalogue names: `prompts/system.md` and
+ * `skills/` both mean "beside this file". A repository's `.review/config.yaml`
+ * therefore says `skills: { path: skills }`, the machine's says
+ * `skills/{{project}}`, and neither has to know where the reviewed checkout
+ * is. Paths from the environment or the command line are not touched here:
+ * they come from no file, so the checkout is their natural base.
+ */
+function besideCatalog(path: string, catalogDirectory: string): string {
+  const trimmed = path.trim();
+  return trimmed === "" || isAnchored(trimmed)
+    ? trimmed
+    : `${catalogDirectory.replace(/\/+$/u, "")}/${trimmed.replace(/^\.\//u, "")}`;
+}
+
 /** The project's `skills` section: `{ path, mappings }` onto two fields. */
 const SKILLS_FIELDS: Readonly<Record<SkillsSectionKey, ConfigField>> = {
   path: "skillsPath",
@@ -89,6 +111,8 @@ export interface ConfigSources {
 export interface ResolveOptions extends ConfigOptions {
   /** The parsed catalogue, or `null` when there is no file. */
   readonly catalog: Catalog | null;
+  /** The catalogue file's directory; the base for every relative path it names. */
+  readonly catalogDirectory?: string;
   /** `--project`, or `null` to pick the only project / run without one. */
   readonly project: string | null;
   /** Command-line settings by field name; they outrank every other layer. */
@@ -149,6 +173,12 @@ export interface ProjectValuesOptions {
   readonly catalog: Catalog;
   /** `--project`, or `null` to pick the only project. */
   readonly project: string | null;
+  /**
+   * The directory the catalogue file is in. Every relative path the
+   * catalogue names is taken from here, so `prompts` and `skills.path` share
+   * one base and a reader can check either against the other.
+   */
+  readonly catalogDirectory: string;
   /** The merged environment the settings loader also reads. */
   readonly environment: Readonly<Record<string, string>>;
   /** Where `config.json` and its sibling `.env` live, for error messages. */
@@ -182,6 +212,7 @@ export interface ProjectValuesOptions {
 export function projectValues({
   catalog,
   project,
+  catalogDirectory,
   environment,
   configHome,
   requiresModel = true,
@@ -224,6 +255,12 @@ export function projectValues({
     const path = values[field];
     if (typeof path === "string") values[field] = withProjectName(path, spec.name);
   }
+  // The catalogue's skills directory is beside the catalogue, like its
+  // prompts -- so a relative path is anchored here, once, and the flow that
+  // reads it never has to ask which base a path meant.
+  if (typeof values.skillsPath === "string") {
+    values.skillsPath = besideCatalog(values.skillsPath, catalogDirectory);
+  }
   if (Array.isArray(values.promptFiles)) {
     values.promptFiles = values.promptFiles.map((file: unknown) =>
       typeof file === "string" ? withProjectName(file, spec.name) : file,
@@ -250,6 +287,7 @@ export function resolveConfig(options: ResolveOptions): Config {
     const all = projectValues({
       catalog,
       project,
+      catalogDirectory: options.catalogDirectory ?? options.configHome,
       environment,
       configHome: options.configHome,
       hasApiKey: supplied.has(CONFIG_ALIASES.apiKey),

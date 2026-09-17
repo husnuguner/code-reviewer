@@ -192,13 +192,16 @@ describe("the catalogue commands", () => {
     expect(files.skillsDirectory("anything")).toBe(join(repo, ".review", "skills"));
   });
 
-  it("ships a repo-local starter that parses, names one project, and reads skills from .review/skills", () => {
+  it("ships a repo-local starter that parses, names one project, and reads skills from beside itself", () => {
     const catalog = parseCatalog(parseYaml(shippedFile("templates/repo-config.yaml")), "template");
     expect(catalog.projects.size).toBe(1);
     const project = catalog.project(null);
     // No local-path: the reviewer already knows where it is.
     expect(project.settings["local-path"]).toBeUndefined();
-    expect(project.settings.skills).toEqual({ path: ".review/skills", mappings: {} });
+    // `skills`, not `.review/skills`: a relative path in a catalogue is taken
+    // from the catalogue's own directory, the same base `prompts` has always
+    // used. One rule, checkable by reading the file.
+    expect(project.settings.skills).toEqual({ path: "skills", mappings: {} });
     for (const key of Object.keys(catalog.defaults)) expect(PROJECT_SETTING_KEYS).toContain(key);
   });
 

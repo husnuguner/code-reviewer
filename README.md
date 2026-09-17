@@ -237,10 +237,12 @@ This is the part worth configuring first: it is what turns a generic review into
 
 **The reviewer ships no skills of its own.** Where they are read from is the project's `skills.path` ([ADR 0003](docs/adr/0003-no-bundled-skill-library.md), amended by [ADR 0005](docs/adr/0005-skill-scope-in-the-catalogue.md)):
 
-| `skills.path`        | Where skills are read from                                                                                                       |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| absolute or `~` path | a directory on **this machine** — the usual home is `~/.config/reviewer/skills/<project>`                                        |
-| relative path        | inside the **reviewed repository**, from the checkout — so a branch that revises a convention is reviewed under the revised rule |
+| `skills.path`        | Where skills are read from                                                                                                                                           |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| absolute or `~` path | that directory, as written — the machine-wide home is `~/.config/reviewer/skills/<project>`                                                                          |
+| relative path        | **beside the catalogue file**, exactly like `prompts` — in a repository's `.review/config.yaml`, `skills` means `.review/skills`, versioned with the code it governs |
+
+One base for every path a catalogue names, so a reader can check `skills.path` against `prompts` and neither can be wrong about where the other points. `--skills-path` and `REVIEW_SKILLS_PATH` come from no file and are taken from the reviewed checkout instead.
 
 Each skill is Markdown with YAML frontmatter; `name` is the unique id:
 
@@ -257,7 +259,7 @@ Guidance text injected into the review prompt for matching files.
 
 ```yaml
 skills:
-  path: .review/skills
+  path: skills # beside config.yaml
   mappings:
     medusa-route: ["src/api/**/route.ts"]
     medusa-conventions: "src/**/*.ts"
