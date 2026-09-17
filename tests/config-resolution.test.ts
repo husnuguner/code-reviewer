@@ -274,6 +274,22 @@ describe("secrets", () => {
     );
   });
 
+  it("does not demand the key the catalogue names when the environment supplies LLM_API_KEY", () => {
+    // The CI case: the workflow hands the key in as LLM_API_KEY, while the
+    // repository's committed config says `api-key: ANTHROPIC_API_KEY`. That
+    // variable is the override layer above the catalogue -- a run that has
+    // it has its key, and the catalogue's *name* for a different variable
+    // must not be demanded as well.
+    const s = scratch();
+    const environment = cleanEnvironment(s, { LLM_API_KEY: "from-ci" });
+    delete environment["ANTHROPIC_API_KEY"];
+    const config = load(s, { project: "app", configFile: s.catalogFile, env: environment });
+    expect(config.apiKey).toBe("from-ci");
+    // Everything else the catalogue says still applies.
+    expect(config.provider).toBe("claude");
+    expect(config.modelName).toBe("claude-opus-5");
+  });
+
   it("does not demand a key the catalogue names when the flow builds no model", () => {
     // `--preview` decides scope and calls nobody; a pre-flight that refused to
     // run without a key it would never send is a pre-flight nobody can run

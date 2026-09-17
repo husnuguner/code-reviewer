@@ -160,6 +160,16 @@ export interface ProjectValuesOptions {
    * that will actually send it.
    */
   readonly requiresModel?: boolean;
+  /**
+   * True when the environment already supplies `LLM_API_KEY`.
+   *
+   * That variable is the override layer above the catalogue, so a run that
+   * has it has its key: the catalogue's `llm.api-key` -- which *names* a
+   * different variable -- is answered and must not be demanded as well. This
+   * is how a CI job hands the key in under one name while a repository's
+   * committed config names another.
+   */
+  readonly hasApiKey?: boolean;
   readonly logger?: Logger;
 }
 
@@ -175,6 +185,7 @@ export function projectValues({
   environment,
   configHome,
   requiresModel = true,
+  hasApiKey = false,
   logger = NULL_LOGGER,
 }: ProjectValuesOptions): Partial<Record<ConfigField, unknown>> {
   const spec = catalog.project(project);
@@ -199,7 +210,13 @@ export function projectValues({
     const raw = llm[key];
     values[LLM_FIELDS[key]] =
       key === "api-key" && typeof raw === "string"
-        ? resolveSecret(raw, environment, "llm.api-key", `${configHome}/.env`, requiresModel)
+        ? resolveSecret(
+            raw,
+            environment,
+            "llm.api-key",
+            `${configHome}/.env`,
+            requiresModel && !hasApiKey,
+          )
         : raw;
   }
   // A shared path may name the project's own folder: `skills/{{project}}`.
@@ -235,6 +252,7 @@ export function resolveConfig(options: ResolveOptions): Config {
       project,
       environment,
       configHome: options.configHome,
+      hasApiKey: supplied.has(CONFIG_ALIASES.apiKey),
       ...(options.requiresModel !== undefined && { requiresModel: options.requiresModel }),
       ...(options.logger && { logger: options.logger }),
     });
