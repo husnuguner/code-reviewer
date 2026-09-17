@@ -160,41 +160,13 @@ projects:
     # warning too.
     # Default {}.
     #
-    # An example: a MedusaJS project's skills and where each applies.
+    # Three shapes: a list of globs, one bare glob, and [] to switch a skill
+    # off without deleting its file.
     skills:
       mappings:
-        medusa-conventions: ["src/**/*.ts"]
-        medusa-route: ["src/api/**/route.ts"]
-        medusa-auth: ["src/api/**/route.ts", "src/api/**/middlewares.ts"]
-        medusa-validation:
-          - "src/api/**/validation-schemas.ts"
-          - "src/api/**/validation-schema.ts"
-          - "src/api/**/validators.ts"
-          - "src/api/**/middlewares.ts"
-        medusa-model:
-          - "src/modules/**/models/**/*.ts"
-          - "src/modules/**/models.ts"
-          - "src/modules/**/types/**/*.ts"
-          - "src/modules/**/types.ts"
-        medusa-module:
-          - "src/modules/*/index.ts"
-          - "src/modules/*/*/index.ts"
-          - "src/modules/**/service.ts"
-          - "src/modules/**/*-module-service.ts"
-          - "src/modules/**/services/**/*.ts"
-          - "src/modules/**/utils/**/*.ts"
-          - "src/modules/**/state-machine/**/*.ts"
-          - "medusa-config.ts"
-        medusa-provider:
-          - "src/modules/**/providers/**/*.ts"
-          - "src/modules/**/loaders/**/*.ts"
-          - "src/modules/**/*-provider-service.ts"
-          - "src/modules/providers/**/*.ts"
-          - "medusa-config.ts"
-        medusa-links: ["src/links/**/*.ts"]
-        medusa-workflow: ["src/workflows/**/*.ts"]
-        medusa-subscriber: ["src/subscribers/**/*.ts"]
-        medusa-scheduled-job: ["src/jobs/**/*.ts"]
+        api-rules: ["src/api/**/route.ts", "src/api/**/middlewares.ts"]
+        data-model: "src/modules/**/models/**/*.ts"
+        background-jobs: []
 
   # A second project: the minimum that parses. It runs on the defaults (and,
   # having no skills.mappings, on the four lenses alone), against the current

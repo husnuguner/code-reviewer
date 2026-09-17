@@ -47,8 +47,13 @@ describe("docs/config.example.yaml", () => {
     // ... the skills directory comes from the defaults, the mappings are its own ...
     const skills = config.skillSettings();
     expect(skills.path).toBe("~/.config/reviewer/skills/shop"); // {{project}} spelled out
-    expect(Object.keys(skills.mappings)).toHaveLength(11);
-    expect(skills.mappings["medusa-route"]).toEqual(["src/api/**/route.ts"]);
+    // The three shapes a mapping takes: a list, one bare glob (read as a
+    // list), and [] for a skill switched off.
+    expect(skills.mappings).toEqual({
+      "api-rules": ["src/api/**/route.ts", "src/api/**/middlewares.ts"],
+      "data-model": ["src/modules/**/models/**/*.ts"],
+      "background-jobs": [],
+    });
     // ... and prompts replace the defaults' list.
     expect(config.promptFiles).toEqual(["prompts/system.md", "prompts/shop.md"]);
   });

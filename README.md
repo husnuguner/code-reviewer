@@ -36,7 +36,7 @@ reviewer --base main             # the real thing
 src/api/admin/subscription/rules/route.ts:41
   **[Bug/correctness]** `req.body` is read directly; the validated payload is
   `req.validatedBody` ...
-  (skills: medusa-auth, medusa-conventions, medusa-route)
+  (skills: api-rules, conventions)
 ```
 
 The `(skills: …)` line names the guideline skills that were in the prompt for that file — which is the whole point of the skills pipeline.
@@ -251,8 +251,8 @@ Each skill is Markdown with YAML frontmatter; `name` is the unique id:
 
 ```markdown
 ---
-name: medusa-route
-description: Review MedusaJS 2.x API route files.
+name: api-rules
+description: Rules for HTTP route files.
 ---
 
 Guidance text injected into the review prompt for matching files.
@@ -264,9 +264,9 @@ Guidance text injected into the review prompt for matching files.
 skills:
   path: skills # beside config.yaml
   mappings:
-    medusa-route: ["src/api/**/route.ts"]
-    medusa-conventions: "src/**/*.ts"
-    medusa-links: []
+    api-rules: ["src/api/**/route.ts"]
+    conventions: "src/**/*.ts"
+    background-jobs: []
 ```
 
 Globs use `**` (across directories), `*` (within a segment), `?` and `[...]` classes. The mapping is the only place a skill's scope is stated — a skill's frontmatter carries `name` and `description`, nothing about paths; a skill mapped nowhere never applies (and is warned about); `[]` switches one off without touching the file; a mapping naming a skill that was not loaded is logged as a warning. A file without valid frontmatter — a README in the skills directory — is ignored by the loader.

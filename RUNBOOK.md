@@ -39,7 +39,7 @@ Everything lives under `~/.config/reviewer/`. Nothing is committed anywhere.
 ├── config.yaml            the model, review policy, projects
 ├── .env                   the one secret the catalogue names (chmod 600)
 ├── prompts/system.md      the review policy you own
-└── skills/shop/    the 11 Medusa skills
+└── skills/shop/    that project's skills (if not kept in its .review/)
 ```
 
 ### `config.yaml`
@@ -59,7 +59,7 @@ projects:
   shop:
     local-path: ~/work/shop       # the checkout this project reviews
     skills:
-      mappings: { medusa-route: ["src/api/**/route.ts"], "...": ["one entry per skill"] }
+      mappings: { api-rules: ["src/api/**/route.ts"], "...": ["one entry per skill"] }
 ```
 
 `defaults` is what every project starts from; a project overrides a key by
