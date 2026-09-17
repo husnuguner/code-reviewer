@@ -62,6 +62,9 @@ jobs:
           # build to hold on those.
           fail-on: none
           out: code-review.ndjson
+          # The comment job below posts these as review comments; annotations
+          # on top would show every finding twice.
+          annotations: false
 
   comment:
     name: Post the findings as review comments

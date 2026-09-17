@@ -97,6 +97,14 @@ inputs:
     description: "Upload the NDJSON as a workflow artifact."
     required: false
     default: "true"
+  annotations:
+    description: >-
+      Write each finding as a GitHub annotation on its changed line, plus a
+      job summary. Right when nothing else puts the findings on the PR: it
+      needs no write permission. Set to "false" when a comment job posts
+      them as review comments, or every finding shows twice.
+    required: false
+    default: "true"
   node-version:
     description: "Node.js the reviewer runs on."
     required: false
@@ -187,6 +195,7 @@ runs:
         OUT_FILE: ${{ inputs.out }}
         PROJECT: ${{ inputs.project }}
         PREVIEW: ${{ inputs.preview }}
+        ANNOTATIONS: ${{ inputs.annotations }}
         ACTION_PATH: ${{ github.action_path }}
         BASE_REF: ${{ steps.base.outputs.ref }}
       run: |
@@ -205,17 +214,29 @@ runs:
           --branch "${HEAD_REF}"
           --fail-on "${FAIL_ON}"
         )
-        # `--format github` prints the annotations; `--out` keeps the machine
-        # copy, so one model call serves both the humans and the CI bot.
+        # `--out` keeps the machine copy either way, so one model call serves
+        # both the humans and the CI bot. `--format github` adds annotations
+        # on the diff; a workflow whose comment job posts the same findings
+        # turns that off, or each shows twice.
         if [ "${PREVIEW}" = "true" ]; then
           args+=(--preview)
+        elif [ "${ANNOTATIONS}" = "false" ]; then
+          args+=(--format ndjson --out "${OUT_FILE}")
+          quiet=1
         else
           args+=(--format github --out "${OUT_FILE}")
         fi
         [ -n "${PROJECT}" ] && args+=(--project "${PROJECT}")
         if [ -n "${REVIEWER_CONFIG}" ]; then args+=(--config "${REVIEWER_CONFIG}"); else unset REVIEWER_CONFIG; fi
 
-        node "${ACTION_PATH}/dist/cli/index.js" "${args[@]}"
+        # Without annotations, stdout would only repeat the file record for
+        # record; logs are on stderr and still show. With them, stdout is
+        # where the runner reads the ::error/::warning commands from.
+        if [ "${quiet:-0}" = "1" ]; then
+          node "${ACTION_PATH}/dist/cli/index.js" "${args[@]}" >/dev/null
+        else
+          node "${ACTION_PATH}/dist/cli/index.js" "${args[@]}"
+        fi
         status=$?
 
         echo "findings-file=${OUT_FILE}" >> "${GITHUB_OUTPUT}"

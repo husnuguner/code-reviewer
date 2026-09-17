@@ -147,6 +147,7 @@ jobs:
           skills-path: .review/skills # this repo's own conventions
           fail-on: none
           out: code-review.ndjson
+          annotations: false # the comment job below posts them; no need to show each twice
 
   comment: # the only job that can write, and it runs no model
     needs: review
@@ -169,28 +170,29 @@ jobs:
 
 What the `review` job produces, without posting anything:
 
-- **Annotations on the changed lines** — `bug`/`security` as errors, the rest as warnings. These appear in the pull request's _Files changed_ view, beside the code.
+- **Annotations on the changed lines** (unless `annotations: false`) — `bug`/`security` as errors, the rest as warnings. These appear in the pull request's _Files changed_ view, beside the code. They are the no-write-permission way to get findings onto a PR; with a comment job, turn them off or every finding shows twice.
 - **A job summary** — a severity-sorted table, including the findings that had no line to hang on.
 - **`code-review.ndjson` as an artifact** — the input for the `comment` job, or for any other bot you prefer.
 
 ### Action inputs
 
-| Input                   | Default              | Meaning                                                                            |
-| ----------------------- | -------------------- | ---------------------------------------------------------------------------------- |
-| `api-key`               | _required_           | The LLM key. Pass a secret.                                                        |
-| `base-ref`              | the PR's base branch | What to compare against. The action fetches it before reviewing.                   |
-| `head-ref`              | `HEAD`               | What to review.                                                                    |
-| `provider`              | `claude`             | `claude`, or `local` for an OpenAI-compatible server.                              |
-| `model` / `base-url`    | provider default     | Model name; endpoint for `local` (or a Claude proxy).                              |
-| `language`              | `en`                 | Language of the findings' text.                                                    |
-| `skills-path`           | —                    | Where this repository's review skills live, relative to the checkout.              |
-| `config` / `project`    | —                    | A catalogue inside the checkout, when rules are versioned with the code.           |
-| `exclude`               | —                    | Newline- or comma-separated globs to skip.                                         |
-| `max-findings-per-file` | `3`                  | Per-file cap; the most severe survive, the rest are counted.                       |
-| `fail-on`               | `none`               | Severities that fail the job. `none` means the review informs, humans decide.      |
-| `verify`                | `true`               | Drop findings the diff refutes.                                                    |
-| `preview`               | `false`              | Print the scope and stop — calls no model, so it costs nothing to test the wiring. |
-| `out`                   | `code-review.ndjson` | Where the record stream is written.                                                |
+| Input                   | Default              | Meaning                                                                                                                               |
+| ----------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `api-key`               | _required_           | The LLM key. Pass a secret.                                                                                                           |
+| `base-ref`              | the PR's base branch | What to compare against. The action fetches it before reviewing.                                                                      |
+| `head-ref`              | `HEAD`               | What to review.                                                                                                                       |
+| `provider`              | `claude`             | `claude`, or `local` for an OpenAI-compatible server.                                                                                 |
+| `model` / `base-url`    | provider default     | Model name; endpoint for `local` (or a Claude proxy).                                                                                 |
+| `language`              | `en`                 | Language of the findings' text.                                                                                                       |
+| `skills-path`           | —                    | Where this repository's review skills live, relative to the checkout.                                                                 |
+| `config` / `project`    | —                    | A catalogue inside the checkout, when rules are versioned with the code.                                                              |
+| `exclude`               | —                    | Newline- or comma-separated globs to skip.                                                                                            |
+| `max-findings-per-file` | `3`                  | Per-file cap; the most severe survive, the rest are counted.                                                                          |
+| `fail-on`               | `none`               | Severities that fail the job. `none` means the review informs, humans decide.                                                         |
+| `verify`                | `true`               | Drop findings the diff refutes.                                                                                                       |
+| `preview`               | `false`              | Print the scope and stop — calls no model, so it costs nothing to test the wiring.                                                    |
+| `out`                   | `code-review.ndjson` | Where the record stream is written.                                                                                                   |
+| `annotations`           | `true`               | Findings as annotations on the diff, plus a job summary. **Set `false` when a comment job posts them**, or every finding shows twice. |
 
 Outputs: `findings-file` and `findings` (a count).
 
