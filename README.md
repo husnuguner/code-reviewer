@@ -205,19 +205,42 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - uses: actions/checkout@v5 # the poster is this repository's own code
       - uses: actions/download-artifact@v7
         id: findings
         with: { name: code-review-findings }
         continue-on-error: true
-      - uses: husnuguner/code-reviewer/comment-action@v0.0.1
-        if: ${{ steps.findings.outcome == 'success' }} # skipped, not green, when there is nothing to post
+      # There is no poster action: `reviewer comment` is a command of the one
+      # executable, so this job checks it out and runs it. Everything below is
+      # skipped -- not green -- when the review produced nothing to post.
+      - uses: actions/checkout@v5
+        if: ${{ steps.findings.outcome == 'success' }}
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          findings: code-review.ndjson
-          request-changes-on: bug,security # a real review: red badge, merge block where protection asks
-          supersede: true # one current verdict per PR; a clean run lifts the block
+          repository: husnuguner/code-reviewer
+          ref: v0.0.1 # the same version the review job used
+          path: .reviewer
+      - uses: oven-sh/setup-bun@v2
+        if: ${{ steps.findings.outcome == 'success' }}
+        with:
+          bun-version-file: .reviewer/.bun-version
+      - if: ${{ steps.findings.outcome == 'success' }}
+        working-directory: .reviewer
+        run: bun install --frozen-lockfile --production --ignore-scripts
+      - name: Post the review
+        if: ${{ steps.findings.outcome == 'success' }}
+        env:
+          # The token reaches the process as an environment variable, never as
+          # an argument, where a process list would show it.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          bun --no-env-file .reviewer/src/cli/main.ts comment
+          --findings code-review.ndjson
+          --repo ${{ github.repository }}
+          --pr ${{ github.event.pull_request.number }}
+          --request-changes-on bug,security
+          --supersede
 ```
+
+`--request-changes-on bug,security` is what makes it a real review (red badge, merge block where branch protection asks); `--supersede` keeps one current verdict per pull request, so a clean run lifts a block an earlier one raised.
 
 What the `review` job produces, without posting anything:
 
@@ -254,6 +277,8 @@ A reviewer that posts needs a write credential in the same process that feeds un
 Splitting it removes the question: the job that runs the model has `contents: read` and no more, and the job that can write runs no model. The NDJSON between them is a plain data file. Nothing else about the review changes — the same findings, the same anchors, the same skills.
 
 The split is between _runs_, not executables: `reviewer review` and `reviewer comment` are two commands of one program, and no run ever holds both credentials. The review never reads a hosting token; `comment` never builds a model. Each has its own composition root, and the workflow gives each its own job and permissions.
+
+Only the review half is packaged as an action. Posting is the `comment` command, wired by the workflow above — one job, one token, one command — because an action wrapper around it bought nothing but a second inputs table to keep in step with the flags it forwarded.
 
 ### `reviewer comment` — the poster
 

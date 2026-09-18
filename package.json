@@ -29,8 +29,7 @@
     "src",
     "prompts",
     "templates",
-    "action.yml",
-    "comment-action"
+    "action.yml"
   ],
   "scripts": {
     "reviewer": "bun --no-env-file src/cli/main.ts",
