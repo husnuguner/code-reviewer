@@ -3,7 +3,7 @@
 # docs/config.example.yaml of the reviewer's repository.
 #
 # The reviewer reads LOCAL GIT and reports; it posts nothing. Turning findings
-# into pull-request comments is a CI bot's job (review-comment).
+# into pull-request comments is a CI bot's job (reviewer comment).
 #
 # Secret: llm.api-key names an environment variable. Put the key in
 # ~/.config/reviewer/.env, or in .review/.env (gitignored) -- never here.

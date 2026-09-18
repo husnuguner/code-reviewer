@@ -3,8 +3,8 @@
 # order of precedence (src/infra/config/loader.ts) in which the working
 # directory's .env is the *weakest* source; letting Bun promote it to the
 # real environment would invert that order. Off here for everything run from
-# this repository (tests, scripts); the two executables carry the same
-# decision in their shebang, because a checkout they review has no say in it.
+# this repository (tests, scripts); the executable carries the same
+# decision in its shebang, because a checkout they review has no say in it.
 env = false
 
 [run]

@@ -245,9 +245,9 @@ runs:
         # LLM_BASE_URL. The reviewer reads `.env` files itself, and ranks the
         # working directory's last.
         if [ "${quiet:-0}" = "1" ]; then
-          bun --no-env-file "${ACTION_PATH}/src/cli/index.ts" "${args[@]}" >/dev/null
+          bun --no-env-file "${ACTION_PATH}/src/cli/main.ts" "${args[@]}" >/dev/null
         else
-          bun --no-env-file "${ACTION_PATH}/src/cli/index.ts" "${args[@]}"
+          bun --no-env-file "${ACTION_PATH}/src/cli/main.ts" "${args[@]}"
         fi
         status=$?
 

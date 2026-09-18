@@ -1,6 +1,6 @@
 {
   "name": "code-reviewer",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "On-demand code-review agent for one repository: reviews a change set with an LLM and reports anchored inline findings.",
   "license": "MIT",
   "repository": {
@@ -19,8 +19,7 @@
     "bun": ">=1.4"
   },
   "bin": {
-    "reviewer": "./src/cli/index.ts",
-    "review-comment": "./src/cli/comment-main.ts"
+    "reviewer": "./src/cli/main.ts"
   },
   "exports": {
     "./core": "./src/core/index.ts"
@@ -33,8 +32,7 @@
     "comment-action"
   ],
   "scripts": {
-    "reviewer": "bun --no-env-file src/cli/index.ts",
-    "review-comment": "bun --no-env-file src/cli/comment-main.ts",
+    "reviewer": "bun --no-env-file src/cli/main.ts",
     "test": "bun test --timeout 20000 --parallel",
     "test:watch": "bun test --timeout 20000 --watch",
     "typecheck": "tsc --noEmit",

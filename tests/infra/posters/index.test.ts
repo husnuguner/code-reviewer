@@ -25,7 +25,7 @@ describe("the poster registry", () => {
   });
 
   it("builds a poster that speaks the port, whatever the provider", async () => {
-    // Through the registry, not the class: this is the path review-comment
+    // Through the registry, not the class: this is the path `reviewer comment`
     // takes, and it must not know it is talking to GitHub.
     const poster = registry.create("github", { token: "t", baseUrl: null });
     await expect(

@@ -67,7 +67,7 @@ The key stays out of the repository: `~/.config/reviewer/.env` for every project
 
 **Machine-wide catalogue.** For repositories that carry no rules of their own, or for one person's rules that are not the team's, `reviewer init` run _outside_ a checkout writes `~/.config/reviewer/config.yaml` instead, and `reviewer add <name>` (from inside a checkout) defines a project in it. Everything below applies to both homes.
 
-Working on this repository itself? `bun install && bun link` gives you the same two executables from `src/`.
+Working on this repository itself? `bun install && bun link` gives you the same `reviewer` executable from `src/`.
 
 ## Usage
 
@@ -204,17 +204,17 @@ A reviewer that posts needs a write credential in the same process that feeds un
 
 Splitting it removes the question: the job that runs the model has `contents: read` and no more, and the job that can write runs no model. The NDJSON between them is a plain data file. Nothing else about the review changes — the same findings, the same anchors, the same skills.
 
-The posting code that used to live _inside the reviewer_ is gone; `review-comment` is its replacement.
+The split is between _runs_, not executables: `reviewer review` and `reviewer comment` are two commands of one program, and no run ever holds both credentials. The review never reads a hosting token; `comment` never builds a model. Each has its own composition root, and the workflow gives each its own job and permissions.
 
-### `review-comment` — the poster
+### `reviewer comment` — the poster
 
-The bot is not a script pasted into a workflow. It is a second executable in
-this repository, typechecked, linted and unit-tested like everything else, and
-runnable by hand against a findings file:
+The bot is not a script pasted into a workflow. It is a command of this
+repository's own executable, typechecked, linted and unit-tested like
+everything else, and runnable by hand against a findings file:
 
 ```bash
-review-comment --findings code-review.ndjson --repo acme/app --pr 7 --dry-run
-review-comment --findings code-review.ndjson --repo acme/app --pr 7   # needs GITHUB_TOKEN
+reviewer comment --findings code-review.ndjson --repo acme/app --pr 7 --dry-run
+reviewer comment --findings code-review.ndjson --repo acme/app --pr 7   # needs GITHUB_TOKEN
 ```
 
 | Flag                   | Effect                                                                                                                  |
@@ -481,13 +481,13 @@ bun run reviewer …     # the CLI from source, as `reviewer` would run
 
 Toolchain: Bun (pinned in `.bun-version`; it is the package manager, the test runner and the runtime, and there is no build step) · TypeScript 6 for `tsc`, editors and `typescript-eslint` · ESLint 10 with type-aware rules · Prettier.
 
-Bun reads a working directory's `.env` into the environment by default. This repository turns that off (`bunfig.toml`, `env = false`) and the two executables carry `--no-env-file` in their shebang, because the reviewer reads `.env` files itself in a stated order in which the working directory's is the weakest — and the working directory is the checkout under review.
+Bun reads a working directory's `.env` into the environment by default. This repository turns that off (`bunfig.toml`, `env = false`) and the executable carries `--no-env-file` in its shebang, because the reviewer reads `.env` files itself in a stated order in which the working directory's is the weakest — and the working directory is the checkout under review.
 
 Layout — three layers with the dependency direction enforced by ESLint (`import-x/no-restricted-paths`):
 
 - `src/core/` — the review engine, free of I/O. `domain/` (Finding, Skill, changed-file records) · `ports/` (ChatModel, GitReader, CodeContext, SkillSource, Logger, reporters) · `review/` (`selection` — which files are in scope, and why the rest are not · `changed-file` — the per-file step · `branch-review` — the flow · `volume` — the per-file cap · `render` · `severity` · `anchor` · `diff` · `verify`) · `skills/` (glob engine, frontmatter parser, registry) · `comment/` (records → one review payload, pure) · `catalog/` (`config.yaml` schema, `init`/`projects`) · `config/` (the settings schema and the resolver) · `llm/` (registry).
 - `src/infra/` — adapters: `llm/` (AI SDK: `local`, `claude`) · `git/` (`Bun.spawn`: diff source and pre-context) · `skills/` (directory and worktree sources) · `config/` (files, `.env`, paths) · `logging/` (pino → stderr) · `reporters/` (text, NDJSON, GitHub Actions, and a tee) · `github/` (one endpoint: post a review).
-- `src/cli/` — the composition root (`awilix`) and the two `commander` command lines: `reviewer` (calls a model, cannot post) and `review-comment` (holds a token, cannot call a model).
+- `src/cli/` — `main.ts` (the executable) · `reviewer.ts` (the root command: a registry of subcommands, no dispatch of its own) · `commands/` (`review`, the default, calls a model and cannot post · `init`/`projects`/`add`, the catalogue · `comment`, holds a token and cannot call a model · `shared`, what more than one of them needs) · `command-line.ts` (how a command is defined and how its errors become exit codes) · `container.ts` (the composition root, `awilix`).
 
 `core/` is also published as `code-reviewer/core` for embedding; it takes its adapters as constructor arguments.
 

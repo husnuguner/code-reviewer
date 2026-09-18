@@ -1,6 +1,6 @@
 /**
- * The command line: flags parse as documented, and the two catalogue commands
- * print what the fixtures froze.
+ * The catalogue commands: `init`, `projects` and `add` print what the
+ * fixtures froze, write what they promise, and leave what is there alone.
  */
 
 import { describe, expect, it } from "bun:test";
@@ -10,20 +10,22 @@ import { join } from "node:path";
 
 import { parse as parseYaml } from "yaml";
 
-import { UsageError, cliOverrides, hasFailingFinding, parseArguments } from "../../src/cli/run";
-import { type Catalog, PROJECT_SETTING_KEYS, parseCatalog } from "../../src/core/catalog/catalog";
+import {
+  type Catalog,
+  PROJECT_SETTING_KEYS,
+  parseCatalog,
+} from "../../../src/core/catalog/catalog";
 import {
   type CatalogFiles,
   addProject,
   initCatalog,
   listProjects,
-} from "../../src/core/catalog/commands";
-import { type ConsoleOutput } from "../../src/core/ports/console";
-import { type BranchReviewResult } from "../../src/core/review/branch-review";
-import { FsCatalogFiles } from "../../src/infra/config/catalog-files";
-import { loadCatalog } from "../../src/infra/config/loader";
-import { shippedFile } from "../../src/infra/shipped-files";
-import { loadFixture } from "../contracts/fixtures";
+} from "../../../src/core/catalog/commands";
+import { type ConsoleOutput } from "../../../src/core/ports/console";
+import { FsCatalogFiles } from "../../../src/infra/config/catalog-files";
+import { loadCatalog } from "../../../src/infra/config/loader";
+import { shippedFile } from "../../../src/infra/shipped-files";
+import { loadFixture } from "../../contracts/fixtures";
 
 function recorder(): ConsoleOutput & { text: () => string } {
   const lines: string[] = [];
@@ -34,144 +36,6 @@ function recorder(): ConsoleOutput & { text: () => string } {
     text: () => lines.map((line) => `${line}\n`).join(""),
   };
 }
-
-/** A run that reported one finding; only its severity matters to the gate. */
-function reported(severity: string): Pick<BranchReviewResult, "findings"> {
-  return {
-    findings: [
-      {
-        path: "src/a.ts",
-        line: 12,
-        start_line: null,
-        anchor: "exact",
-        severity,
-        body: "Null check missing.",
-        example: "",
-        skills: [],
-      },
-    ],
-  };
-}
-
-describe("parsing the command line", () => {
-  it("defaults every flag off and the command to review", () => {
-    const arguments_ = parseArguments([]);
-    expect(arguments_).toEqual({
-      command: "review",
-      name: null,
-      path: null,
-      // `add` puts a project's skills inside the repository they govern.
-      skills: ".review/skills",
-      project: null,
-      config: null,
-      // The current checkout: a CI build sits on a detached commit, so the
-      // common case must not need a branch name.
-      branch: "HEAD",
-      base: "main",
-      format: "text",
-      out: null,
-      preview: false,
-      lang: null,
-      skillsPath: null,
-      exclude: [],
-      failOn: [],
-      verify: true,
-      verbose: false,
-    });
-  });
-
-  it("turns each flag on", () => {
-    expect(parseArguments(["--preview"]).preview).toBe(true);
-    expect(parseArguments(["-v"]).verbose).toBe(true);
-    expect(parseArguments(["--verbose"]).verbose).toBe(true);
-    // The only flag that is on until refused: there is no `--verify`.
-    expect(parseArguments(["--no-verify"]).verify).toBe(false);
-  });
-
-  it("reads the review flags", () => {
-    const arguments_ = parseArguments([
-      "--project",
-      "app",
-      "--config",
-      "/c.yaml",
-      "--lang",
-      "tr",
-      "--skills-path",
-      ".review/skills",
-      "--exclude",
-      "**/*.md",
-      "--exclude",
-      "**/*.lock",
-    ]);
-    expect(arguments_.project).toBe("app");
-    expect(arguments_.config).toBe("/c.yaml");
-    expect(arguments_.lang).toBe("tr");
-    expect(arguments_.skillsPath).toBe(".review/skills");
-    expect(arguments_.exclude).toEqual(["**/*.md", "**/*.lock"]);
-  });
-
-  it("reads the branch flags", () => {
-    const arguments_ = parseArguments([
-      "--branch",
-      "feature/x",
-      "--base",
-      "develop",
-      "--format",
-      "ndjson",
-      "--out",
-      "findings.ndjson",
-    ]);
-    expect(arguments_.branch).toBe("feature/x");
-    expect(arguments_.base).toBe("develop");
-    expect(arguments_.format).toBe("ndjson");
-    expect(arguments_.out).toBe("findings.ndjson");
-  });
-
-  it("reads --fail-on as a severity list, and 'none' as no gate", () => {
-    expect(parseArguments(["--fail-on", "bug,security"]).failOn).toEqual(["bug", "security"]);
-    expect(parseArguments(["--fail-on", "none"]).failOn).toEqual([]);
-    expect(() => parseArguments(["--fail-on", "urgent"])).toThrow(/Allowed severities are/u);
-  });
-
-  it("fails only on a severity --fail-on names", () => {
-    expect(hasFailingFinding(reported("bug"), ["bug", "security"])).toBe(true);
-    expect(hasFailingFinding(reported("readability"), ["bug", "security"])).toBe(false);
-  });
-
-  it("never fails without a gate, however severe the finding", () => {
-    expect(hasFailingFinding(reported("bug"), [])).toBe(false);
-    expect(hasFailingFinding({ findings: [] }, ["bug"])).toBe(false);
-  });
-
-  it("reads a reported severity however it was spelled", () => {
-    // The same normalisation `--request-changes-on` applies: a build that
-    // stopped failing because a record said `"Bug"` would be a gate that
-    // fails open.
-    for (const spelling of ["bug", "Bug", "BUG", " bug "]) {
-      expect(hasFailingFinding(reported(spelling), ["bug"])).toBe(true);
-    }
-    expect(hasFailingFinding(reported("typo"), ["bug"])).toBe(false);
-  });
-
-  it("knows the two catalogue commands", () => {
-    expect(parseArguments(["init"]).command).toBe("init");
-    expect(parseArguments(["projects", "--config", "/c.json"]).command).toBe("projects");
-  });
-
-  it("rejects an unknown command and a bad format", () => {
-    expect(() => parseArguments(["frobnicate"])).toThrow(UsageError);
-    expect(() => parseArguments(["--format", "xml"])).toThrow(
-      /Allowed choices are text, ndjson, github/u,
-    );
-  });
-
-  it("only overrides what was actually passed", () => {
-    expect(cliOverrides(parseArguments([]))).toEqual({});
-    expect(cliOverrides(parseArguments(["--lang", "tr"]))).toEqual({ reviewLang: "tr" });
-    // An empty skills path is a real instruction: it disables skills.
-    expect(cliOverrides(parseArguments(["--skills-path", ""]))).toEqual({ skillsPath: "" });
-  });
-});
 
 describe("the catalogue commands", () => {
   const fixtures = loadFixture("commands");
@@ -371,15 +235,5 @@ describe("defining a project", () => {
     // Without a skills path the entry names no directory, so the catalogue's
     // shared `skills.path` default applies.
     expect(catalogOf(files).project("local-rules").settings.skills).toBeUndefined();
-  });
-
-  it("parses 'add' with a name and the two scaffolding flags", () => {
-    const arguments_ = parseArguments(["add", "my-app", "--path", "/src/app", "--skills", "rules"]);
-    expect(arguments_.command).toBe("add");
-    expect(arguments_.name).toBe("my-app");
-    expect(arguments_.path).toBe("/src/app");
-    expect(arguments_.skills).toBe("rules");
-    // The default is inside the reviewed repository, which is what CI reads.
-    expect(parseArguments(["add", "x"]).skills).toBe(".review/skills");
   });
 });

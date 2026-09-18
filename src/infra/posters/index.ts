@@ -4,7 +4,7 @@
  *
  * To add a hosting system -- GitLab, Bitbucket, Gerrit -- write its
  * `ReviewPoster` beside the GitHub one and declare its provider here.
- * Nothing else changes: `review-comment` validates `--provider` against this
+ * Nothing else changes: `reviewer comment` validates `--provider` against this
  * registry's names, generates its help from these descriptions, reads the
  * token from the variable each provider names, and builds through the
  * registry. There is no `if (provider === "github")` anywhere.

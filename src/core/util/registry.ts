@@ -55,6 +55,16 @@ export class Registry<T extends RegistryEntry> {
     return this.entries.keys().toArray();
   }
 
+  /**
+   * The first registered name: what a flag left unset means. A registry with
+   * nothing in it has no default, and that is a wiring error, not a value.
+   */
+  defaultName(): string {
+    const first = this.names()[0];
+    if (first === undefined) throw new ValueError(`No ${this.label} is registered.`);
+    return first;
+  }
+
   /** Sorted names, for an error message that should read the same every time. */
   sortedNames(): string[] {
     return sortedByCodePoint(this.entries.keys());

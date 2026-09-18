@@ -1,30 +1,30 @@
 /**
- * `review-comment`: post a run's findings to a pull request.
+ * `reviewer comment`: post a run's findings to a pull request.
  *
- * A second executable, not a flag on `reviewer`, and that separation is the
- * whole design. This one holds a repository token and cannot call a model;
- * `reviewer` calls a model and cannot post. Neither can be talked into the
- * other's job, which is what makes a prompt-injected diff harmless here
- * (see README, "Why the reviewer cannot post").
+ * The other half of the split, and the only half that holds a repository
+ * token. It never builds a model: its input is the NDJSON `reviewer --out`
+ * wrote, a plain data file, so nothing a diff says can reach it -- and the
+ * review that read the diff never had a token to post with. One executable,
+ * two commands, no run that holds both credentials (see README, "Why the
+ * reviewer cannot post").
  *
- * Its input is the NDJSON `reviewer --out` writes, so it is equally usable
- * from a workflow, a cron job, or by hand against a file on disk.
+ * Equally usable from a workflow, a cron job, or by hand against a file on
+ * disk.
  */
 
 import { readFileSync } from "node:fs";
 
-import { type Command, InvalidArgumentError } from "commander";
+import { type Command, Option } from "commander";
 
-import { MAX_INLINE, buildReview, parseRecords } from "../core/posting/review-payload";
-import { PostingError } from "../core/posting/review-poster";
-import { errorMessage } from "../core/util/errors";
-import { PinoLogger } from "../infra/logging/pino-logger";
-import { builtinReviewPosterRegistry } from "../infra/posters/index";
+import { MAX_INLINE, buildReview, parseRecords } from "../../core/posting/review-payload";
+import { PostingError } from "../../core/posting/review-poster";
+import { type Severity } from "../../core/review/severity";
+import { errorMessage } from "../../core/util/errors";
+import { PinoLogger } from "../../infra/logging/pino-logger";
+import { builtinReviewPosterRegistry } from "../../infra/posters/index";
+import { OperatorError, choice, defineCommand, instanceOfAny, integer } from "../command-line";
 
-import { OperatorError, commandLine, parseCommandLine, runCommand, severityList } from "./program";
-
-// The shared scaffolding owns these; re-exported so a caller of this module
-// need not know where a usage error is defined.
+import { severityList } from "./shared";
 
 /**
  * The hosting systems `--provider` may name.
@@ -34,9 +34,9 @@ import { OperatorError, commandLine, parseCommandLine, runCommand, severityList 
  * poster is later built through.
  */
 const posters = builtinReviewPosterRegistry();
-const DEFAULT_PROVIDER = posters.names()[0] ?? "github";
+const DEFAULT_PROVIDER = posters.defaultName();
 
-/** The parsed command line. */
+/** The parsed `comment` command line, one field per flag. */
 export interface CommentArguments {
   readonly findings: string;
   /** Which hosting system posts; a name the registry knows. */
@@ -45,7 +45,7 @@ export interface CommentArguments {
   readonly pr: number;
   readonly maxInline: number;
   /** Severities that make the review a request for changes; empty means never. */
-  readonly requestChangesOn: readonly string[];
+  readonly requestChangesOn: readonly Severity[];
   /** Dismiss this identity's earlier pending reviews before posting. */
   readonly supersede: boolean;
   readonly baseUrl: string | null;
@@ -54,29 +54,14 @@ export interface CommentArguments {
   readonly verbose: boolean;
 }
 
-function integer(value: string): number {
-  if (!/^\d+$/u.test(value)) throw new InvalidArgumentError("Not a positive integer.");
-  return Number(value);
-}
-
-/** The command line as a `Command`; exposed so `--help` can be tested. */
-export function buildProgram(): Command {
-  return commandLine(
-    "review-comment",
-    "Post the findings of a review run to a pull request, reading the NDJSON that " +
-      "`reviewer --out` writes. Calls no language model: this is the half of the split that " +
-      "holds a repository token.",
-  )
+/** The `comment` subcommand's flags. */
+function commentOptions(command: Command): Command {
+  return command
     .requiredOption("--findings <path>", "The NDJSON record stream to post.")
     .option(
       "--provider <name>",
       `The hosting system to post to: ${posters.describe()}. Its token is read from the variable the provider names (see --help of each).`,
-      (value: string) => {
-        if (!posters.has(value)) {
-          throw new InvalidArgumentError(`Allowed providers are ${posters.names().join(", ")}.`);
-        }
-        return value;
-      },
+      choice(posters.names(), { label: "providers" }),
       DEFAULT_PROVIDER,
     )
     .requiredOption(
@@ -86,15 +71,17 @@ export function buildProgram(): Command {
     .requiredOption("--pr <number>", "The pull request number.", integer)
     .option(
       "--max-inline <n>",
-      `Cap on inline comments; the rest are listed in the review body (default ${String(MAX_INLINE)}).`,
+      "Cap on inline comments; the rest are listed in the review body.",
       integer,
       MAX_INLINE,
     )
-    .option(
-      "--request-changes-on <severities>",
-      "Post as a request for changes when a finding has one of these severities (comma-separated, or none). Default none: comment only.",
-      severityList,
-      [] as string[],
+    .addOption(
+      new Option(
+        "--request-changes-on <severities>",
+        "Post as a request for changes when a finding has one of these severities (comma-separated); 'none' only comments.",
+      )
+        .argParser(severityList)
+        .default([], "none"),
     )
     .option(
       "--supersede",
@@ -105,56 +92,23 @@ export function buildProgram(): Command {
       "--base-url <url>",
       "API root, for a self-hosted instance (default: the provider's public endpoint).",
     )
-    .option("--dry-run", "Print the review that would be posted and stop. Needs no token.", false)
-    .option("-v, --verbose", "DEBUG logging on stderr.", false);
-}
-
-/** Parse `argv` (without the executable and script) into typed arguments. */
-export function parseArguments(argv: readonly string[]): CommentArguments {
-  const program = buildProgram();
-  parseCommandLine(program, argv);
-  const options = program.opts<{
-    findings: string;
-    provider: string;
-    repo: string;
-    pr: number;
-    maxInline: number;
-    requestChangesOn: string[];
-    supersede: boolean;
-    baseUrl?: string;
-    dryRun: boolean;
-    verbose: boolean;
-  }>();
-  return {
-    findings: options.findings,
-    provider: options.provider,
-    repo: options.repo,
-    pr: options.pr,
-    maxInline: options.maxInline,
-    requestChangesOn: options.requestChangesOn,
-    supersede: options.supersede,
-    baseUrl: options.baseUrl ?? null,
-    dryRun: options.dryRun,
-    verbose: options.verbose,
-  };
+    .option("--dry-run", "Print the review that would be posted and stop. Needs no token.", false);
 }
 
 /**
- * The process entry: read the records, build the review, post it.
+ * A refusal from the hosting system (a wrong slug, a token without write
+ * permission) is the operator's to act on, whichever system it was.
+ */
+const isCommentOperatorError = instanceOfAny(PostingError);
+
+/**
+ * Read the records, build the review, post it; returns the exit code.
  *
  * A stream with no findings is still posted. "I looked and found nothing" is
  * information a reviewer wants, and silence is indistinguishable from a run
  * that never happened.
  */
-export function main(argv: readonly string[]): Promise<number> {
-  return runCommand(() => post(parseArguments(argv)), {
-    // A refusal from the hosting system (a wrong slug, a token without write
-    // permission) is the operator's to act on, whichever system it was.
-    isOperatorError: (error) => error instanceof PostingError,
-  });
-}
-
-async function post(arguments_: CommentArguments): Promise<number> {
+async function runComment(arguments_: CommentArguments): Promise<number> {
   const logger = PinoLogger.console({ verbose: arguments_.verbose });
   const log = logger.child("comment");
 
@@ -209,4 +163,15 @@ async function post(arguments_: CommentArguments): Promise<number> {
   return 0;
 }
 
-export { UsageError } from "./program";
+/** `reviewer comment`, as the root command registers it. */
+export const COMMENT = defineCommand<CommentArguments>({
+  name: "comment",
+  description:
+    "Post the findings of a review run to a pull request, reading the NDJSON that " +
+    "`reviewer --out` writes. Calls no language model: this is the half of the split that " +
+    "holds a repository token.",
+  options: commentOptions,
+  arguments: (options) => ({ ...options, baseUrl: options.baseUrl ?? null }),
+  run: runComment,
+  isOperatorError: isCommentOperatorError,
+});

@@ -1,5 +1,5 @@
 /**
- * The posting port: what `review-comment` needs from a hosting system.
+ * The posting port: what `reviewer comment` needs from a hosting system.
  *
  * One operation -- post one review with inline comments to one change
  * request -- and nothing else. The poster is the half of the split that

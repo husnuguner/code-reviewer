@@ -117,4 +117,4 @@ runs:
         [ "${DRY_RUN}" = "true" ] && args+=(--dry-run)
         # `--no-env-file`: the token comes from the real environment, and a
         # `.env` in the working directory must not be able to supply one.
-        bun --no-env-file "${ACTION_PATH}/../src/cli/comment-main.ts" "${args[@]}"
+        bun --no-env-file "${ACTION_PATH}/../src/cli/main.ts" comment "${args[@]}"

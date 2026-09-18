@@ -8,7 +8,7 @@ macOS üzerinde Bun 1.4.2 ile yapıldı.
 ## 1. Karar
 
 Bun tek araçtır: paket yöneticisi, script çalıştırıcı, test çalıştırıcı **ve
-runtime**. Derleme adımı yoktur; `bin` doğrudan `src/cli/*.ts`'e işaret eder ve
+runtime**. Derleme adımı yoktur; `bin` doğrudan `src/cli/main.ts`'e işaret eder ve
 Bun TypeScript'i olduğu gibi çalıştırır. Aynı işi yapan iki kütüphane
 bulunmaz — bkz. §2.
 
@@ -90,12 +90,12 @@ Karşılığı üç yerde, her biri doğrulanmış:
 
 ## 4. Değişen dosyalar
 
-- `package.json` — v2.0.0; `bin` → `src/cli/index.ts`, `src/cli/comment-main.ts`;
+- `package.json` — v2.0.0; `bin` → `src/cli/main.ts` (v2.1.0'da tek yürütülebilir, bkz. §7);
   `exports["./core"]` → `src/core/index.ts`; `files` `dist` → `src`; script'ler
   Bun; `engines.bun`, `packageManager`; `prepare`/`volta` yok.
 - `bunfig.toml`, `.bun-version`, `bun.lock` — yeni. `package-lock.json`,
   `tsup.config.ts`, `vitest.config.ts`, `.vitest/`, `dist/` — silindi.
-- `src/cli/index.ts`, `src/cli/comment-main.ts` — shebang (çalıştırılabilir).
+- `src/cli/main.ts` — shebang (çalıştırılabilir).
 - `src/infra/git/local-git.ts` — `runGit` `Bun.spawn` ile; iki pipe ve çıkış
   birlikte beklenir, başlatılamayan git `GitError`.
 - `src/infra/config/loader.ts` — `parseEnv`.
@@ -118,7 +118,7 @@ Karşılığı üç yerde, her biri doğrulanmış:
 ```bash
 bun install
 bun run check                                   # tsc + eslint + prettier + 899 test
-./src/cli/index.ts --help && ./src/cli/comment-main.ts --help
+./src/cli/main.ts --help && ./src/cli/main.ts comment --help
 bun run reviewer -- --preview --base main       # model çağırmaz
 ```
 
@@ -131,3 +131,43 @@ shipped dosyaları buluyor.
 
 Tek revert: `package-lock.json`, `dist` tabanlı `action.yml` ve `vitest`
 geçmişte; `v1` tag'i o dünyada kalır.
+
+## 7. Ardından: tek yürütülebilir, kayıtlı komutlar (v2.1.0)
+
+`review-comment` ayrı bir yürütülebilir olmaktan çıktı; `reviewer comment` bir
+alt komut. Güvenlik ayrımı yürütülebilirler arasında değil **koşular**
+arasındaydı zaten: review hiçbir hosting token'ı okumaz, `comment` hiçbir
+model kurmaz; her birinin kendi kompozisyon kökü var ve workflow her birine
+kendi işini ve iznini verir. `comment-action` girdileri değişmedi.
+
+`src/cli/` yeniden adlandırıldı ve bölündü: `main.ts` (süreç girişi),
+`reviewer.ts` (kök komut — bir kayıt listesi, kendi dallanması yok),
+`commands/{review,catalog,comment,shared}.ts`, `command-line.ts` (eski
+`program.ts`: bir komut nasıl tanımlanır, hataları nasıl exit koduna döner).
+
+Komutlar **Command pattern** ile: her modül bir `CliCommand` sabiti dışa
+aktarır (`REVIEW`, `INIT`, `PROJECTS`, `ADD`, `COMMENT`); parse bir
+`Invocation` (argümanlarına bağlanmış komut + `run()`) üretir; kök
+`parseArguments(argv).run()` der, `switch`/`if` yok. Ortak parçalar tek yerde:
+`defineCommand(spec)` Commander `action`/`optsWithGlobals`/positional
+kalıbını, `ParsedOptions<A>` eşlenmiş tipi `XOptions` arayüzlerini,
+`commands/shared.ts` `--config` bayrağı, rapor biçimi kaydı ve
+inceleme yapmayan komutların `RunRequest`'ini üstlenir.
+
+Bayrak değerleri için de bir standart var: `OptionParser<T>` (`metin → T`,
+`InvalidArgumentError` ile reddeder) ve alan-bağımsız kombinatörler —
+`choice(values, { label, caseInsensitive })`, `integer`, `listOf(item, { none })`,
+`repeatable(item)`, `text`. Alan sözlüğü bunları kullanan yerde birleşir:
+`severityList = listOf(choice(SEVERITIES, …), { none: "none" })` (`commands/shared.ts`).
+`command-line.ts` artık `core/`'dan hiçbir şey ithal etmez. Aynı ilkeyle:
+operator hataları `instanceOfAny(…)`, kayıt varsayılanı `Registry.defaultName()`,
+liste varsayılanları help'te `none` diye yazılır (`Option.default([], "none")`).
+
+Kütüphanenin kendi komut nesnesini veren alternatifler Bun altında denendi:
+
+| Kütüphane                 | Komut modeli                                                                                           | Neden seçilmedi                                                                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `@stricli/core` (1M/hf)   | `buildCommand` + `buildRouteMap({ defaultCommand })`, sıfır bağımlılık, flag tipi ↔ parser derleyicide | En yakın aday; ama exit-kod sözleşmesi, hata metni ve kebab-case için ayar, testlerin parse-ayrı tarzından vazgeçiş, küçük topluluk |
+| `clipanion` (4.6M/hf)     | sınıf tabanlı `Command`, `Command.Default`                                                             | 4.0.0-rc, typanion bağımlılığı, hata çıktısı stack trace'li, ANSI help                                                              |
+| `citty` (28M/hf)          | `defineCommand({ args, run })`                                                                         | varsayılan alt komut yok; kök `run` alt komuttan sonra da koşuyor                                                                   |
+| **`commander`** (462M/hf) | zincir; komut nesnesi yok                                                                              | **kaldı**: sıfır bağımlılık, en yaygın; ~60 satırlık `CliCommand`/`Invocation` kaydı deseni sağlıyor, exit-kod/hata kontrolü bizde  |

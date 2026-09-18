@@ -26,6 +26,12 @@ describe("the registry", () => {
     ]);
   });
 
+  it("names the default: the first registered, and none when nothing is", () => {
+    expect(described(entry("text"), entry("ndjson")).defaultName()).toBe("text");
+    expect(() => described().defaultName()).toThrow(ValueError);
+    expect(() => described().defaultName()).toThrow("No report format is registered.");
+  });
+
   it("sorts names for a message that reads the same every time", () => {
     expect(described(entry("text"), entry("ndjson"), entry("github")).sortedNames()).toEqual([
       "github",
