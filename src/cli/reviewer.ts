@@ -99,7 +99,7 @@ function loggingOptions(program: Command): Command {
   return program
     .option(
       "-v, --verbose",
-      "Debug logging: DEBUG-level detail for reviewer.* (per-file decisions, skill matches), with timestamps and component names.",
+      "Debug logging: DEBUG-level detail for reviewer.* (per-file decisions, skill matches), with local clock times (14:32:07.412) and component names.",
       false,
     )
     .option(

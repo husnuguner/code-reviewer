@@ -135,13 +135,13 @@ Exit codes: `0` success · `1` usage error, refused `init`, or `projects` withou
 
 Logs describe _how the run went_; the report is _what it found_. They never share a stream: every log line goes to stderr, so `--format ndjson` on stdout parses line by line no matter how loud the run is. These flags live on the root command, so every subcommand takes them in the same place — before or after the command name.
 
-| Flag                  | Effect                                                                                                           |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `-v`, `--verbose`     | DEBUG detail for `reviewer.*` (per-file decisions, skill matches), with ISO-8601 timestamps and component names. |
-| `-q`, `--quiet`       | Warnings and errors only. The report is unaffected.                                                              |
-| `--log-level LEVEL`   | `debug`, `info` (default), `warn`, `error`, `silent`. Outranks `-v` and `-q`.                                    |
-| `--log-format FORMAT` | `auto` (default), `text`, `json`, `github`.                                                                      |
-| `--no-color`          | Never colour log lines.                                                                                          |
+| Flag                  | Effect                                                                                                         |
+| --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `-v`, `--verbose`     | DEBUG detail for `reviewer.*` (per-file decisions, skill matches), with local clock times and component names. |
+| `-q`, `--quiet`       | Warnings and errors only. The report is unaffected.                                                            |
+| `--log-level LEVEL`   | `debug`, `info` (default), `warn`, `error`, `silent`. Outranks `-v` and `-q`.                                  |
+| `--log-format FORMAT` | `auto` (default), `text`, `json`, `github`.                                                                    |
+| `--no-color`          | Never colour log lines.                                                                                        |
 
 By default a line is the sentence and its level, because stderr is not a log file ([clig.dev](https://clig.dev/#output)); `-v` is the request for the record around it:
 
@@ -151,9 +151,22 @@ info: Loaded 3 skill(s): api-rules, tests, security
 warn: No merge-base for 'HEAD' and 'main'; comparing against 'main' directly.
 
 $ reviewer --base main -v
-2026-09-18T11:12:59.341Z debug reviewer.catalog: Catalogue .review/config.yaml: 1 project(s).
-2026-09-18T11:12:59.342Z info  reviewer.skills: Loaded 3 skill(s): api-rules, tests, security
+11:12:59.341  debug  reviewer.catalog: Catalogue .review/config.yaml: 1 project(s).
+11:12:59.342  info   reviewer.skills: Loaded 3 skill(s): api-rules, tests, security
 ```
+
+The verbose clock is `HH:MM:SS.mmm` in the reader's own time zone: a run is minutes long, so the date is the same on every line of it, while the milliseconds are the point — the gap between two lines is how a slow model call announces itself. The record underneath keeps the full UTC instant, which is what `--log-format json` emits, so nothing is lost by the shorter column.
+
+A slow run is almost always waiting on the model, and each file says so when it is done: the `review` line carries how long every waiting step took, and `-v` adds one line per model call with what it cost, so a file that had to be asked twice reads as two waits rather than one long one.
+
+```console
+$ reviewer --base main -v
+11:13:41.902  debug  reviewer.review.file_reviewer: src/api/route.ts: the model answered in 77.7s (attempt 1 of 2; 9,445 tokens in (7,650 cached), 2,410 out, 31 tokens/s).
+11:14:00.017  debug  reviewer.review.verify: src/api/route.ts: the verifier answered in 18.1s for 9 finding(s) (3,210 tokens in, 181 out, 10 tokens/s).
+11:14:00.019  info   reviewer.review.changed_file: review src/api/route.ts: +85 line(s), skills=["medusa-route"], 3 finding(s) (context 0.2s, model 77.7s, verify 18.1s).
+```
+
+`context` is the repository being read for [pre-context](#pre-context), `model` the review call itself (retries included), `verify` the [verification pass](#verification) — absent when it is turned off. The token line is the diagnosis: a completion's wall time is almost entirely output generation, so a long wait with a large `out` at the vendor's usual rate is a long answer — the reviewer asked for too much — while a small `out` at a low rate is the vendor being slow. The parenthesis after `tokens in` is what a [kept prefix](#what-a-run-pays-for-twice-and-does-not-have-to) saved (`cached`) or cost (`cache written`); it is the only place a cache hit is visible. A retried call also says why (`The model answered 529; retrying in 1240ms`), so a four-minute file is never a mystery.
 
 `--log-format` chooses the shape of that line. `auto` resolves to `github` on a runner and `text` everywhere else:
 
@@ -454,9 +467,19 @@ It is the **same** function the real run acts on, not a second estimate, so what
 
 `max-findings-per-file` (default 3; `0` = no cap) caps how many findings one file reports. When it bites, the **most severe survive**, and what it withheld is counted into the run's `capped` tally rather than dropped in silence — a cap nobody can measure is a cap nobody should trust.
 
+The model is **told the cap too**, in the same severity order, and asked not to shorten or merge findings to fit. A completion's wall time is its output: a file with a dozen problems and a cap of three would otherwise pay for twelve findings' worth of generation and report three — on a slow model that is the difference between eighty seconds and twenty. The cut after the call still stands, because the model is asked, not trusted; `capped` therefore says how often it overran. Two consequences worth knowing: a finding the [verification pass](#verification) removes is not replaced, so a capped file can report fewer than the cap; and with `0` the model is asked for no limit, which is the old behaviour.
+
 Severity does not filter anything: every severity is reported. What severity decides is the annotation colour in CI, and — only if you ask for it — the exit code, via `--fail-on`.
 
 A finding whose severity the model spells outside the vocabulary is **kept, under the mildest one** — the text is the model's and the problem it describes may be real — and the substitution is counted as `mislabelled`. Re-rating a finding changes where a reader looks first and where `--fail-on` draws its line, so it is not something to do quietly.
+
+## What a run pays for twice, and does not have to
+
+Of what one file's review sends, most is not about that file. In a real project the standing prompt is ~2k tokens and a file's skills block ~5k, against ~1.5k for the diff and its context; and both of those blocks are sent again, byte for byte, by the next file. The reviewer therefore orders each call **stable prefix first** — the standing prompt, then the skills block, then the file — and marks the first two as such (`ChatMessage.stable`). What the model reads is unchanged; only the order within the turn has moved the reused part in front of the new part.
+
+A vendor that keeps prompt prefixes is told which ones to keep. For Anthropic that is prompt caching: the standing prompt is written to the cache on the run's first call and read on every later one, and each distinct skills block likewise, so a twenty-file pull request pays for the standing prompt once and for each skills combination once instead of twenty times. An OpenAI-compatible endpoint is told nothing — the ones that cache do so unasked — and the marks have no effect there.
+
+The arithmetic is Anthropic's and worth knowing before reading a bill: a block **written** to the cache costs a quarter more than sending it plain, a block **read** from it a tenth, and the cache lives five minutes from its last use. So caching pays from the second file on and costs a little on a run of one file — about a quarter of the prefix, which on the numbers above is the price of a few hundred tokens. Blocks under the vendor's minimum (about a thousand tokens on the larger models) are silently not kept; the standing prompt and any skills block worth having are past it. Whether it happened is in the log, because nothing else shows it: `-v` prints each call's `tokens in (7,650 cached)` or `(7,650 cache written)`, and a run that shows neither is a run the vendor kept nothing for.
 
 ## Configuration
 

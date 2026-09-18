@@ -14,6 +14,12 @@
  * ordering matters: `--log-format json` must not be a second, lossy
  * formatting path, it must be the same record with nothing thrown away.
  *
+ * A *reader's* clock is not a collector's. The record carries UTC ISO-8601
+ * because that is the one instant two machines can compare, and the text
+ * rendering prints it as a local wall-clock time, because the person under
+ * `-v` is matching a line against what they just did, not against another
+ * host's log.
+ *
  * Every rendering redacts. Redaction sits at the sink rather than at the call
  * sites because a call site that has to remember is a call site that will
  * eventually forget, and the cost of forgetting is a credential in a CI log
@@ -113,6 +119,30 @@ function levelLabel(level: string, settings: LogSettings): string {
   return colour === undefined ? text : colour(text);
 }
 
+/** A number as a fixed-width field, so every line's clock is the same width. */
+function pad(value: number, width: number): string {
+  return String(value).padStart(width, "0");
+}
+
+/**
+ * The record's instant as a local wall clock: `14:32:07.412`.
+ *
+ * Time of day rather than a date, because a run is minutes long and the
+ * date is the same on every line of it -- a column that never varies is a
+ * column that only pushes the sentence rightwards. Milliseconds stay: they
+ * are the reason to read a timestamp in a verbose run at all, where the
+ * gap between two lines is how a slow model call announces itself.
+ *
+ * Anything that is not a time pino wrote is returned as-is rather than
+ * dropped or guessed at, on the same principle as an unparseable line.
+ */
+export function clockTime(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return iso;
+  const clock = `${pad(at.getHours(), 2)}:${pad(at.getMinutes(), 2)}:${pad(at.getSeconds(), 2)}`;
+  return `${clock}.${pad(at.getMilliseconds(), 3)}`;
+}
+
 /**
  * For a person: `warn: message`, or the whole record under `-v`.
  *
@@ -126,8 +156,11 @@ export const renderText: LogRendering = (record, settings) => {
   const label = levelLabel(record.level, settings);
   if (!settings.detailed) return `${label} ${record.msg}`;
   const dim = (text: string): string => (settings.color ? paint.dim(text) : text);
-  const time = record.time === undefined ? "" : `${dim(record.time)} `;
-  return `${time}${label} ${dim(`${record.name}:`)} ${record.msg}`;
+  // Two spaces, not one: the clock and the level are fixed-width columns,
+  // and a wider gutter is what lets an eye scan down one of them past a
+  // message that ran long.
+  const time = record.time === undefined ? "" : `${dim(clockTime(record.time))}  `;
+  return `${time}${label}  ${dim(`${record.name}:`)} ${record.msg}`;
 };
 
 /** For a collector: the record itself, one JSON object per line. */

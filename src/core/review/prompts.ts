@@ -10,7 +10,9 @@
  * returns, so it is a deliberate edit, not a tidy-up.
  */
 
-import { severityPromptVocabulary } from "./severity";
+import { type ChatMessage } from "../ports/chat-model";
+
+import { SEVERITIES, severityPromptVocabulary } from "./severity";
 
 /**
  * The standing instructions. The severity vocabulary is interpolated from the
@@ -103,21 +105,57 @@ export interface UserPromptInput {
   readonly content: string | null;
   /** Human language for each finding's `body` (default English). */
   readonly language?: string;
-  /** The rendered skills block for this file, or "" when none apply. */
-  readonly skillsText?: string;
   /** The rendered pre-context block (`context.ts`), or "" when none was gathered. */
   readonly contextText?: string;
+  /**
+   * How many findings the run will report for this file; `0` (the default)
+   * asks for no limit.
+   *
+   * Told to the model rather than only applied afterwards (`volume.ts`),
+   * because a completion's wall time is its output: a file with a dozen
+   * problems and a cap of three would otherwise pay for twelve findings'
+   * worth of generation and throw nine away. The cap after the call still
+   * stands -- the model is asked, not trusted -- so `capped` in the summary
+   * says how often the request was not honoured.
+   */
+  readonly maxFindings?: number;
 }
 
-/** Compose the per-file user prompt. */
+/**
+ * The sentence that asks the model to stop at the cap.
+ *
+ * The order is the reviewer's own (`severity.ts`), spelled out so the model
+ * cuts the same findings the volume policy would have: the mildest go first.
+ * "Do not shorten" is the half that matters -- a model told "at most three"
+ * will otherwise fit six into three by merging them, which is a finding
+ * nobody can anchor.
+ */
+export function findingsCapSentence(maxFindings: number): string {
+  const order = SEVERITIES.join(", ");
+  return (
+    `Report at most ${maxFindings} finding(s). If there are more, keep the most severe ` +
+    `(in this order: ${order}) and leave the rest out; do not shorten or merge findings to fit.`
+  );
+}
+
+/**
+ * Compose the per-file user prompt: the part of the turn that is this
+ * file's alone.
+ *
+ * The skills block is *not* in here, and used to be. It goes ahead of this
+ * text as its own message (`reviewMessages`), because it is the one part of
+ * the turn that the next file with the same skills sends again unchanged --
+ * and a prefix a vendor can keep has to come before the text that differs,
+ * not after it.
+ */
 export function buildUserPrompt({
   path,
   annotatedPatch,
   allowedLines,
   content,
   language = "English",
-  skillsText = "",
   contextText = "",
+  maxFindings = 0,
 }: UserPromptInput): string {
   const contextBlock =
     content !== null && content !== ""
@@ -130,7 +168,7 @@ export function buildUserPrompt({
         ]
       : [];
   const surroundingsBlock = contextText ? ["", contextText] : [];
-  const skillsBlock = skillsText ? ["", skillsText] : [];
+  const capLine = maxFindings > 0 ? [findingsCapSentence(maxFindings)] : [];
   const parts = [
     `File: ${path}`,
     "",
@@ -143,10 +181,38 @@ export function buildUserPrompt({
     "```",
     ...contextBlock,
     ...surroundingsBlock,
-    ...skillsBlock,
     "",
     `Write each finding's "body" in ${language}. Keep the JSON keys and the "severity" values in English.`,
+    ...capLine,
     "Return the findings JSON now.",
   ];
   return parts.join("\n");
+}
+
+/**
+ * The whole conversation for one file's review, stable prefix first.
+ *
+ * Three messages at most, in an order that is the point of the function:
+ *
+ * 1. The standing prompt -- the same on every call of the run.
+ * 2. The skills block -- the same on every file that matches the same
+ *    skills; absent when none do.
+ * 3. The file: its diff, its context, the question.
+ *
+ * The first two are marked `stable`, so a vendor that keeps prefixes keeps
+ * them: a twenty-file pull request then pays for the standing prompt once and
+ * for each distinct skills block once, instead of twenty times each. What
+ * the model reads is unchanged -- the same text in the same turn -- only the
+ * order within the turn has moved the reused part in front of the new part.
+ */
+export function reviewMessages(
+  systemPrompt: string,
+  skillsText: string,
+  userPrompt: string,
+): ChatMessage[] {
+  return [
+    { role: "system", content: systemPrompt, stable: true },
+    ...(skillsText === "" ? [] : [{ role: "user" as const, content: skillsText, stable: true }]),
+    { role: "user", content: userPrompt },
+  ];
 }

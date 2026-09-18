@@ -73,19 +73,6 @@
       "expected": "File: a.ts\n\nAllowed line numbers (you may ONLY use these in findings):\n2\n\nUnified diff (added lines prefixed with [L<n>]):\n```diff\n@@ -1 +1,2 @@\n old\n[L2] +added\n```\n\nWrite each finding's \"body\" in Turkish. Keep the JSON keys and the \"severity\" values in English.\nReturn the findings JSON now."
     },
     {
-      "name": "build_user_prompt/with_skills",
-      "input": {
-        "path": "a.ts",
-        "annotated_patch": "@@ -1 +1,2 @@\n old\n[L2] +added",
-        "allowed_lines": [
-          2
-        ],
-        "content": null,
-        "skills_text": "Project/framework standards for this file (apply IN ADDITION to the four lenses):\n\n## s\nbody"
-      },
-      "expected": "File: a.ts\n\nAllowed line numbers (you may ONLY use these in findings):\n2\n\nUnified diff (added lines prefixed with [L<n>]):\n```diff\n@@ -1 +1,2 @@\n old\n[L2] +added\n```\n\nProject/framework standards for this file (apply IN ADDITION to the four lenses):\n\n## s\nbody\n\nWrite each finding's \"body\" in English. Keep the JSON keys and the \"severity\" values in English.\nReturn the findings JSON now."
-    },
-    {
       "name": "build_user_prompt/empty_prior_list",
       "input": {
         "path": "a.ts",
@@ -94,6 +81,32 @@
           2
         ],
         "content": null
+      },
+      "expected": "File: a.ts\n\nAllowed line numbers (you may ONLY use these in findings):\n2\n\nUnified diff (added lines prefixed with [L<n>]):\n```diff\n@@ -1 +1,2 @@\n old\n[L2] +added\n```\n\nWrite each finding's \"body\" in English. Keep the JSON keys and the \"severity\" values in English.\nReturn the findings JSON now."
+    },
+    {
+      "name": "build_user_prompt/with_cap",
+      "input": {
+        "path": "a.ts",
+        "annotated_patch": "@@ -1 +1,2 @@\n old\n[L2] +added",
+        "allowed_lines": [
+          2
+        ],
+        "content": null,
+        "max_findings": 3
+      },
+      "expected": "File: a.ts\n\nAllowed line numbers (you may ONLY use these in findings):\n2\n\nUnified diff (added lines prefixed with [L<n>]):\n```diff\n@@ -1 +1,2 @@\n old\n[L2] +added\n```\n\nWrite each finding's \"body\" in English. Keep the JSON keys and the \"severity\" values in English.\nReport at most 3 finding(s). If there are more, keep the most severe (in this order: bug, security, performance, readability) and leave the rest out; do not shorten or merge findings to fit.\nReturn the findings JSON now."
+    },
+    {
+      "name": "build_user_prompt/zero_cap_asks_no_limit",
+      "input": {
+        "path": "a.ts",
+        "annotated_patch": "@@ -1 +1,2 @@\n old\n[L2] +added",
+        "allowed_lines": [
+          2
+        ],
+        "content": null,
+        "max_findings": 0
       },
       "expected": "File: a.ts\n\nAllowed line numbers (you may ONLY use these in findings):\n2\n\nUnified diff (added lines prefixed with [L<n>]):\n```diff\n@@ -1 +1,2 @@\n old\n[L2] +added\n```\n\nWrite each finding's \"body\" in English. Keep the JSON keys and the \"severity\" values in English.\nReturn the findings JSON now."
     }

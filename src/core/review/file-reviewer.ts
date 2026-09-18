@@ -13,14 +13,15 @@
 
 import { type NewSideEntry } from "../diff/patch-view";
 import { type Finding } from "../domain/finding";
-import { type ChatMessage, type ChatModel } from "../ports/chat-model";
+import { type ChatMessage, type ChatModel, type ChatResponse } from "../ports/chat-model";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { errorMessage } from "../util/errors";
 import { type JsonValue, decodeJson, hasContent, isJsonArray, isJsonObject } from "../util/json";
 import { asText, collapseWhitespace, cutToLength, show } from "../util/text";
+import { type Clock, SYSTEM_CLOCK, describeUsage, seconds, stopwatch } from "../util/timing";
 
 import { type Anchor, CONFLICT, EXACT, FAILED, REPAIRED, resolveAnchor } from "./anchor";
-import { RETRY_PROMPT, buildUserPrompt } from "./prompts";
+import { RETRY_PROMPT, buildUserPrompt, reviewMessages } from "./prompts";
 import { isKnownSeverity, parseSeverity, severityPromptVocabulary } from "./severity";
 
 /**
@@ -85,18 +86,23 @@ export interface ReviewFileInput {
    * anchor.
    */
   readonly anchorIndex?: readonly NewSideEntry[];
+  /** How many findings the run will report for this file; `0` asks for no limit. */
+  readonly maxFindings?: number;
 }
 
 export interface FileReviewerOptions {
   /** The composed system prompt (`systemPrompt(policy, contract)`). */
   readonly systemPrompt: string;
   readonly logger?: Logger;
+  /** The clock each call's duration is read from; injected so a test can pin it. */
+  readonly now?: Clock;
 }
 
 /** Wraps the chat model to produce validated findings for one file. */
 export class FileReviewer {
   private readonly log: Logger;
   private readonly systemPrompt: string;
+  private readonly now: Clock;
 
   constructor(
     private readonly model: ChatModel,
@@ -104,6 +110,7 @@ export class FileReviewer {
   ) {
     this.log = (options.logger ?? NULL_LOGGER).child("review.file_reviewer");
     this.systemPrompt = options.systemPrompt;
+    this.now = options.now ?? SYSTEM_CLOCK;
   }
 
   /** Anchored findings for one file (`[]` on any failure). */
@@ -116,13 +123,12 @@ export class FileReviewer {
       allowedLines: [...input.allowedLines].toSorted((a, b) => a - b),
       content: input.content,
       language: input.language ?? "English",
-      skillsText: input.skillsText ?? "",
       contextText: input.contextText ?? "",
+      maxFindings: input.maxFindings ?? 0,
     });
-    const messages: ChatMessage[] = [
-      { role: "system", content: this.systemPrompt },
-      { role: "user", content: userPrompt },
-    ];
+    // Stable prefix first (standing prompt, then this file's skills), the
+    // file itself last: see `reviewMessages` for why the order matters.
+    const messages = reviewMessages(this.systemPrompt, input.skillsText ?? "", userPrompt);
 
     const payload = await this.askForFindings(input.path, messages);
     if (!isJsonObject(payload)) return [];
@@ -143,14 +149,25 @@ export class FileReviewer {
   ): Promise<JsonValue | undefined> {
     let messages = initial;
     for (const attempt of [1, 2] as const) {
-      let raw: string;
+      let response: ChatResponse;
+      // Timed per attempt, so that a retried file shows as two waits rather
+      // than one long one -- the one line that tells a slow model from a
+      // malformed answer paid for twice.
+      const elapsed = stopwatch(this.now);
       try {
-        const response = await this.model.generate(messages);
-        raw = response.text;
+        response = await this.model.generate(messages);
       } catch (error) {
-        this.log.warn(`LLM call failed for ${path}: ${errorMessage(error)}`);
+        this.log.warn(
+          `LLM call failed for ${path} after ${seconds(elapsed())}: ${errorMessage(error)}`,
+        );
         return undefined;
       }
+      const took = elapsed();
+      const cost = describeUsage(response.usage, took);
+      this.log.debug(
+        `${path}: the model answered in ${seconds(took)} (attempt ${attempt} of 2${cost === "" ? "" : `; ${cost}`}).`,
+      );
+      const raw = response.text;
       try {
         return extractJson(raw);
       } catch (error) {

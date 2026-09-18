@@ -24,6 +24,7 @@ import { type CodeContext } from "../ports/code-context";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { type SkillMatcher } from "../ports/skill-matcher";
 import { show } from "../util/text";
+import { type Clock, SYSTEM_CLOCK, seconds, stopwatch } from "../util/timing";
 
 // The settings group lives with the other groups; re-exported here because
 // this is where callers of the per-file step look for it.
@@ -84,7 +85,45 @@ export interface ReviewChangedFileOptions {
   readonly codeContext?: CodeContext | null;
   /** Every changed file of the change set, this one included. */
   readonly changeSet?: readonly ChangedFile[];
+  /**
+   * How many findings the run will report per file; `0` (the default) means
+   * all of them. Passed on to the prompt, so the model stops where the
+   * report would have cut anyway instead of generating what gets thrown away.
+   */
+  readonly maxFindingsPerFile?: number;
   readonly logger?: Logger;
+  /** The clock the timings are read from; injected so a test can pin them. */
+  readonly now?: Clock;
+}
+
+/**
+ * How long each waiting step of one file's review took, in milliseconds.
+ *
+ * Three steps because those are the three things a file waits on: the
+ * repository (pre-context), the model (the review), and the model again
+ * (verification). `verify` is `null` when no verifier was given, so the log
+ * does not report a step that was never there.
+ */
+interface StepTimings {
+  readonly context: number;
+  readonly model: number;
+  readonly verify: number | null;
+}
+
+/**
+ * The timings as the log states them: `context 0.2s, model 42.3s, verify 18.1s`.
+ *
+ * This is the line that answers "why did a one-file review take four
+ * minutes": without it a slow model and a slow verifier are one number, and
+ * a retry inside either is invisible.
+ */
+function describeTimings(timings: StepTimings): string {
+  const steps: [string, number | null][] = [
+    ["context", timings.context],
+    ["model", timings.model],
+    ["verify", timings.verify],
+  ];
+  return steps.flatMap(([name, ms]) => (ms === null ? [] : [`${name} ${seconds(ms)}`])).join(", ");
 }
 
 /**
@@ -112,11 +151,12 @@ export async function reviewChangedFile(
 
   const skillNames = skills === null ? [] : skills.skillsFor(file.path).map((s) => s.name);
   const verifier = options.verifier ?? null;
+  const now = options.now ?? SYSTEM_CLOCK;
 
   // Both model calls share the one slot: verification is part of this file's
   // work, so letting it run outside the limit would raise how much is in
   // flight beyond what the caller asked for.
-  const verdict = await limit(async () => {
+  const { verdict, timings } = await limit(async () => {
     // An added file's patch already IS the whole file, so a separate content
     // block would only duplicate it in the prompt. Context is fetched for
     // modified files, where the patch is a partial view.
@@ -129,7 +169,10 @@ export async function reviewChangedFile(
       skills === null
         ? ""
         : skills.renderFor(file.path, settings.maxSkillChars, settings.maxSkillsTotalChars);
+    const contextElapsed = stopwatch(now);
     const contextText = await surroundingsOf(file, options, log);
+    const context = contextElapsed();
+    const modelElapsed = stopwatch(now);
     const findings = await reviewer.reviewFile({
       path: file.path,
       annotatedPatch: annotated,
@@ -142,16 +185,21 @@ export async function reviewChangedFile(
       // recomputed from the whole patch: a quote may only be placed in text
       // the model was actually given (see `selection.ts`).
       anchorIndex: selected.newSide,
+      maxFindings: options.maxFindingsPerFile ?? 0,
     });
-    return verifier === null
-      ? keepAll(findings)
-      : verifier.verify({ path: file.path, annotatedPatch: annotated, findings });
+    const model = modelElapsed();
+    if (verifier === null) {
+      return { verdict: keepAll(findings), timings: { context, model, verify: null } };
+    }
+    const verifyElapsed = stopwatch(now);
+    const checked = await verifier.verify({ path: file.path, annotatedPatch: annotated, findings });
+    return { verdict: checked, timings: { context, model, verify: verifyElapsed() } };
   });
 
   const refuted = verdict.refuted.length;
   const checked = refuted === 0 ? "" : `, ${refuted} refuted`;
   log.info(
-    `review ${file.path}: +${allowed.size} line(s), skills=${show(skillNames)}, ${verdict.kept.length} finding(s)${checked}.`,
+    `review ${file.path}: +${allowed.size} line(s), skills=${show(skillNames)}, ${verdict.kept.length} finding(s)${checked} (${describeTimings(timings)}).`,
   );
   return { path: file.path, findings: verdict.kept, skillNames, refuted };
 }

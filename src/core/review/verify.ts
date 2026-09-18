@@ -24,11 +24,12 @@
  */
 
 import { type Finding } from "../domain/finding";
-import { type ChatMessage, type ChatModel } from "../ports/chat-model";
+import { type ChatMessage, type ChatModel, type ChatResponse } from "../ports/chat-model";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { errorMessage } from "../util/errors";
 import { type JsonValue, hasContent, isInteger, isJsonArray, isJsonObject } from "../util/json";
 import { asText, collapseWhitespace } from "../util/text";
+import { type Clock, SYSTEM_CLOCK, describeUsage, seconds, stopwatch } from "../util/timing";
 
 import { extractJson } from "./file-reviewer";
 
@@ -154,12 +155,15 @@ export interface FindingVerifierOptions {
   /** The verification policy (`prompts/verify.md`). */
   readonly systemPrompt: string;
   readonly logger?: Logger;
+  /** The clock the call's duration is read from; injected so a test can pin it. */
+  readonly now?: Clock;
 }
 
 /** Wraps the chat model to answer which of a file's findings the diff refutes. */
 export class FindingVerifier {
   private readonly log: Logger;
   private readonly systemPrompt: string;
+  private readonly now: Clock;
 
   constructor(
     private readonly model: ChatModel,
@@ -167,6 +171,7 @@ export class FindingVerifier {
   ) {
     this.log = (options.logger ?? NULL_LOGGER).child("review.verify");
     this.systemPrompt = options.systemPrompt;
+    this.now = options.now ?? SYSTEM_CLOCK;
   }
 
   /** The findings that survive, and the ones the diff refuted. Never throws. */
@@ -176,19 +181,27 @@ export class FindingVerifier {
     if (findings.length === 0) return keepAll(findings);
 
     const messages: ChatMessage[] = [
-      { role: "system", content: this.systemPrompt },
+      // The policy is the same on every verification of the run; the file
+      // and its findings are not. Marked so a vendor that keeps prefixes
+      // keeps the one worth keeping.
+      { role: "system", content: this.systemPrompt, stable: true },
       { role: "user", content: buildVerifyPrompt(input) },
     ];
-    let raw: string;
+    let response: ChatResponse;
+    const elapsed = stopwatch(this.now);
     try {
-      const response = await this.model.generate(messages);
-      raw = response.text;
+      response = await this.model.generate(messages);
     } catch (error) {
       return this.failOpen(input, `the call failed (${errorMessage(error)})`);
     }
+    const took = elapsed();
+    const cost = describeUsage(response.usage, took);
+    this.log.debug(
+      `${input.path}: the verifier answered in ${seconds(took)} for ${findings.length} finding(s)${cost === "" ? "" : ` (${cost})`}.`,
+    );
     let payload: JsonValue;
     try {
-      payload = extractJson(raw);
+      payload = extractJson(response.text);
     } catch (error) {
       // Not retried, unlike the review itself: there a bad reply costs the
       // file's findings, here it costs nothing but a finding the author reads.

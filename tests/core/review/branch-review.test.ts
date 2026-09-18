@@ -394,9 +394,11 @@ describe("streaming", () => {
     // Two findings per file, one of them unanchored, and a cap of one. The
     // tallies have to describe the same population as `findings`, or a reader
     // cannot check one against the other: what the cap took is `capped`.
+    const asked: number[] = [];
     const reviewer: PerFileReviewer = {
-      reviewFile: (input) =>
-        Promise.resolve([
+      reviewFile: (input) => {
+        asked.push(input.maxFindings ?? -1);
+        return Promise.resolve([
           finding({
             line: Math.min(...input.allowedLines),
             severity: "bug",
@@ -404,9 +406,13 @@ describe("streaming", () => {
             anchor: "exact",
           }),
           finding({ line: null, severity: "readability", body: "withheld", anchor: "failed" }),
-        ]),
+        ]);
+      },
     };
     const result = await reviewBranch(options(repo(), { reviewer, maxFindingsPerFile: 1 }));
+    // The model was asked to stop at the cap; it did not, and the cap still
+    // held -- the request is a saving, never the guarantee.
+    expect(asked).toEqual([1, 1]);
     expect(result.findings).toHaveLength(2);
     expect(result.anchors).toEqual({ exact: 2 });
     expect(result.unanchored).toBe(0);

@@ -18,9 +18,13 @@ import { parseCatalog } from "../../../src/core/catalog/parse";
 import { resolveConfig } from "../../../src/core/config/resolver";
 import { type LlmSettings } from "../../../src/core/config/settings";
 import { ValueError } from "../../../src/core/util/errors";
-import { AiSdkChatModel, splitSystem } from "../../../src/providers/llm/ai-sdk-chat-model";
+import { AiSdkChatModel, toPrompt } from "../../../src/providers/llm/ai-sdk-chat-model";
 import { AiSdkProvider } from "../../../src/providers/llm/ai-sdk-provider";
 import { BUILTIN_MODEL_PROVIDERS, builtinModelProviders } from "../../../src/providers/llm/builtin";
+import {
+  ANTHROPIC_STABLE_PREFIX,
+  ClaudeProvider,
+} from "../../../src/providers/llm/claude/provider";
 import {
   ModelProviderRegistry,
   type ModelRequest,
@@ -57,6 +61,37 @@ describe("AI SDK chat model adapter", () => {
     expect(response.text).toBe('{"findings": []}');
   });
 
+  it("hands up the vendor's token counts, and says nothing where it counted nothing", async () => {
+    const counted = await new AiSdkChatModel(mockModel("ok")).generate([
+      { role: "user", content: "u" },
+    ]);
+    expect(counted.usage).toEqual({
+      inputTokens: 1,
+      outputTokens: 1,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
+    });
+
+    const silent: LanguageModelV3GenerateResult = {
+      content: [{ type: "text", text: "ok" }],
+      finishReason: { unified: "stop", raw: "stop" },
+      usage: {
+        inputTokens: { ...TOKENS, total: undefined },
+        outputTokens: { ...TOKENS, total: undefined, text: undefined, reasoning: undefined },
+      },
+      warnings: [],
+    };
+    const uncounted = await new AiSdkChatModel(
+      new MockLanguageModelV3({ doGenerate: () => Promise.resolve(silent) }),
+    ).generate([{ role: "user", content: "u" }]);
+    expect(uncounted.usage).toEqual({
+      inputTokens: null,
+      outputTokens: null,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
+    });
+  });
+
   it("sends the system prompt as instructions and the rest as messages", async () => {
     const model = mockModel("ok");
     await new AiSdkChatModel(model).generate([
@@ -69,22 +104,91 @@ describe("AI SDK chat model adapter", () => {
     expect(prompt[0]?.content).toBe("SYS");
   });
 
-  it("joins several system messages and keeps the conversation order", () => {
-    const { instructions, conversation } = splitSystem([
-      { role: "system", content: "A" },
-      { role: "user", content: "u1" },
-      { role: "system", content: "B" },
-      { role: "assistant", content: "a1" },
-    ]);
-    expect(instructions).toBe("A\n\nB");
-    expect(conversation).toEqual([
-      { role: "user", content: "u1" },
-      { role: "assistant", content: "a1" },
-    ]);
+  it("keeps system messages apart as a list, several staying several, in order", () => {
+    // A list rather than one joined string: a string cannot carry the option
+    // that asks a vendor to keep it, and a block is what a cache boundary
+    // sits on.
+    expect(
+      toPrompt(
+        [
+          { role: "system", content: "A" },
+          { role: "user", content: "u1" },
+          { role: "system", content: "B" },
+          { role: "assistant", content: "a1" },
+        ],
+        undefined,
+      ),
+    ).toEqual({
+      instructions: [
+        { role: "system", content: "A" },
+        { role: "system", content: "B" },
+      ],
+      conversation: [
+        { role: "user", content: "u1" },
+        { role: "assistant", content: "a1" },
+      ],
+    });
+    expect(toPrompt([{ role: "user", content: "u" }], undefined).instructions).toEqual([]);
   });
 
-  it("has no instructions when no system message was given", () => {
-    expect(splitSystem([{ role: "user", content: "u" }]).instructions).toBeUndefined();
+  it("attaches the vendor's keep-this options to stable messages only", () => {
+    const keep = { vendor: { keep: true } };
+    expect(
+      toPrompt(
+        [
+          { role: "system", content: "POLICY", stable: true },
+          { role: "user", content: "SKILLS", stable: true },
+          { role: "user", content: "FILE" },
+        ],
+        keep,
+      ),
+    ).toEqual({
+      instructions: [{ role: "system", content: "POLICY", providerOptions: keep }],
+      conversation: [
+        { role: "user", content: "SKILLS", providerOptions: keep },
+        { role: "user", content: "FILE" },
+      ],
+    });
+  });
+
+  it("leaves the flag without effect for a vendor with nothing to ask for", () => {
+    // The core marks what is stable whatever the vendor; a vendor that
+    // caches unasked, or not at all, must see plain messages.
+    expect(
+      toPrompt([{ role: "system", content: "POLICY", stable: true }], undefined).instructions,
+    ).toEqual([{ role: "system", content: "POLICY" }]);
+  });
+
+  it("sends the stable prefix to the SDK with the vendor's options on it", async () => {
+    const model = mockModel("ok");
+    await new AiSdkChatModel(model, { stablePrefix: ANTHROPIC_STABLE_PREFIX }).generate([
+      { role: "system", content: "POLICY", stable: true },
+      { role: "user", content: "FILE" },
+    ]);
+    const prompt = model.doGenerateCalls[0]?.prompt ?? [];
+    expect(prompt[0]?.providerOptions).toEqual(ANTHROPIC_STABLE_PREFIX);
+    expect(prompt[1]?.providerOptions).toBeUndefined();
+  });
+
+  it("hands up what the vendor kept and reused, and nothing when it did neither", async () => {
+    const cached: LanguageModelV3GenerateResult = {
+      content: [{ type: "text", text: "ok" }],
+      finishReason: { unified: "stop", raw: "stop" },
+      usage: {
+        inputTokens: { total: 9445, noCache: 1795, cacheRead: 7650, cacheWrite: 0 },
+        outputTokens: { total: 2455, text: 2455, reasoning: 0 },
+      },
+      warnings: [],
+    };
+    const response = await new AiSdkChatModel(
+      new MockLanguageModelV3({ doGenerate: () => Promise.resolve(cached) }),
+    ).generate([{ role: "user", content: "u" }]);
+    expect(response.usage).toEqual({
+      inputTokens: 9445,
+      outputTokens: 2455,
+      cacheReadTokens: 7650,
+      cacheWriteTokens: 0,
+    });
   });
 
   it("calls the vendor exactly once, leaving trying again to the decorator", async () => {
@@ -137,6 +241,45 @@ describe("the model provider registry", () => {
     const registry = builtinModelProviders();
     expect(registry.create("local", choice())).toBeInstanceOf(AiSdkChatModel);
     expect(registry.create("claude", choice("claude-opus-4-8"))).toBeInstanceOf(AiSdkChatModel);
+  });
+
+  it("asks Anthropic to keep the stable prefix, and asks nothing of a local endpoint", async () => {
+    // The vendor class decides what `stable` means; the adapter it builds
+    // must carry that decision. Probed through a mock SDK model so the
+    // wiring is tested without the network.
+    class Probe extends ClaudeProvider {
+      readonly model = mockModel("ok");
+      protected override languageModel(): MockLanguageModelV3 {
+        return this.model;
+      }
+    }
+    const claude = new Probe();
+    await claude.create(choice()).generate([
+      { role: "system", content: "POLICY", stable: true },
+      { role: "user", content: "FILE" },
+    ]);
+    expect(claude.model.doGenerateCalls[0]?.prompt[0]?.providerOptions).toEqual(
+      ANTHROPIC_STABLE_PREFIX,
+    );
+    expect(ANTHROPIC_STABLE_PREFIX).toEqual({
+      anthropic: { cacheControl: { type: "ephemeral" } },
+    });
+
+    class LocalProbe extends AiSdkProvider {
+      readonly name = "probe";
+      readonly description = "a vendor that asks for nothing";
+      readonly defaultModel = "m";
+      readonly model = mockModel("ok");
+      protected languageModel(): MockLanguageModelV3 {
+        return this.model;
+      }
+    }
+    const local = new LocalProbe();
+    await local.create(choice()).generate([
+      { role: "system", content: "POLICY", stable: true },
+      { role: "user", content: "FILE" },
+    ]);
+    expect(local.model.doGenerateCalls[0]?.prompt[0]?.providerOptions).toBeUndefined();
   });
 
   it("refuses an unknown provider by name, listing the known ones", () => {

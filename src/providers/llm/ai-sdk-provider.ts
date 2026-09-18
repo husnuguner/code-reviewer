@@ -11,20 +11,37 @@
  * merely discouraged.
  *
  * What is left for a vendor class is exactly what differs between vendors:
- * the id, the line of help, the default model, and the SDK client.
+ * the id, the line of help, the default model, the SDK client -- and, for a
+ * vendor that keeps prompt prefixes on request, what the request looks like.
  */
 
 import { type LanguageModel } from "ai";
 
 import { type ChatModel } from "../../core/ports/chat-model";
 
-import { AiSdkChatModel } from "./ai-sdk-chat-model";
+import { AiSdkChatModel, type ProviderOptions } from "./ai-sdk-chat-model";
 import { ModelProvider, type ModelRequest } from "./model-provider";
 
 export abstract class AiSdkProvider extends ModelProvider {
   /** The shared adapter over the vendor's SDK model; not a vendor's to change. */
   protected chatModel(request: ModelRequest): ChatModel {
-    return new AiSdkChatModel(this.languageModel(request));
+    const stablePrefix = this.stablePrefix();
+    return new AiSdkChatModel(this.languageModel(request), {
+      ...(stablePrefix !== undefined && { stablePrefix }),
+    });
+  }
+
+  /**
+   * What to attach to a message the core marked `stable`, so this vendor
+   * keeps it for the run's later calls.
+   *
+   * `undefined` by default, which is right for most: an OpenAI-compatible
+   * server that caches prefixes does so unasked, and one that does not has
+   * nothing to be asked. A vendor that wants telling overrides this once,
+   * and the core's flag reaches it without the core learning its name.
+   */
+  protected stablePrefix(): ProviderOptions | undefined {
+    return undefined;
   }
 
   /** The SDK model for one request; `request.model` is already settled. */

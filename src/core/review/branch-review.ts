@@ -117,6 +117,10 @@ export async function* iterBranchReview(
       readContent: (path) => git.readFile(path, options.settings.maxFileChars),
       codeContext: options.codeContext ?? null,
       changeSet,
+      // The same number `capPerFile` applies below, told to the model first:
+      // what the report would cut is not worth generating. The cut after
+      // the call stays, so `capped` counts how often the model overran.
+      maxFindingsPerFile: options.maxFindingsPerFile ?? 0,
       ...(options.logger && { logger: options.logger }),
     });
 

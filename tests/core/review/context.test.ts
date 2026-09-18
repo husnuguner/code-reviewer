@@ -332,18 +332,19 @@ describe("rendering", () => {
     expect(renderContext(EMPTY_CONTEXT, 10_000)).toBe("");
   });
 
-  it("lands in the user prompt between the file content and the skills", () => {
+  it("lands in the user prompt after the file content, before the closing ask", () => {
+    // The skills are no longer in this text at all: they travel ahead of it
+    // as their own message (`reviewMessages`), so a vendor can keep them.
     const prompt = buildUserPrompt({
       path: "a.ts",
       annotatedPatch: "+x",
       allowedLines: [1],
       content: "whole file",
-      skillsText: "## skill",
       contextText: "CONTEXT BLOCK",
     });
     const at = (needle: string): number => prompt.indexOf(needle);
     expect(at("whole file")).toBeLessThan(at("CONTEXT BLOCK"));
-    expect(at("CONTEXT BLOCK")).toBeLessThan(at("## skill"));
+    expect(at("CONTEXT BLOCK")).toBeLessThan(at("Return the findings JSON now."));
     expect(
       buildUserPrompt({ path: "a", annotatedPatch: "+x", allowedLines: [1], content: null }),
     ).not.toContain("CONTEXT");

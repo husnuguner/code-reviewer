@@ -11,7 +11,12 @@ import { describe, expect, it } from "bun:test";
 import { PassThrough } from "node:stream";
 
 import { type LogSettings, resolveLogSettings } from "../../../src/providers/logging/log-settings";
-import { PinoLogger, formatLine, parseRecord } from "../../../src/providers/logging/pino-logger";
+import {
+  PinoLogger,
+  clockTime,
+  formatLine,
+  parseRecord,
+} from "../../../src/providers/logging/pino-logger";
 
 function capture(): { sink: PassThrough; lines: () => string[] } {
   const sink = new PassThrough();
@@ -72,14 +77,24 @@ describe("the default shape: a sentence, not a log record", () => {
 });
 
 describe("the verbose shape: the whole record", () => {
-  it("adds an ISO-8601 timestamp and the component name", () => {
+  it("adds a wall-clock timestamp and the component name", () => {
     const lines = logged({ level: "debug", detailed: true, color: false }, (log) =>
       log.debug("visible"),
     );
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(
-      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z debug reviewer\.x: visible$/u,
-    );
+    expect(lines[0]).toMatch(/^\d{2}:\d{2}:\d{2}\.\d{3} {2}debug {2}reviewer\.x: visible$/u);
+  });
+
+  it("lines up the clock and the level as fixed-width columns", () => {
+    // The two columns are what an eye scans down; a level of a different
+    // length must not shift the component name out from under the one above.
+    const lines = logged({ level: "debug", detailed: true, color: false }, (log) => {
+      log.debug("d");
+      log.info("i");
+      log.error("e");
+    });
+    const offsets = lines.map((line) => line.indexOf("reviewer.x:"));
+    expect(new Set(offsets).size).toBe(1);
   });
 
   it("names children under the root, as Python's module loggers are", () => {
@@ -94,6 +109,25 @@ describe("the verbose shape: the whole record", () => {
   });
 });
 
+describe("the clock a verbose line shows", () => {
+  it("is the reader's own, because they are matching a line against what they just did", () => {
+    // The record stays UTC (that is what two machines can compare); the
+    // rendering is local, and this pins the conversion rather than the
+    // shape -- the assertion has to hold in whatever zone CI runs in.
+    const at = new Date(2025, 8, 18, 14, 32, 7, 412);
+    expect(clockTime(at.toISOString())).toBe("14:32:07.412");
+  });
+
+  it("pads every field, so the column cannot narrow at one past midnight", () => {
+    const at = new Date(2025, 0, 1, 0, 1, 2, 3);
+    expect(clockTime(at.toISOString())).toBe("00:01:02.003");
+  });
+
+  it("passes through a time it cannot read rather than inventing one", () => {
+    expect(clockTime("not a time")).toBe("not a time");
+  });
+});
+
 describe("--log-format json", () => {
   it("emits one complete record per line, whatever the level", () => {
     const lines = logged({ level: "debug", format: "json", color: false }, (log) => {
@@ -105,9 +139,10 @@ describe("--log-format json", () => {
       { level: "debug", name: "reviewer.x", msg: "d" },
       { level: "warn", name: "reviewer.x", msg: "w" },
     ]);
-    // The time is in the record even though the text rendering hides it:
+    // The time is in the record even though the text rendering hides it,
+    // and it stays full UTC ISO-8601 there whatever the text column shows:
     // a record is either complete or it is not.
-    expect(records[0]?.["time"]).toMatch(/^\d{4}-\d{2}-\d{2}T/u);
+    expect(records[0]?.["time"]).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u);
   });
 });
 

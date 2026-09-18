@@ -4,9 +4,12 @@ import {
   MAX_PROMPT_CHARS,
   RETRY_PROMPT,
   buildUserPrompt,
+  findingsCapSentence,
+  reviewMessages,
   systemPrompt,
 } from "../../src/core/review/prompts";
 import { textBody } from "../../src/core/review/render";
+import { SEVERITIES } from "../../src/core/review/severity";
 import { sortedByCodePoint } from "../../src/core/util/text";
 import { shippedFile } from "../../src/providers/assets/shipped-files";
 
@@ -30,8 +33,8 @@ interface PromptInput {
   allowed_lines: number[];
   content: string | null;
   language?: string;
-  /** The matching skills' text, which is the whole point of the skills pipeline. */
-  skills_text?: string;
+  /** The run's per-file cap, told to the model; absent or 0 asks for no limit. */
+  max_findings?: number;
 }
 
 /** A prompt's non-empty lines, section headers dropped, in code-point order. */
@@ -144,9 +147,33 @@ describe("prompts", () => {
           allowedLines: input.allowed_lines,
           content: input.content,
           ...(input.language !== undefined && { language: input.language }),
-          ...(input.skills_text !== undefined && { skillsText: input.skills_text }),
+          ...(input.max_findings !== undefined && { maxFindings: input.max_findings }),
         }),
       ).toBe(expected);
     },
   );
+
+  it("puts the stable prefix first: standing prompt, then skills, then the file", () => {
+    // The order is what lets a vendor keep the reused part: a prefix has to
+    // come before the text that differs. The skills are their own message
+    // for the same reason -- two files with the same skills share it.
+    const messages = reviewMessages("POLICY", "## skills", "File: a.ts");
+    expect(messages).toEqual([
+      { role: "system", content: "POLICY", stable: true },
+      { role: "user", content: "## skills", stable: true },
+      { role: "user", content: "File: a.ts" },
+    ]);
+    // No skills, no skills message: an empty stable block would be a cache
+    // boundary around nothing.
+    expect(reviewMessages("POLICY", "", "File: a.ts")).toEqual([
+      { role: "system", content: "POLICY", stable: true },
+      { role: "user", content: "File: a.ts" },
+    ]);
+  });
+
+  it("spells the cap's severity order from the one declaration", () => {
+    // The model is asked to cut what `capPerFile` would have cut, so the
+    // order it is given must be the order the volume policy sorts by.
+    expect(findingsCapSentence(3)).toContain(`in this order: ${SEVERITIES.join(", ")}`);
+  });
 });

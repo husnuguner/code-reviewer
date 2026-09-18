@@ -133,6 +133,39 @@ describe("the shared per-file step", () => {
     ]);
   });
 
+  it("says how long each waiting step took, so a slow run can be read back", async () => {
+    // A pinned clock: each read moves it forward by a known step, so the line
+    // says what the arithmetic says and not what the machine was doing.
+    const ticks = [0, 200, 200, 42_500, 42_500, 60_600];
+    let read = 0;
+    const now = (): number => ticks[Math.min(read++, ticks.length - 1)] ?? 0;
+    const lines: string[] = [];
+    const verifier = {
+      verify: (input: { findings: readonly Finding[] }) =>
+        Promise.resolve({ kept: [...input.findings], refuted: [] }),
+    };
+    await review(new ChangedFile("a.ts", "modified", PATCH), {
+      logger: recordingLogger(lines),
+      verifier,
+      now,
+    });
+    expect(lines).toEqual([
+      "INFO review a.ts: +1 line(s), skills=[], 1 finding(s) (context 0.2s, model 42.3s, verify 18.1s).",
+    ]);
+  });
+
+  it("reports no verify timing when there is no verifier", async () => {
+    const lines: string[] = [];
+    let now = 0;
+    await review(new ChangedFile("a.ts", "modified", PATCH), {
+      logger: recordingLogger(lines),
+      now: () => (now += 500),
+    });
+    expect(lines).toEqual([
+      "INFO review a.ts: +1 line(s), skills=[], 1 finding(s) (context 0.5s, model 0.5s).",
+    ]);
+  });
+
   it("reads context for a modified file but not for an added one", async () => {
     const reads: string[] = [];
     const readContent = (path: string): Promise<string | null> => {
@@ -157,6 +190,18 @@ describe("the shared per-file step", () => {
     ]);
     expect(result?.findings.map((f) => f.line)).toEqual([2]);
     expect(result?.skillNames).toEqual([]);
+  });
+
+  it("tells the reviewer the run's per-file cap, and asks for no limit without one", async () => {
+    // The cap is applied after the call (`volume.ts`); telling the model
+    // first is what keeps a file with a dozen problems from paying for a
+    // dozen findings' worth of generation and reporting three.
+    const capped = await review(new ChangedFile("a.ts", "modified", PATCH), {
+      maxFindingsPerFile: 3,
+    });
+    expect(capped.reviewer.seen[0]?.maxFindings).toBe(3);
+    const uncapped = await review(new ChangedFile("a.ts", "modified", PATCH));
+    expect(uncapped.reviewer.seen[0]?.maxFindings).toBe(0);
   });
 
   it("names the skills that were in the prompt", async () => {

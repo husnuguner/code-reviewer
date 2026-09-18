@@ -50,12 +50,23 @@ const FINDINGS: [Finding, Finding] = [
   finding({ line: 3, severity: "security", body: "two" }),
 ];
 
+/** What every pinned-clock test sees the call take. */
+const CALL_MS = 18_100;
+
 function verifier(model: ChatModel, lines: string[] = []): FindingVerifier {
+  // A clock that advances by one call's worth on every read, so the timing
+  // line says the same thing on every machine.
+  let now = 0;
   return new FindingVerifier(model, {
     systemPrompt: "verification policy",
     logger: recordingLogger(lines),
+    now: () => (now += CALL_MS),
   });
 }
+
+/** The DEBUG line every answered call leaves, for `n` findings. */
+const answered = (n: number): string =>
+  `DEBUG a.ts: the verifier answered in 18.1s for ${n} finding(s).`;
 
 function verify(
   model: ChatModel,
@@ -150,7 +161,8 @@ describe("verifying one file's findings", () => {
     expect(verdict.kept).toEqual(FINDINGS);
     // One call only: a finding the author reads is cheaper than a second call.
     expect(model.calls).toHaveLength(1);
-    expect(lines[0]).toMatch(/^WARNING Could not verify a\.ts: the reply was not JSON/u);
+    expect(lines[0]).toBe(answered(2));
+    expect(lines[1]).toMatch(/^WARNING Could not verify a\.ts: the reply was not JSON/u);
   });
 
   it.each(['{"remove": [{"index": 9}]}', '{"remove": "all"}', '{"ok": true}'])(
@@ -166,6 +178,7 @@ describe("verifying one file's findings", () => {
     const reply = '{"remove": [{"index": 2, "ground": "A", "reason": "no such call in the diff"}]}';
     await verify(new FakeModel([reply]), FINDINGS, lines);
     expect(lines).toEqual([
+      answered(2),
       "INFO a.ts: dropped a security finding at line 3 -- ground A: no such call in the diff.",
     ]);
   });
@@ -173,6 +186,35 @@ describe("verifying one file's findings", () => {
   it("records a removal that came with no ground as exactly that", async () => {
     const lines: string[] = [];
     await verify(new FakeModel(['{"remove": [2]}']), FINDINGS, lines);
-    expect(lines).toEqual(["INFO a.ts: dropped a security finding at line 3 -- no ground given."]);
+    expect(lines).toEqual([
+      answered(2),
+      "INFO a.ts: dropped a security finding at line 3 -- no ground given.",
+    ]);
+  });
+
+  it("marks its policy as stable and the file's findings as not", async () => {
+    // The verification policy is the same on every call of the run; a vendor
+    // that keeps prefixes is told so. The findings differ per file.
+    const model = new FakeModel(['{"remove": []}']);
+    await verify(model);
+    expect(model.calls[0]?.map((m) => [m.role, m.stable ?? false])).toEqual([
+      ["system", true],
+      ["user", false],
+    ]);
+  });
+
+  it("says what the call cost when the model reports its token counts", async () => {
+    const lines: string[] = [];
+    const counting: ChatModel = {
+      generate: () =>
+        Promise.resolve({
+          text: '{"remove": []}',
+          usage: { inputTokens: 3210, outputTokens: 181 },
+        }),
+    };
+    await verify(counting, FINDINGS, lines);
+    expect(lines).toEqual([
+      "DEBUG a.ts: the verifier answered in 18.1s for 2 finding(s) (3,210 tokens in, 181 out, 10 tokens/s).",
+    ]);
   });
 });
