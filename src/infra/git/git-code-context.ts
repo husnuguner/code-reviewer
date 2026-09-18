@@ -115,11 +115,13 @@ export class GitCodeContext implements CodeContext {
     let out: string;
     try {
       // -F: literal; -n: line numbers; -I: skip binaries; -w: whole word so
-      // `id` does not match `identity`. `--` ends the options, in case a
-      // needle starts with a dash.
+      // `id` does not match `identity`; -z: NUL after the path and the line
+      // number, so neither can be confused with a colon inside a path.
+      // `--` ends the options, in case a needle starts with a dash.
       out = await this.run(this.root, [
         "grep",
         "-n",
+        "-z",
         "-F",
         "-I",
         "-w",
@@ -136,16 +138,31 @@ export class GitCodeContext implements CodeContext {
   }
 }
 
-/** `<ref>:<path>:<line>:<text>` rows into hits. */
+/**
+ * `<ref>:<path>\0<line>\0<text>` rows into hits -- the shape `git grep -z`
+ * prints.
+ *
+ * The NUL is why `-z` is asked for. Without it the row is colon-separated
+ * and the path has to be guessed at with a non-greedy match, which a path
+ * containing `:<digits>:` defeats: `src/a:12:b.ts:5:code` reads as line 12
+ * of `src/a`. Rare, but the failure is silent -- the model is handed a file
+ * name that does not exist -- and a delimiter that cannot occur in a path
+ * costs one flag.
+ *
+ * A ref cannot contain a colon (git refuses such a name), so splitting the
+ * `<ref>:` prefix off by length stays exact.
+ */
 export function parseGrep(output: string, reference: string): CodeSearchHit[] {
   const prefix = `${reference}:`;
   const hits: CodeSearchHit[] = [];
   for (const row of output.split("\n")) {
     if (!row.startsWith(prefix)) continue;
-    const rest = row.slice(prefix.length);
-    const match = /^(.+?):(\d+):(.*)$/u.exec(rest);
-    if (match?.[1] === undefined || match[2] === undefined) continue;
-    hits.push({ path: match[1], line: Number(match[2]), text: match[3] ?? "" });
+    const [path, line, ...text] = row.slice(prefix.length).split("\0");
+    if (path === undefined || path === "" || line === undefined || !/^\d+$/u.test(line)) continue;
+    // `-I` keeps binaries out, so the text holds no NUL of its own; joining
+    // the tail back is what makes that an assumption the parse survives
+    // rather than one it depends on.
+    hits.push({ path, line: Number(line), text: text.join("\0") });
   }
   return hits;
 }

@@ -41,9 +41,17 @@ function recorded(options: { listable?: boolean } = {}): {
         ? Promise.resolve("export const a = 1;\n")
         : Promise.reject(new Error("no such path"));
     }
-    return Promise.resolve("feature:src/b.ts:3:uses a\n");
+    return Promise.resolve(`${grepRow("feature", "src/b.ts", 3, "uses a")}\n`);
   };
   return { run, commands: () => commands };
+}
+
+/** The delimiter `git grep -z` puts after the path and after the line number. */
+const NUL = "\u{0}";
+
+/** One row as `git grep -z` prints it: `<ref>:<path>\0<line>\0<text>`. */
+function grepRow(reference: string, path: string, line: number, text: string): string {
+  return `${reference}:${path}${NUL}${String(line)}${NUL}${text}`;
 }
 
 /**
@@ -110,9 +118,30 @@ describe("the git-backed code context", () => {
   });
 
   it("parses grep rows and ignores anything else", () => {
-    expect(parseGrep("feature:src/a.ts:12:export const a = 1;\nnoise\n", "feature")).toEqual([
+    const row = grepRow("feature", "src/a.ts", 12, "export const a = 1;");
+    expect(parseGrep(`${row}\nnoise\n`, "feature")).toEqual([
       { path: "src/a.ts", line: 12, text: "export const a = 1;" },
     ]);
+  });
+
+  it("reads a path containing a colon, which is why -z is asked for", () => {
+    // Colon-separated, `src/a:12:b.ts:5:code` reads as line 12 of `src/a`:
+    // a file name that does not exist, handed to the model as fact. A NUL
+    // cannot occur in a path, so there is nothing left to guess at.
+    const row = grepRow("feature", "src/a:12:b.ts", 5, "code");
+    expect(parseGrep(`${row}\n`, "feature")).toEqual([
+      { path: "src/a:12:b.ts", line: 5, text: "code" },
+    ]);
+  });
+
+  it("keeps a colon in the matched text, and drops a row it cannot read", () => {
+    const row = grepRow("feature", "a.ts", 7, "const u = 'http://x';");
+    expect(parseGrep(`${row}\n`, "feature")).toEqual([
+      { path: "a.ts", line: 7, text: "const u = 'http://x';" },
+    ]);
+    // A line number that is not one, and a row with no path at all.
+    const malformed = `feature:a.ts${NUL}nope${NUL}code\nfeature:${NUL}1${NUL}x\n`;
+    expect(parseGrep(malformed, "feature")).toEqual([]);
   });
 });
 
