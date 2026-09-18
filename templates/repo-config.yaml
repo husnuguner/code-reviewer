@@ -1,6 +1,6 @@
 # This repository's review setup. Commit this directory: the team and CI read
-# the same rules from it. Every key, with its meaning and default, is in
-# docs/config.example.yaml of the reviewer's repository.
+# the same rules from it. Every key, with its meaning and default, is in the
+# annotated reference the reviewer ships: templates/config.example.yaml.
 #
 # The reviewer reads LOCAL GIT and reports; it posts nothing. Turning findings
 # into pull-request comments is a CI bot's job (reviewer comment).
@@ -28,5 +28,6 @@ projects:
       # Beside this file, like `prompts` above: every relative path in this
       # catalogue is taken from the catalogue's own directory (.review/).
       path: skills
-      mappings: {} # skill name -> globs it reviews; a skill mapped nowhere never applies
+      # skill name -> globs it reviews; a skill mapped nowhere never applies.
+      mappings: {}
       # api-rules: ["src/api/**/*.ts"]

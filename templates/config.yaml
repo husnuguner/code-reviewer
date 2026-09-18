@@ -1,5 +1,6 @@
 # code-reviewer -- the catalogue. Every key, with its meaning and default, is
-# documented in docs/config.example.yaml of the reviewer's repository.
+# documented in the annotated reference the reviewer ships beside this
+# template: templates/config.example.yaml.
 #
 # This reviewer reads LOCAL GIT and reports; it posts nothing and talks to no
 # hosting system. A project is therefore a checkout plus the rules that apply

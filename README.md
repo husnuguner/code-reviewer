@@ -441,7 +441,7 @@ Five layers speak, highest first: **command line → environment → `config.yam
 
 ### `config.yaml`
 
-The complete annotated reference — every key, its meaning and default — is [`docs/config.example.yaml`](docs/config.example.yaml); a test keeps it in step with the parser. `reviewer init` writes a shorter starter ([`templates/config.yaml`](templates/config.yaml)). The shape, at its smallest useful:
+The complete annotated reference — every key, its meaning and default — is [`templates/config.example.yaml`](templates/config.example.yaml); a test keeps it in step with the parser. It ships with the reviewer, so an installed copy has it on disk beside the starters. `reviewer init` writes a shorter one of those ([`templates/config.yaml`](templates/config.yaml)). The shape, at its smallest useful:
 
 ```yaml
 version: 3

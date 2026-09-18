@@ -1,11 +1,13 @@
 # The complete, annotated catalogue -- every key the reviewer accepts, with its
-# meaning, type and default. `reviewer init` writes a shorter starter
-# (templates/config.yaml); copy what you need from here into
+# meaning, type and default. Nothing writes this file: it is the reference
+# that ships beside the starters in this directory. `reviewer init` writes one
+# of those instead (config.yaml for the machine-wide catalogue,
+# repo-config.yaml inside a checkout); copy what you need from here into
 # ~/.config/reviewer/config.yaml and leave the rest out -- a key you omit takes
 # the default shown here.
 #
-# Validated by tests/config-example.test.ts, so it can never drift from what
-# the parser accepts.
+# Validated by tests/core/catalog/config-example.test.ts, so it can never
+# drift from what the parser accepts.
 #
 # What goes where under ~/.config/reviewer/:
 #   config.yaml   -> the defaults every project starts from, and the

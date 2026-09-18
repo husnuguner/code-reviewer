@@ -207,15 +207,15 @@ describe("the model provider registry", () => {
 /**
  * The catalogue is where an operator names a vendor, so the two files that
  * show them how (`templates/config.yaml`, which `reviewer init` writes, and
- * `docs/config.example.yaml`) must name vendors that exist, and what they
- * name must reach that vendor unchanged.
+ * `templates/config.example.yaml`, the annotated reference) must name vendors
+ * that exist, and what they name must reach that vendor unchanged.
  */
 describe("what the catalogue says about the model", () => {
   const ROOT = join(import.meta.dir, "..", "..", "..");
   const registry = builtinModelProviders();
   const providers = { names: registry.names(), default: registry.defaultName() };
 
-  it.each(["templates/config.yaml", "docs/config.example.yaml"])(
+  it.each(["templates/config.yaml", "templates/config.example.yaml"])(
     "%s names only registered vendors, and its llm section reaches one",
     (file) => {
       const path = join(ROOT, file);

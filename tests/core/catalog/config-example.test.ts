@@ -19,9 +19,9 @@ import { sortedByCodePoint } from "../../../src/core/util/text";
 // Up out of tests/core/catalog/ to the repository root. The only test that
 // reads a file by walking out of its own directory, which is why moving it
 // into the mirror broke it and nothing else.
-const EXAMPLE = join(import.meta.dirname, "..", "..", "..", "docs", "config.example.yaml");
+const EXAMPLE = join(import.meta.dirname, "..", "..", "..", "templates", "config.example.yaml");
 
-describe("docs/config.example.yaml", () => {
+describe("templates/config.example.yaml", () => {
   const catalog = parseCatalog(parseYaml(readFileSync(EXAMPLE, "utf8")), EXAMPLE);
 
   it("parses, with the documented projects", () => {
