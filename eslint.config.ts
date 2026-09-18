@@ -127,8 +127,8 @@ export default defineConfig(
 
       // -- unicorn: keep the signal, drop the style noise that fights the port --
       "unicorn/prevent-abbreviations": "off",
-      // "Repository" is a domain term (CONTEXT.md); a `RepoProvider` would be
-      // the one place the code spells it differently from the glossary.
+      // "Repository" is a domain term; a `RepoProvider` would be the one place
+      // the code spells it differently from the rest of the vocabulary.
       "unicorn/name-replacements": ["error", { replacements: { repository: false } }],
       "unicorn/no-null": "off", // JSON payloads from providers carry null
       "unicorn/no-array-reduce": "off",

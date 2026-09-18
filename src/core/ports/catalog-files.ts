@@ -25,14 +25,9 @@ export interface CatalogFiles {
   readonly directory: string;
   /** The config home, for the hint about where the `.env` belongs. */
   readonly configHome: string;
-  /** Where the review policy goes: `prompts/system.md` beside the catalogue. */
-  readonly promptPath: string;
   exists(): boolean;
   /** Write the catalogue, creating parent directories. */
   write(text: string): void;
-  promptExists(): boolean;
-  /** Write the review policy, creating parent directories. */
-  writePrompt(text: string): void;
 
   /**
    * Add one project to the catalogue, leaving every comment in place.

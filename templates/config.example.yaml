@@ -15,9 +15,9 @@
 #                    environment variable) or written here; naming keeps it
 #                    shareable.
 #   .env          -> the named secret: LLM_API_KEY.
-#   prompts/      -> the review policy (who the reviewer is, what it looks
-#                    for), as Markdown files; see defaults.prompts.
 #   skills/       -> the review skills, one folder per project; see skills.
+#                    The review policy itself is not here: it ships with the
+#                    reviewer and is not configurable.
 #
 # Precedence, highest first: command line > exported environment >
 # ~/.config/reviewer/.env > ./.env > the project > defaults > built-in.
@@ -51,15 +51,13 @@ defaults:
   language: tr
 
   # ---- review policy ---------------------------------------------------
-  # Files whose text, in this order, is the policy half of the system prompt:
-  # who the reviewer is, what it looks for, what it leaves alone. `init`
-  # writes the shipped policy to prompts/system.md beside this file; edit it,
-  # or add files. Relative paths are taken from this file's directory;
-  # absolute and ~ paths work too, and {{project}} stands for the project's
-  # name. The other half -- how the diff is presented and the JSON that comes
-  # back -- is the reviewer's and cannot be changed. Default []: the shipped
-  # policy.
-  prompts: [prompts/system.md]
+  # There is no key for it. The policy -- who the reviewer is, what it looks
+  # for, what it leaves alone, and the hard rules that stop reviewed content
+  # from steering it -- is the reviewer's own, as is the JSON contract it
+  # answers with: replacing that text would drop a guardrail by accident. To
+  # add rules of your own, write a skill (below); a skill reaches the model as
+  # data, capped by the max-skill-* limits, and one mapped to ["**/*"] applies
+  # to every reviewed file.
 
   # Whether each file's findings are checked against its own diff by a second
   # model call before anything is reported, so that a finding the diff proves
@@ -77,7 +75,7 @@ defaults:
     # Where the skill documents (*.md with a `name:` frontmatter) are.
     #   absolute or ~ path -> that directory, as written; the machine-wide
     #                         home is ~/.config/reviewer/skills/<project>.
-    #   relative path      -> beside THIS FILE, exactly like `prompts`. In a
+    #   relative path      -> beside THIS FILE. In a
     #                         repository's .review/config.yaml that means
     #                         `skills` for .review/skills. One base for every
     #                         path the catalogue names.
@@ -138,11 +136,10 @@ defaults:
 projects:
   shop:
     # Any key from defaults may be overridden here (a section such as llm
-    # merges key by key; prompts replaces the list, it does not append).
+    # merges key by key).
     llm:
       model: claude-sonnet-5
     language: tr
-    prompts: [prompts/system.md, prompts/shop.md]
     verify: true
     # The checkout this project reviews. Omit to review the current
     # directory, which is what a CI job does after actions/checkout.

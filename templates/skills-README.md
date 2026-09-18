@@ -24,7 +24,7 @@ here:
 
 ```yaml
 skills:
-  path: skills # beside config.yaml, like prompts
+  path: skills # beside config.yaml
   mappings:
     api-rules: ["src/api/**/*.ts"]
 ```

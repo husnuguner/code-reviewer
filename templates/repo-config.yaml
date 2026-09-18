@@ -16,7 +16,9 @@ defaults:
     api-key: ANTHROPIC_API_KEY # the variable holding the key
     # base-url: http://127.0.0.1:1234/v1
   language: en
-  prompts: [prompts/system.md] # the review policy, beside this file
+  # The review policy -- who the reviewer is, what it looks for, what it leaves
+  # alone -- is the reviewer's own and is not configurable. What THIS project
+  # needs on top of it goes in skills/ below.
   exclude: ["**/*.spec.ts", "**/*.test.ts", "**/migrations/*.ts"]
   max-findings-per-file: 3 # the most severe survive; the rest are counted
 
@@ -25,9 +27,10 @@ projects:
   # where it is, because this file is inside it.
   this-repo:
     skills:
-      # Beside this file, like `prompts` above: every relative path in this
-      # catalogue is taken from the catalogue's own directory (.review/).
+      # Every relative path in this catalogue is taken from the catalogue's own
+      # directory (.review/), so this means .review/skills.
       path: skills
       # skill name -> globs it reviews; a skill mapped nowhere never applies.
+      # This is where your rules go: map one to ["**/*"] to apply it everywhere.
       mappings: {}
       # api-rules: ["src/api/**/*.ts"]

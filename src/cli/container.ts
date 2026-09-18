@@ -56,7 +56,6 @@ import { type ModelProviderRegistry } from "../providers/llm/model-provider";
 import { RetryingChatModel } from "../providers/llm/retrying-chat-model";
 import { type LogSettings } from "../providers/logging/log-settings";
 import { PinoLogger } from "../providers/logging/pino-logger";
-import { catalogDirectory, readReviewPolicy } from "../providers/prompts/policy-files";
 import { builtinFormatProviders } from "../providers/reporting/builtin";
 import { type FormatProviderRegistry } from "../providers/reporting/format-provider";
 import { lineWriter } from "../providers/reporting/line-writer";
@@ -222,13 +221,12 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
           logger,
         }),
     ).singleton(),
-    // The operator's review policy (or the shipped one) over the fixed contract.
-    systemPrompt: asFunction(({ config, catalogPath }: RunCradle) =>
-      systemPrompt(
-        readReviewPolicy(config.promptFiles, catalogDirectory(catalogPath)) ??
-          shippedFile("prompts/system.md"),
-        shippedFile("prompts/output-contract.md"),
-      ),
+    // Both halves of the system prompt are the reviewer's own: the policy
+    // states the lenses and the hard rules, the contract states the JSON that
+    // comes back. Neither is composed from the catalogue -- a project adds
+    // what it needs through `skills`, which reach the model as data.
+    systemPrompt: asFunction(() =>
+      systemPrompt(shippedFile("prompts/system.md"), shippedFile("prompts/output-contract.md")),
     ).singleton(),
     fileReviewer: asFunction(
       ({ chatModel, systemPrompt: prompt, logger }: RunCradle) =>

@@ -21,7 +21,6 @@ import {
   type ConcurrencyLimits,
   type FileReviewSettings,
   type LlmSettings,
-  type PromptFiles,
   type ReportPolicy,
   type SkillMappings,
   type SkillSettings,
@@ -48,7 +47,6 @@ export const CONFIG_ALIASES = {
   maxFileChars: "REVIEW_MAX_FILE_CHARS",
   skillsPath: "REVIEW_SKILLS_PATH",
   skillMappings: "REVIEW_SKILL_MAPPINGS",
-  promptFiles: "REVIEW_PROMPT_FILES",
   maxSkillChars: "REVIEW_MAX_SKILL_CHARS",
   maxSkillsTotalChars: "REVIEW_MAX_SKILLS_TOTAL_CHARS",
   maxContextChars: "REVIEW_MAX_CONTEXT_CHARS",
@@ -81,31 +79,6 @@ const optionalText = z.preprocess(
 
 /** One glob, or a list of them. */
 const globOrGlobs = z.union([z.string(), z.array(z.string())]);
-
-/**
- * A list of paths. From the catalogue it is a list; from the environment it
- * is comma-separated text (or a JSON list). Blanks are dropped.
- */
-const pathList = z.preprocess(
-  (value) => {
-    if (typeof value !== "string") return value;
-    const text = value.trim();
-    if (text === "") return [];
-    if (text.startsWith("[")) {
-      try {
-        return JSON.parse(text) as unknown;
-      } catch {
-        return value;
-      }
-    }
-    return text.split(",");
-  },
-  z
-    .array(z.string())
-    .transform((paths): PromptFiles =>
-      paths.map((path) => path.trim()).filter((path) => path !== ""),
-    ),
-);
 
 /**
  * Skill name -> globs. From the catalogue it is `skills.mappings`; from the
@@ -180,7 +153,6 @@ function rawSchema(providers: RegisteredProviders) {
     REVIEW_MAX_FILE_CHARS: integer.default(8000),
     REVIEW_SKILLS_PATH: text.default(""),
     REVIEW_SKILL_MAPPINGS: skillMappings.default({}),
-    REVIEW_PROMPT_FILES: pathList.default([]),
     REVIEW_MAX_SKILL_CHARS: integer.default(10_000),
     REVIEW_MAX_SKILLS_TOTAL_CHARS: integer.default(18_000),
     REVIEW_MAX_CONTEXT_CHARS: integer.default(6000),

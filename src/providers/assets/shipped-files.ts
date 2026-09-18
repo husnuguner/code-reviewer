@@ -1,11 +1,13 @@
 /**
  * The text files this package ships -- prose belongs in files, not in code.
  *
- * `prompts/system.md` is the review policy, the half of the system prompt an
- * operator may replace (see `defaults.prompts`); `prompts/output-contract.md`
- * is the half the core owns, and `prompts/verify.md` is the verification
- * policy -- core-owned too, because its asymmetry rule and its vetoes are
- * what keep a second pass from deleting real findings.
+ * All three prompt files are the reviewer's own and none is replaceable.
+ * `prompts/system.md` is the review policy -- the lenses and the hard rules;
+ * `prompts/output-contract.md` is the JSON contract, so a prompt can never
+ * break the parser; `prompts/verify.md` is the verification policy, whose
+ * asymmetry rule and vetoes keep a second pass from deleting real findings.
+ * What a project needs on top of the policy goes in `skills/`, which reach
+ * the model as data rather than as instructions.
  * `templates/config.yaml` is the catalogue `reviewer init` writes. All are
  * located from this module's own position, walking up to the `package.json`
  * that names this package, so a global install and a checkout find the same
@@ -46,6 +48,7 @@ function isThisPackage(manifest: string): boolean {
 }
 
 export type ShippedFile =
+  /** The review policy: the lenses and the hard rules. Not replaceable. */
   | "prompts/system.md"
   | "prompts/output-contract.md"
   | "prompts/verify.md"

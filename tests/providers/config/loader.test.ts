@@ -32,14 +32,12 @@ const CATALOG = {
     llm: { provider: "claude", model: "claude-opus-5", "api-key": "ANTHROPIC_API_KEY" },
     language: "en",
     "max-file-chars": 4000,
-    prompts: ["prompts/system.md", "prompts/{{project}}.md"],
     skills: { path: "~/.config/reviewer/skills/{{project}}" },
     "local-path": "~/src/{{project}}",
   },
   projects: {
     app: {
       language: "tr",
-      prompts: ["prompts/app.md"],
       skills: {
         path: ".review/skills",
         mappings: { "api-routes": ["src/api/**/route.ts"], models: "src/modules/**/models/*.ts" },
@@ -350,10 +348,9 @@ describe("resolution", () => {
   });
 
   it("anchors every relative path the catalogue names to the catalogue's own directory", () => {
-    // One base, not two. `prompts: [prompts/system.md]` has always meant
-    // "beside this file"; `skills.path` now means the same, so a reader can
-    // check either against the other -- and a repository's .review/config.yaml
-    // says `skills: { path: skills }` without knowing where the checkout is.
+    // One base for every relative path a catalogue names: "beside this file".
+    // A repository's .review/config.yaml therefore says
+    // `skills: { path: skills }` without knowing where the checkout is.
     const s = scratch();
     const config = load(s, { project: "app", configFile: s.catalogFile });
     expect(config.skillSettings().path).toBe(join(s.root, ".review/skills"));
@@ -375,9 +372,8 @@ describe("resolution", () => {
     const bare = load(s, { project: "legacy", configFile: s.catalogFile });
     expect(bare.reviewLang).toBe("English");
     expect(bare.maxFileChars).toBe(4000);
-    // `{{project}}` in a shared path is the selected project's name.
-    expect(bare.promptFiles).toEqual(["prompts/system.md", "prompts/legacy.md"]);
     // The directory comes from the defaults; the mappings are a project's own.
+    // `{{project}}` in that shared path is the selected project's name.
     expect(bare.skillSettings()).toEqual({
       path: "~/.config/reviewer/skills/legacy",
       mappings: {},
@@ -388,7 +384,6 @@ describe("resolution", () => {
     expect(app.reviewLang).toBe("Turkish");
     expect(app.maxFileChars).toBe(4000);
     expect(app.maxFindingsPerFile).toBe(2);
-    expect(app.promptFiles).toEqual(["prompts/app.md"]); // replaces, does not append
   });
 
   it("takes the model settings from the catalogue, the key by name or as given", () => {
@@ -411,22 +406,6 @@ describe("resolution", () => {
       model: "claude-opus-5",
     });
     expect(legacy.localPath).toBe("~/src/legacy");
-  });
-
-  it("reads the prompt files from the environment as CSV or JSON", () => {
-    const s = scratch();
-    const csv = load(s, {
-      project: "app",
-      configFile: s.catalogFile,
-      env: cleanEnvironment(s, { REVIEW_PROMPT_FILES: " a.md, ,~/b.md " }),
-    });
-    expect(csv.promptFiles).toEqual(["a.md", "~/b.md"]);
-    const json = load(s, {
-      project: "app",
-      configFile: s.catalogFile,
-      env: cleanEnvironment(s, { REVIEW_PROMPT_FILES: '["x.md"]' }),
-    });
-    expect(json.promptFiles).toEqual(["x.md"]);
   });
 
   it("reads the skills map from the environment as JSON, which beats the catalogue", () => {

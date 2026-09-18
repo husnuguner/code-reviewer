@@ -40,7 +40,6 @@ export const PROJECT_FIELDS: Readonly<
   Record<Exclude<ProjectSettingKey, "skills" | "llm">, ConfigField>
 > = {
   language: "reviewLang",
-  prompts: "promptFiles",
   verify: "verifyFindings",
   "local-path": "localPath",
   exclude: "excludePaths",
@@ -76,8 +75,8 @@ function isAnchored(path: string): boolean {
 /**
  * A catalogue's relative path, anchored to the catalogue's own directory.
  *
- * One rule for every path the catalogue names: `prompts/system.md` and
- * `skills/` both mean "beside this file". A repository's `.review/config.yaml`
+ * One rule for every path the catalogue names: `skills/` and any other
+ * relative path both mean "beside this file". A repository's `.review/config.yaml`
  * therefore says `skills: { path: skills }`, the machine's says
  * `skills/{{project}}`, and neither has to know where the reviewed checkout
  * is. Paths from the environment or the command line are not touched here:
@@ -277,18 +276,13 @@ function withProjectPlaceholders(values: Values, projectName: string): Values {
     const path = out[field];
     if (typeof path === "string") out[field] = withProjectName(path, projectName);
   }
-  if (Array.isArray(out.promptFiles)) {
-    out.promptFiles = out.promptFiles.map((file: unknown) =>
-      typeof file === "string" ? withProjectName(file, projectName) : file,
-    );
-  }
   return out;
 }
 
 /**
- * The catalogue's skills directory is beside the catalogue, like its prompts:
- * a relative path is anchored here, once, and the flow that reads it never
- * has to ask which base a path meant.
+ * The catalogue's skills directory is beside the catalogue: a relative path
+ * is anchored here, once, and the flow that reads it never has to ask which
+ * base a path meant.
  */
 function withAnchoredSkillsPath(values: Values, catalogDirectory: string): Values {
   return typeof values.skillsPath === "string"

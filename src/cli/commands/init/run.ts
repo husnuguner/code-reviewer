@@ -4,7 +4,9 @@
  * Decide which home the catalogue gets, hand the core use-case a file store
  * and the shipped starter files, and let it write. The two homes get
  * different starters: a repository holds one project and already knows where
- * it is; a machine holds many and has to be told.
+ * it is; a machine holds many and has to be told. No review policy is among
+ * the starters: that file is the reviewer's own (see `prompts/system.md`),
+ * and a project's own rules go in `skills/`.
  */
 
 import { initCatalog } from "../../../core/catalog/init";
@@ -22,7 +24,6 @@ export function runInit(arguments_: CatalogArguments): number {
     catalog: shippedFile(
       files.home === "repo" ? "templates/repo-config.yaml" : "templates/config.yaml",
     ),
-    policy: shippedFile("prompts/system.md"),
     skillsReadme: shippedFile("templates/skills-README.md"),
   });
 }

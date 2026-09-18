@@ -24,7 +24,7 @@ printf 'ANTHROPIC_API_KEY=sk-ant-...\n' > ~/.config/reviewer/.env && chmod 600 ~
 
 # 3. in the repository you want reviewed
 cd ~/work/my-repo
-reviewer init            # writes ./.review/ -- config, policy, skills folder
+reviewer init            # writes ./.review/ -- config, skills folder
 reviewer --preview --base main   # what would be reviewed; no model call, no cost
 reviewer --base main             # the real thing
 ```
@@ -49,7 +49,6 @@ The `(skills: …)` line names the guideline skills that were in the prompt for 
 my-repo/
 └── .review/
     ├── config.yaml        which skill applies to which paths, the model, excludes
-    ├── prompts/system.md  the review policy -- who the reviewer is, what it looks for
     ├── skills/            one Markdown file per convention (README explains the format)
     │   └── README.md
     └── .gitignore         keeps .review/.env (a project-specific key) out of git
@@ -334,12 +333,12 @@ This is the part worth configuring first: it is what turns a generic review into
 
 **The reviewer ships no skills of its own.** Where they are read from is the project's `skills.path`:
 
-| `skills.path`        | Where skills are read from                                                                                                                                           |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| absolute or `~` path | that directory, as written — the machine-wide home is `~/.config/reviewer/skills/<project>`                                                                          |
-| relative path        | **beside the catalogue file**, exactly like `prompts` — in a repository's `.review/config.yaml`, `skills` means `.review/skills`, versioned with the code it governs |
+| `skills.path`        | Where skills are read from                                                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| absolute or `~` path | that directory, as written — the machine-wide home is `~/.config/reviewer/skills/<project>`                                                  |
+| relative path        | **beside the catalogue file** — in a repository's `.review/config.yaml`, `skills` means `.review/skills`, versioned with the code it governs |
 
-One base for every path a catalogue names, so a reader can check `skills.path` against `prompts` and neither can be wrong about where the other points. `--skills-path` and `REVIEW_SKILLS_PATH` come from no file and are taken from the reviewed checkout instead.
+One base for every path a catalogue names, so a reader never has to ask which directory a relative path meant. `--skills-path` and `REVIEW_SKILLS_PATH` come from no file and are taken from the reviewed checkout instead.
 
 Each skill is Markdown with YAML frontmatter; `name` is the unique id:
 
@@ -448,7 +447,6 @@ version: 3
 defaults:
   llm: { provider: claude, model: claude-opus-5, api-key: ANTHROPIC_API_KEY }
   language: tr
-  prompts: [prompts/system.md]
   skills: { path: ~/.config/reviewer/skills/{{project}} }
   exclude: ["**/*.spec.ts", "**/migrations/*.ts"]
 projects:
@@ -464,11 +462,11 @@ A key set on the project wins over `defaults`, which wins over the built-in defa
 
 **The model's key** — `llm.api-key` — takes either the **name** of an environment variable (spelled like one: `ANTHROPIC_API_KEY`; read from the environment and the `.env` files) or the value itself. Naming keeps the file shareable; a named variable that is not set is an error rather than a confusing 401 later.
 
-**`prompts`** names the files whose text is the review _policy_ — who the reviewer is, what it looks for, what it leaves alone. The other half of the system prompt — how the diff is presented and the exact JSON that comes back — is the reviewer's and is not configurable, so a policy can never break the parser.
+**There is no key for the review policy.** Who the reviewer is, what it looks for, what it leaves alone, the hard rules that stop reviewed content from steering it, and the exact JSON that comes back are all the reviewer's own ([`prompts/system.md`](prompts/system.md) and [`prompts/output-contract.md`](prompts/output-contract.md)). Replacing that text would mean dropping a guardrail by accident — the anti-hallucination rules and the injection rule are load-bearing, and the verification pass assumes they are in force. What a project needs _on top_ of the policy is a **skill**: it reaches the model as data rather than as instructions, it is capped by `max-skill-chars` / `max-skills-total-chars`, and one mapped to `["**/*"]` applies to every reviewed file.
 
-A key the schema does not recognise is **rejected**, not ignored. A key from an earlier spelling (`lang`, `skills_path`, `max_*`, `maxFindingsPerFile`…) is answered with its current name, and a key from the posting era (`repositories`, `repository`, `severities`, `max-prior-comment-chars`, `max-concurrent-prs`) is answered with what replaced it.
+A key the schema does not recognise is **rejected**, not ignored. A key from an earlier spelling (`lang`, `skills_path`, `max_*`, `maxFindingsPerFile`…) is answered with its current name, and a key that this build removed (`repositories`, `repository`, `severities`, `max-prior-comment-chars`, `max-concurrent-prs`, `prompts`) is answered with what replaced it — `prompts` with the skill that replaces it.
 
-Setting keys (`defaults` and project): `llm` (`provider`, `model`, `base-url`, `api-key`), `language`, `prompts`, `verify`, `skills` (`path`; `mappings` on a project), `local-path`, `exclude`, `max-findings-per-file`, `max-file-chars`, `max-skill-chars`, `max-skills-total-chars`, `max-context-chars`, `max-concurrent-files`.
+Setting keys (`defaults` and project): `llm` (`provider`, `model`, `base-url`, `api-key`), `language`, `verify`, `skills` (`path`; `mappings` on a project), `local-path`, `exclude`, `max-findings-per-file`, `max-file-chars`, `max-skill-chars`, `max-skills-total-chars`, `max-context-chars`, `max-concurrent-files`.
 
 ### Environment
 
@@ -486,7 +484,6 @@ The environment is the override layer: any variable below beats its `config.yaml
 | `REVIEW_MAX_FINDINGS_PER_FILE`  | `3`              | Max findings reported per file; the most severe survive. `0` = uncapped.                              |
 | `REVIEW_SKILLS_PATH`            | —                | Directory of review skills inside the reviewed repo; empty disables skills.                           |
 | `REVIEW_SKILL_MAPPINGS`         | `{}`             | The project's `skills` map as JSON; normally set in `config.yaml`.                                    |
-| `REVIEW_PROMPT_FILES`           | —                | Comma-separated review-policy files; normally set in `config.yaml`.                                   |
 | `REVIEW_VERIFY`                 | `true`           | Check findings against the diff and drop the refuted ones. `--no-verify` wins.                        |
 | `REVIEW_MAX_SKILL_CHARS`        | `10000`          | Per-skill body cap.                                                                                   |
 | `REVIEW_MAX_SKILLS_TOTAL_CHARS` | `18000`          | Per-file cap for the whole skills block.                                                              |
@@ -565,7 +562,7 @@ Bun reads a working directory's `.env` into the environment by default. This rep
 Layout — three layers, one direction. The core does the work and asks for abstract objects; the providers layer supplies them; the CLI chooses which. ESLint enforces the arrows (`import-x/no-restricted-paths`): `core/` imports neither `providers/` nor `cli/`, and `providers/` never imports `cli/`.
 
 - `src/core/` — **the work.** `ports/` is the whole of what it asks for from outside: `ChatModel`, `ReviewPoster`, `BranchReviewReporter`, `GitReader`, `CodeContext`, `SkillSource`, `CatalogFiles`, `Logger`, `ConsoleOutput`. Nothing in here knows which vendor, host or rendering answers — the word "provider" does not occur in this tree except as the string value of `LLM_PROVIDER`. `domain/` (Finding, Skill, changed-file records) · `review/` (`selection` — which files are in scope, and why the rest are not · `review-file` — the per-file step · `branch-review` — the flow · `volume` · `render` · `severity` · `anchor` · `verify`) · `diff/` · `skills/` (glob engine, frontmatter parser, registry) · `posting/` (records → one review payload, pure) · `catalog/` (`schema` — the file's vocabulary · `catalog` — the model, with a project's settings over the defaults · `parse` — shape validation into a `Catalog` · `init`, `add-project`, `list-projects` — the use-cases, each one file) · `config/` (the settings schema, the resolver, `secret` — a value that names a variable — and the typed setting groups the flows read, `LlmSettings` among them) · `util/` (the primitives the platform lacks: contract error names, code-point text, JSON as a type, completion-ordered promises).
-- `src/providers/` — **what can change.** Every implementation of a port, grouped by the feature it serves and never by vendor. Where a port has several implementations selectable by name, the folder has one shape: a _kind_ (an abstract `Provider` subclass that owns what that kind needs — a default model, a token variable), one folder per implementation, and `builtin.ts` listing the instances. `provider.ts` / `registry.ts` are the mechanism (`Provider<In, Out>`, `ProviderRegistry`). `llm/` (`model-provider` · the AI SDK adapter and its retry decorator · `claude/`, `local/`) · `repository/` (`repository-provider` · `github/{provider,client}`) · `reporting/` (`format-provider` · `text/`, `ndjson/`, `github/` · `collecting`, `tee`, `closable`, `line-writer`) · and the single-implementation adapters: `git/` (`Bun.spawn`: diff source and pre-context) · `skills/` (directory and worktree sources) · `catalog/` (`paths` — where `config.yaml` lives · `reader` — find, read, YAML, hand to the core · `files` — the `CatalogFiles` port on disk) · `config/` (`environment-files` — the `.env` layers · `loader` — one run's `Config` from all of them) · `logging/` (pino → stderr) · `console/` · `prompts/` · `assets/` (the files this package ships) · `http/` (a `URL`-only `fetch` and its retry, shared by `llm/` and `repository/`).
+- `src/providers/` — **what can change.** Every implementation of a port, grouped by the feature it serves and never by vendor. Where a port has several implementations selectable by name, the folder has one shape: a _kind_ (an abstract `Provider` subclass that owns what that kind needs — a default model, a token variable), one folder per implementation, and `builtin.ts` listing the instances. `provider.ts` / `registry.ts` are the mechanism (`Provider<In, Out>`, `ProviderRegistry`). `llm/` (`model-provider` · the AI SDK adapter and its retry decorator · `claude/`, `local/`) · `repository/` (`repository-provider` · `github/{provider,client}`) · `reporting/` (`format-provider` · `text/`, `ndjson/`, `github/` · `collecting`, `tee`, `closable`, `line-writer`) · and the single-implementation adapters: `git/` (`Bun.spawn`: diff source and pre-context) · `skills/` (directory and worktree sources) · `catalog/` (`paths` — where `config.yaml` lives · `reader` — find, read, YAML, hand to the core · `files` — the `CatalogFiles` port on disk) · `config/` (`environment-files` — the `.env` layers · `loader` — one run's `Config` from all of them) · `logging/` (pino → stderr) · `console/` · `assets/` (the files this package ships) · `http/` (a `URL`-only `fetch` and its retry, shared by `llm/` and `repository/`).
 - `src/cli/` — **the composition.** `main.ts` (the executable) · `reviewer.ts` (the root command: a registry of subcommands, no dispatch of its own) · `command-line.ts` (how a command is defined and how its errors become exit codes) · `container.ts` (the composition root, `awilix`) · `options/` (the flag groups more than one command takes — `logging`, `catalog` (`--config`), `format`, `severity`, `repository` — each a file) · `commands/<name>/` (one folder per command, two files each: `command.ts` says what it takes, `run.ts` what it does — `review` the default, calls a model and cannot post · `comment`, holds a token and cannot call a model · `init` / `projects` / `add`, the catalogue).
 
 `core/` is published as `code-reviewer/core` for embedding — it takes its adapters as constructor arguments — and `providers/` as `code-reviewer/providers`, so an embedder adds a vendor, a host or a rendering by extending a kind and handing an instance to the registry, never by editing the core. `src/lib/` is the bottom of the stack: standalone code (`resilience/`, `github-actions/`) that imports nothing of ours.
@@ -582,8 +579,6 @@ Layout — three layers, one direction. The core does the work and asks for abst
 
 Tests: `tests/contracts/` pin every pure module to the fixtures in `tests/fixtures/`; `tests/*.test.ts` cover the adapters and the flow against real git and a mock language model.
 
-The domain vocabulary is in [`CONTEXT.md`](CONTEXT.md).
-
 ### Decisions
 
 The choices with a real trade-off behind them, and what was given up:
@@ -591,8 +586,9 @@ The choices with a real trade-off behind them, and what was given up:
 - **The reviewer reads local git and posts nothing.** A job that feeds untrusted diff text to a model must not hold a write credential; posting is a separate executable in a separate job. Given up: reading a PR's existing comments to avoid repeating them.
 - **Skills belong to the reviewed repository, not to the reviewer.** They are that repository's own conventions, versioned with its code, so a change to a rule ships with the code that follows it. The reviewer ships none of its own.
 - **A skill's scope is stated once, in the catalogue.** `skills.mappings` is the only place that says which files a skill reviews; a skill document carries no scope of its own. Two places for one decision means one of them eventually lies.
-- **Every relative path in a catalogue is taken from the catalogue's own directory.** `prompts` and `skills.path` share one base, so a reader can check either against the other.
-- **The review policy is a file the operator owns; the output contract is not.** A policy can say anything about what to review and nothing about how to answer, so it can never break the parser.
+- **Every relative path in a catalogue is taken from the catalogue's own directory.** One base for all of them, so a reader never has to ask which directory a path meant.
+- **The whole system prompt is the reviewer's own.** Policy and output contract both ship with the tool, so no setting can drop a hard rule or break the parser. A project extends the review with skills, which arrive as data.
+- **Everything the model is shown is data, never instructions.** The diff, the file, the pre-context and the skills cannot change the reviewer's scope or output shape; an attempt to do so is itself a `security` finding.
 - **Pre-context is deterministic.** The reviewer decides what surrounding code to fetch; the model asks for nothing. The review stays one call and the output contract stays fixed.
 - **Nothing is dropped in silence.** Refuted, capped, mislabelled, unanchored, failed, truncated, skipped — each is counted or listed, never merely omitted. A run that reviewed nothing says which kind of silence that was, rather than "No issues found.".
 - **The bot may request changes; it may not approve.** A `REQUEST_CHANGES` review is a machine saying "look here"; an `APPROVE` would be a machine saying "this is safe", on the word of a model that read untrusted text. The first is useful and reversible; the second is a merge gate with a hole in it. Given up: a fully automated green tick.

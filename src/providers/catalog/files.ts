@@ -18,7 +18,6 @@ import { CatalogError, errorMessage } from "../../core/util/errors";
 import { isRepoConfig } from "./paths";
 
 export class FsCatalogFiles implements CatalogFiles {
-  readonly promptPath: string;
   readonly directory: string;
   /** Read off the path: a catalogue under `.review/` is a repository's own. */
   readonly home: CatalogHome;
@@ -29,7 +28,6 @@ export class FsCatalogFiles implements CatalogFiles {
   ) {
     this.directory = dirname(path);
     this.home = isRepoConfig(path) ? "repo" : "machine";
-    this.promptPath = join(this.directory, "prompts", "system.md");
   }
 
   exists(): boolean {
@@ -38,14 +36,6 @@ export class FsCatalogFiles implements CatalogFiles {
 
   write(text: string): void {
     writeCreatingParents(this.path, text);
-  }
-
-  promptExists(): boolean {
-    return existsSync(this.promptPath);
-  }
-
-  writePrompt(text: string): void {
-    writeCreatingParents(this.promptPath, text);
   }
 
   /**

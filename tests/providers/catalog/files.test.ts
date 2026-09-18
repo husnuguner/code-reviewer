@@ -43,22 +43,22 @@ describe("the catalogue commands", () => {
       written?: string;
     };
 
-  it("init writes the skeleton and the shipped policy once, and refuses to overwrite", () => {
+  it("init writes the skeleton once, without a policy file, and refuses to overwrite", () => {
     const root = mkdtempSync(join(tmpdir(), "reviewer-init-"));
     const path = join(root, "nested", "config.yaml");
     const files: CatalogFiles = new FsCatalogFiles(path, "<CONFIG_HOME>");
-    const placeholders = (text: string): string =>
-      text.replaceAll(files.promptPath, "<PROMPT_PATH>").replaceAll(path, "<CONFIG_PATH>");
+    const placeholders = (text: string): string => text.replaceAll(path, "<CONFIG_PATH>");
     const starter = {
       catalog: shippedFile("templates/config.yaml"),
-      policy: "policy text",
       skillsReadme: "what a skill is",
     };
     const out = recorder();
     expect(initCatalog(files, out, starter)).toBe(expected("init/writes_skeleton").code);
     expect(placeholders(out.text())).toBe(expected("init/writes_skeleton").out);
     expect(readFileSync(path, "utf8")).toBe(starter.catalog);
-    expect(readFileSync(files.promptPath, "utf8")).toBe("policy text");
+    // The policy is the reviewer's own: `init` installs no copy to edit, so
+    // there is no file here whose drift could silently drop a hard rule.
+    expect(existsSync(join(root, "nested", "prompts"))).toBe(false);
 
     const again = recorder();
     expect(initCatalog(files, again, starter)).toBe(expected("init/refuses_existing").code);
@@ -72,14 +72,14 @@ describe("the catalogue commands", () => {
     const out = recorder();
     const code = initCatalog(files, out, {
       catalog: shippedFile("templates/repo-config.yaml"),
-      policy: "policy",
       skillsReadme: "what a skill is",
     });
 
     expect(code).toBe(0);
-    // The whole setup, in one committed folder: config, policy, skills.
+    // The whole setup, in one committed folder: config and skills. The policy
+    // is not among them -- it ships with the reviewer and is not replaceable.
     expect(readFileSync(join(repo, ".review", "config.yaml"), "utf8")).toContain("version: 3");
-    expect(readFileSync(join(repo, ".review", "prompts", "system.md"), "utf8")).toBe("policy");
+    expect(existsSync(join(repo, ".review", "prompts"))).toBe(false);
     expect(readFileSync(join(repo, ".review", "skills", "README.md"), "utf8")).toBe(
       "what a skill is",
     );
@@ -98,29 +98,16 @@ describe("the catalogue commands", () => {
     // No local-path: the reviewer already knows where it is.
     expect(project.settings["local-path"]).toBeUndefined();
     // `skills`, not `.review/skills`: a relative path in a catalogue is taken
-    // from the catalogue's own directory, the same base `prompts` has always
-    // used. One rule, checkable by reading the file.
+    // from the catalogue's own directory. One rule, checkable by reading the
+    // file.
     expect(project.settings.skills).toEqual({ path: "skills", mappings: {} });
     for (const key of Object.keys(catalog.defaults)) expect(key).toBeOneOf(PROJECT_SETTING_KEYS);
   });
 
-  it("ships a starter catalogue that parses and points at the policy it installs", () => {
+  it("ships a starter catalogue that parses and names no review policy", () => {
     const catalog = parseCatalog(parseYaml(shippedFile("templates/config.yaml")), "template");
-    expect(catalog.defaults.prompts).toEqual(["prompts/system.md"]);
     expect(catalog.project("example").name).toBe("example");
     for (const key of Object.keys(catalog.defaults)) expect(key).toBeOneOf(PROJECT_SETTING_KEYS);
-  });
-
-  it("init keeps an existing policy file", () => {
-    const root = mkdtempSync(join(tmpdir(), "reviewer-init-"));
-    const files: CatalogFiles = new FsCatalogFiles(join(root, "config.yaml"), root);
-    files.writePrompt("mine");
-    const out = recorder();
-    expect(
-      initCatalog(files, out, { catalog: "version: 3\n", policy: "shipped", skillsReadme: "r" }),
-    ).toBe(0);
-    expect(readFileSync(files.promptPath, "utf8")).toBe("mine");
-    expect(out.text()).toContain(`Kept ${files.promptPath}`);
   });
 
   it.each([

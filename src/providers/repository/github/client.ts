@@ -50,8 +50,7 @@ export class GithubError extends PostingError {
  * The repository a review is posted to, as `owner` and `name`.
  *
  * Spelled out rather than abbreviated: `Repository` is the domain's word for
- * this (see CONTEXT.md), and a glossary term is not the place to save four
- * characters.
+ * this, and a domain term is not the place to save four characters.
  */
 export interface Repository {
   readonly owner: string;

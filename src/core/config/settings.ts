@@ -87,10 +87,3 @@ export interface SkillSettings {
   readonly path: string;
   readonly mappings: SkillMappings;
 }
-
-/**
- * The review policy an operator has written: files whose text, in order,
- * replaces the shipped policy half of the system prompt. Relative paths are
- * resolved against the catalogue's directory. Empty = the shipped policy.
- */
-export type PromptFiles = readonly string[];

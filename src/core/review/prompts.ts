@@ -20,10 +20,12 @@ import { severityPromptVocabulary } from "./severity";
 const SEVERITIES_PLACEHOLDER = "{{severities}}";
 
 /**
- * The system prompt for a run: the review policy in force, then the output
- * contract. Both texts live in `prompts/*.md` (the policy may be the
- * operator's own files, see `defaults.prompts`); the contract's
- * `{{severities}}` is filled here so the vocabulary has one source.
+ * The system prompt for a run: the review policy, then the output contract.
+ * Both texts are the reviewer's own (`prompts/system.md` and
+ * `prompts/output-contract.md`) and neither is configurable, so no setting
+ * can drop a hard rule or break the parser; a project adds what it needs as
+ * a skill, which reaches the model as data. The contract's `{{severities}}`
+ * is filled here so the vocabulary has one source.
  */
 export function systemPrompt(policy: string, contractTemplate: string): string {
   const contract = contractTemplate.replaceAll(SEVERITIES_PLACEHOLDER, () =>

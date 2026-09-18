@@ -60,7 +60,5 @@ describe("templates/config.example.yaml", () => {
       "data-model": ["src/modules/**/models/**/*.ts"],
       "background-jobs": [],
     });
-    // ... and prompts replace the defaults' list.
-    expect(config.promptFiles).toEqual(["prompts/system.md", "prompts/shop.md"]);
   });
 });

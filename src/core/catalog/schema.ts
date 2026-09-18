@@ -18,9 +18,10 @@
  * so `repositories.providers`, a project's `repository` and the posting
  * settings are gone. What remains is YAML with kebab-case keys, a root
  * `defaults` section (with the `llm` settings), `skills: { path, mappings }`,
- * `prompts` (the review-policy files), `language`, `local-path`, and list
- * settings as lists. A v2 file parses unchanged unless it names one of the
- * removed keys, which is answered by name.
+ * `language`, `local-path`, and list settings as lists. The review policy is
+ * not among them: it is the reviewer's own, and a project extends it through
+ * `skills`. A v2 file parses unchanged unless it names one of the removed
+ * keys, which is answered by name.
  */
 export const SCHEMA_VERSION = 3;
 
@@ -28,7 +29,6 @@ export const SCHEMA_VERSION = 3;
 export const PROJECT_SETTING_KEYS = [
   "llm",
   "language",
-  "prompts",
   "verify",
   "skills",
   "local-path",
@@ -92,6 +92,8 @@ export const REMOVED_SETTING_KEYS: Readonly<Record<string, string>> = {
     "there is no prior discussion to read: this build reviews local git and posts nothing",
   "max-concurrent-prs":
     "one branch is reviewed per run; 'max-concurrent-files' is the remaining concurrency knob",
+  prompts:
+    "the review policy is the reviewer's own and cannot be replaced; add what this project needs as a skill under 'skills' (map it to ['**/*'] to apply everywhere)",
 };
 
 export const REMOVED_PROJECT_KEYS: Readonly<Record<string, string>> = {

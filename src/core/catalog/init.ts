@@ -9,18 +9,19 @@
 import { type CatalogFiles } from "../ports/catalog-files";
 import { type ConsoleOutput } from "../ports/console";
 
-/** What `init` installs: a starter catalogue, the review policy, a skills README. */
+/** What `init` installs: a starter catalogue and a skills README. */
 export interface StarterFiles {
   readonly catalog: string;
-  readonly policy: string;
   /** Explains, to whoever opens the skills folder, what a skill is. */
   readonly skillsReadme: string;
 }
 
 /**
- * Write the starter catalogue and, beside it, the shipped review policy the
- * starter's `defaults.prompts` points at -- so editing the policy is editing
- * a file the operator owns from day one. An existing policy file is kept.
+ * Write the starter catalogue and, in a repository, the files beside it.
+ *
+ * No review policy is written: the policy is the reviewer's own and is not
+ * replaceable, so what an operator owns from day one is the catalogue and
+ * the skills folder -- which is where a project's own rules go.
  */
 export function initCatalog(
   files: CatalogFiles,
@@ -33,12 +34,6 @@ export function initCatalog(
   }
   files.write(starter.catalog);
   out.line(`Wrote ${files.path}`);
-  if (files.promptExists()) {
-    out.line(`Kept ${files.promptPath}`);
-  } else {
-    files.writePrompt(starter.policy);
-    out.line(`Wrote ${files.promptPath}`);
-  }
   return files.home === "repo"
     ? finishRepoInit(files, out, starter)
     : finishMachineInit(files, out);
@@ -88,8 +83,7 @@ function finishMachineInit(files: CatalogFiles, out: ConsoleOutput): number {
   out.line();
   out.line("Next:");
   out.line(`  1. Put LLM_API_KEY in ${files.configHome}/.env`);
-  out.line(`  2. Edit ${files.promptPath} to change what the reviewer looks for.`);
-  out.line("  3. cd <a checkout> && reviewer add <name>    # define a project");
-  out.line("  4. reviewer projects                          # check what is defined");
+  out.line("  2. cd <a checkout> && reviewer add <name>    # define a project");
+  out.line("  3. reviewer projects                          # check what is defined");
   return 0;
 }
