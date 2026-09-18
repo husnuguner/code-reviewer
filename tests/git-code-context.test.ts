@@ -16,10 +16,34 @@ import { type PerFileReviewer } from "../src/core/review/changed-file";
 import { DEFAULT_FILE_REVIEW_SETTINGS } from "../src/core/review/changed-file";
 import { type ReviewFileInput } from "../src/core/review/file-reviewer";
 import { GitCodeContext, parseGrep } from "../src/infra/git/git-code-context";
-import { LocalGitReader } from "../src/infra/git/local-git";
+import { type GitRunner, LocalGitReader } from "../src/infra/git/local-git";
 
 function git(root: string, ...arguments_: string[]): void {
   execaSync("git", arguments_, { cwd: root });
+}
+
+/** A runner that records its invocations and answers from one fake ref. */
+function recorded(options: { listable?: boolean } = {}): {
+  run: GitRunner;
+  commands: () => string[];
+} {
+  const commands: string[] = [];
+  const run: GitRunner = (_root, arguments_) => {
+    commands.push(arguments_.join(" "));
+    const [command] = arguments_;
+    if (command === "ls-tree") {
+      return options.listable === false
+        ? Promise.reject(new Error("not a tree"))
+        : Promise.resolve("src/a.ts\0src/b.ts\0");
+    }
+    if (command === "show") {
+      return arguments_[1] === "feature:src/a.ts"
+        ? Promise.resolve("export const a = 1;\n")
+        : Promise.reject(new Error("no such path"));
+    }
+    return Promise.resolve("feature:src/b.ts:3:uses a\n");
+  };
+  return { run, commands: () => commands };
 }
 
 /**
@@ -88,6 +112,52 @@ describe("the git-backed code context", () => {
   it("parses grep rows and ignores anything else", () => {
     expect(parseGrep("feature:src/a.ts:12:export const a = 1;\nnoise\n", "feature")).toEqual([
       { path: "src/a.ts", line: 12, text: "export const a = 1;" },
+    ]);
+  });
+});
+
+/**
+ * The ref is fixed for the run and this adapter is built once for it, so the
+ * repeated questions the per-file gathering asks -- the same module resolved
+ * from several files, the same symbol searched twice, a dozen candidate paths
+ * that do not exist -- must not each become a subprocess.
+ */
+describe("what the code context asks git", () => {
+  it("lists the ref once, then answers a missing path without asking git", async () => {
+    const { run, commands } = recorded();
+    const context = new GitCodeContext("/repo", "feature", run);
+    expect(await context.readFile("src/nope.ts")).toBeNull();
+    expect(await context.readFile("src/nope/index.ts")).toBeNull();
+    expect(await context.readFile("src/a.ts")).toContain("export const a = 1;");
+    expect(commands()).toEqual(["ls-tree -r -z --name-only feature", "show feature:src/a.ts"]);
+  });
+
+  it("reads a file and searches a needle once each, however often they are asked for", async () => {
+    const { run, commands } = recorded();
+    const context = new GitCodeContext("/repo", "feature", run);
+    const [first, second] = await Promise.all([
+      context.readFile("src/a.ts"),
+      context.readFile("src/a.ts"),
+    ]);
+    expect(first).toBe(second);
+    await context.readFile("src/a.ts");
+    const hits = await context.search("a", 10);
+    await context.search("a", 4);
+    expect(hits).toEqual([{ path: "src/b.ts", line: 3, text: "uses a" }]);
+    expect(commands().filter((command) => command.startsWith("show"))).toHaveLength(1);
+    expect(commands().filter((command) => command.startsWith("grep"))).toHaveLength(1);
+  });
+
+  it("probes git as before when the ref cannot be listed", async () => {
+    const { run, commands } = recorded({ listable: false });
+    const context = new GitCodeContext("/repo", "feature", run);
+    expect(await context.readFile("src/a.ts")).toContain("export const a = 1;");
+    expect(await context.readFile("src/gone.ts")).toBeNull();
+    // One failed listing, not one per read, and both reads still happened.
+    expect(commands()).toEqual([
+      "ls-tree -r -z --name-only feature",
+      "show feature:src/a.ts",
+      "show feature:src/gone.ts",
     ]);
   });
 });

@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 
-import { UsageError, cliOverrides, parseArguments } from "../src/cli/run";
+import { UsageError, cliOverrides, hasFailingFinding, parseArguments } from "../src/cli/run";
 import { type Catalog, PROJECT_SETTING_KEYS, parseCatalog } from "../src/core/catalog/catalog";
 import {
   type CatalogFiles,
@@ -19,6 +19,7 @@ import {
   listProjects,
 } from "../src/core/catalog/commands";
 import { type ConsoleOutput } from "../src/core/ports/console";
+import { type BranchReviewResult } from "../src/core/review/branch-review";
 import { FsCatalogFiles } from "../src/infra/config/catalog-files";
 import { loadCatalog } from "../src/infra/config/loader";
 import { shippedFile } from "../src/infra/shipped-files";
@@ -32,6 +33,24 @@ function recorder(): ConsoleOutput & { text: () => string } {
       lines.push(text);
     },
     text: () => lines.map((line) => `${line}\n`).join(""),
+  };
+}
+
+/** A run that reported one finding; only its severity matters to the gate. */
+function reported(severity: string): Pick<BranchReviewResult, "findings"> {
+  return {
+    findings: [
+      {
+        path: "src/a.ts",
+        line: 12,
+        start_line: null,
+        anchor: "exact",
+        severity,
+        body: "Null check missing.",
+        example: "",
+        skills: [],
+      },
+    ],
   };
 }
 
@@ -113,6 +132,26 @@ describe("parsing the command line", () => {
     expect(parseArguments(["--fail-on", "bug,security"]).failOn).toEqual(["bug", "security"]);
     expect(parseArguments(["--fail-on", "none"]).failOn).toEqual([]);
     expect(() => parseArguments(["--fail-on", "urgent"])).toThrow(/Allowed severities are/u);
+  });
+
+  it("fails only on a severity --fail-on names", () => {
+    expect(hasFailingFinding(reported("bug"), ["bug", "security"])).toBe(true);
+    expect(hasFailingFinding(reported("readability"), ["bug", "security"])).toBe(false);
+  });
+
+  it("never fails without a gate, however severe the finding", () => {
+    expect(hasFailingFinding(reported("bug"), [])).toBe(false);
+    expect(hasFailingFinding({ findings: [] }, ["bug"])).toBe(false);
+  });
+
+  it("reads a reported severity however it was spelled", () => {
+    // The same normalisation `--request-changes-on` applies: a build that
+    // stopped failing because a record said `"Bug"` would be a gate that
+    // fails open.
+    for (const spelling of ["bug", "Bug", "BUG", " bug "]) {
+      expect(hasFailingFinding(reported(spelling), ["bug"])).toBe(true);
+    }
+    expect(hasFailingFinding(reported("typo"), ["bug"])).toBe(false);
   });
 
   it("knows the two catalogue commands", () => {

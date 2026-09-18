@@ -9,7 +9,13 @@ import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { type SkillMatcher } from "../ports/skill-matcher";
 import { type SkillSource } from "../ports/skill-source";
 import { errorMessage } from "../util/errors";
-import { compareCodePoints, pyLength, pyRepr, pySlice, pySorted } from "../util/py";
+import {
+  compareCodePoints,
+  countCodePoints,
+  cutToLength,
+  sortedByCodePoint,
+  show,
+} from "../util/text";
 
 /** Holds the merged set of skills and selects/renders them per file. */
 export class SkillRegistry implements SkillMatcher {
@@ -28,7 +34,7 @@ export class SkillRegistry implements SkillMatcher {
     const best = new Map<string, Skill>();
     for (const skill of skills) {
       if (best.has(skill.name)) {
-        this.log.info(`Skill ${pyRepr(skill.name)} declared more than once; using the last.`);
+        this.log.info(`Skill ${show(skill.name)} declared more than once; using the last.`);
       }
       best.set(skill.name, skill);
     }
@@ -62,7 +68,7 @@ export class SkillRegistry implements SkillMatcher {
       }
     }
     const registry = new SkillRegistry(applyMappings(skills, mappings, log), logger);
-    const names = pySorted(registry.skills.map((s) => s.name)).join(", ");
+    const names = sortedByCodePoint(registry.skills.map((s) => s.name)).join(", ");
     log.info(`Loaded ${registry.skills.length} skill(s): ${names || "(none)"}`);
     return registry;
   }
@@ -89,8 +95,8 @@ export class SkillRegistry implements SkillMatcher {
     const skipped: string[] = [];
     let used = 0;
     for (const skill of matched) {
-      const block = `## ${skill.name}\n${pySlice(skill.body, 0, maxSkillChars)}`;
-      const size = pyLength(block);
+      const block = `## ${skill.name}\n${cutToLength(skill.body, maxSkillChars)}`;
+      const size = countCodePoints(block);
       if (used + size > maxTotalChars && blocks.length > 0) {
         skipped.push(skill.name);
         continue;
@@ -126,7 +132,7 @@ export function applyMappings(
   const loaded = new Set(skills.map((skill) => skill.name));
   for (const name of Object.keys(mappings)) {
     if (!loaded.has(name)) {
-      log.warn(`Skill mapping for ${pyRepr(name)} matches no loaded skill; check the name.`);
+      log.warn(`Skill mapping for ${show(name)} matches no loaded skill; check the name.`);
     }
   }
   return skills.map((skill) => {
@@ -134,12 +140,12 @@ export function applyMappings(
     if (mapped === undefined) {
       // Loaded, unreachable, and nobody said so on purpose.
       log.warn(
-        `Skill ${pyRepr(skill.name)} has no entry in the project's skills.mappings and will not be applied to any file. Map it (skills.mappings.${skill.name}: ["<glob>"]) or switch it off explicitly with [].`,
+        `Skill ${show(skill.name)} has no entry in the project's skills.mappings and will not be applied to any file. Map it (skills.mappings.${skill.name}: ["<glob>"]) or switch it off explicitly with [].`,
       );
       return skill;
     }
     if (mapped.length === 0) {
-      log.info(`Skill ${pyRepr(skill.name)} is switched off by the project's skills.mappings.`);
+      log.info(`Skill ${show(skill.name)} is switched off by the project's skills.mappings.`);
     }
     return { ...skill, globs: mapped };
   });

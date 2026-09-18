@@ -30,7 +30,7 @@ import {
 } from "../src/core/review/changed-file";
 import { type ReviewFileInput } from "../src/core/review/file-reviewer";
 import { type Verdict, type VerifyInput } from "../src/core/review/verify";
-import { pySorted } from "../src/core/util/py";
+import { sortedByCodePoint } from "../src/core/util/text";
 import { LocalGitReader } from "../src/infra/git/local-git";
 
 import { loadFixture } from "./contracts/fixtures";
@@ -133,7 +133,7 @@ describe("what git reports", () => {
     const o = options(repo());
     const result = await reviewBranch(o);
     // a.py modified and new.py added; same.py untouched and gone.py deleted.
-    expect(pySorted(o.reviewer.seen)).toEqual(["a.py", "new.py"]);
+    expect(sortedByCodePoint(o.reviewer.seen)).toEqual(["a.py", "new.py"]);
     expect(result.files_reviewed).toBe(2);
     expect(o.reviewer.seen).not.toContain("gone.py");
   });
@@ -248,7 +248,7 @@ describe("verification", () => {
     // The fake reviewer says "boom" on every file, so nothing survives.
     expect(result.findings).toEqual([]);
     expect(result.refuted).toBe(2);
-    expect(pySorted(verifier.seen)).toEqual(["a.py", "new.py"]);
+    expect(sortedByCodePoint(verifier.seen)).toEqual(["a.py", "new.py"]);
   });
 
   it("shows the verifier the same annotated diff the reviewer saw", async () => {
@@ -306,7 +306,7 @@ describe("previewing a branch", () => {
     const promised = decisions.filter((d) => d.reason === "none").map((d) => d.path);
     const o = options(root, { settings });
     await reviewBranch(o);
-    expect(pySorted(o.reviewer.seen)).toEqual(pySorted(promised));
+    expect(sortedByCodePoint(o.reviewer.seen)).toEqual(sortedByCodePoint(promised));
   });
 });
 

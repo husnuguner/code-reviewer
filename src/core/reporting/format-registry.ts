@@ -10,16 +10,13 @@
  * new file and one line in the built-in list -- not an edit to a `switch` that
  * three modules would otherwise have to agree on.
  *
- * This mirrors `LLMProviderRegistry` deliberately: same shape, same reason.
- *
  * The core owns the registry so that the command line can validate a format
  * without importing a single writer; `infra/reporters/index.ts` registers the
  * concrete ones at composition time.
  */
 
 import { type BranchReviewReporter } from "../ports/review-reporter";
-import { ValueError } from "../util/errors";
-import { pyRepr, pySorted } from "../util/py";
+import { DescribedRegistry, type DescribedEntry } from "../util/registry";
 
 /** Writes one line of a run's output. */
 export type LineWriter = (text: string) => void;
@@ -42,7 +39,7 @@ export interface ReportContext {
 }
 
 /** Everything the registry needs to know about one rendering. */
-export interface ReportFormat {
+export interface ReportFormat extends DescribedEntry {
   /** Unique id used in `--format`. */
   readonly name: string;
   /** One line, shown in `--help`. */
@@ -51,48 +48,18 @@ export interface ReportFormat {
   build(context: ReportContext): BranchReviewReporter;
 }
 
-export class ReportFormatRegistry {
-  private readonly formats = new Map<string, ReportFormat>();
-
+/**
+ * A `DescribedRegistry` of renderings: selection, listing, generated help and
+ * the refusal a wrong `--format` meets are the shared ones, and building a
+ * reporter out of the context is the only part that is this registry's own.
+ */
+export class ReportFormatRegistry extends DescribedRegistry<ReportFormat> {
   constructor(formats: readonly ReportFormat[] = []) {
-    for (const format of formats) this.register(format);
-  }
-
-  register(format: ReportFormat): void {
-    this.formats.set(format.name, format);
-  }
-
-  /** Registration order, which is the order `--help` lists them in. */
-  names(): string[] {
-    return this.formats.keys().toArray();
-  }
-
-  /** Sorted names, for an error message that should read the same every time. */
-  sortedNames(): string[] {
-    return pySorted(this.formats.keys());
-  }
-
-  has(name: string): boolean {
-    return this.formats.has(name);
-  }
-
-  /** `name: description` for every format, for generated help text. */
-  describe(): string {
-    return this.formats
-      .values()
-      .map((format) => `'${format.name}' ${format.description}`)
-      .toArray()
-      .join("; ");
+    super("report format", formats);
   }
 
   /** The reporter `name` describes. */
   build(name: string, context: ReportContext): BranchReviewReporter {
-    const format = this.formats.get(name);
-    if (format === undefined) {
-      throw new ValueError(
-        `Unknown report format ${pyRepr(name)}; available: ${pyRepr(this.sortedNames())}`,
-      );
-    }
-    return format.build(context);
+    return this.get(name).build(context);
   }
 }

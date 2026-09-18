@@ -4,7 +4,7 @@ import { type Skill } from "../../src/core/domain/skill";
 import { isGlobMatch } from "../../src/core/skills/glob";
 import { FrontmatterSkillParser } from "../../src/core/skills/parser";
 import { SkillRegistry, applyMappings } from "../../src/core/skills/registry";
-import { compareCodePoints } from "../../src/core/util/py";
+import { compareCodePoints } from "../../src/core/util/text";
 import { recordingLogger } from "../helpers/logging";
 
 import { casesUnder, loadFixture } from "./fixtures";

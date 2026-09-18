@@ -15,7 +15,7 @@
 import { z } from "zod";
 
 import { type ProviderSettings } from "../llm/provider-registry";
-import { pyRepr, pyString, pyStrip } from "../util/py";
+import { asText, show } from "../util/text";
 
 import { languageName } from "./language";
 import {
@@ -70,17 +70,12 @@ export function aliasOf(field: ConfigField): ConfigAlias {
 // -- value coercions ----------------------------------------------------------
 
 /** A string as the environment supplies it; other scalars are spelled out. */
-const text = z.preprocess(
-  (value) => (value === undefined ? undefined : pyString(value)),
-  z.string(),
-);
+const text = z.preprocess((value) => (value === undefined ? undefined : asText(value)), z.string());
 
 /** `""` (or whitespace) reads as unset. */
 const optionalText = z.preprocess(
   (value) =>
-    value === undefined || value === null || pyStrip(pyString(value)) === ""
-      ? null
-      : pyString(value),
+    value === undefined || value === null || asText(value).trim() === "" ? null : asText(value),
   z.string().nullable(),
 );
 
@@ -94,7 +89,7 @@ const globOrGlobs = z.union([z.string(), z.array(z.string())]);
 const pathList = z.preprocess(
   (value) => {
     if (typeof value !== "string") return value;
-    const text = pyStrip(value);
+    const text = value.trim();
     if (text === "") return [];
     if (text.startsWith("[")) {
       try {
@@ -108,7 +103,7 @@ const pathList = z.preprocess(
   z
     .array(z.string())
     .transform((paths): PromptFiles =>
-      paths.map((path) => pyStrip(path)).filter((path) => path !== ""),
+      paths.map((path) => path.trim()).filter((path) => path !== ""),
     ),
 );
 
@@ -119,7 +114,7 @@ const pathList = z.preprocess(
 const skillMappings = z.preprocess(
   (value) => {
     if (typeof value !== "string") return value;
-    if (pyStrip(value) === "") return {};
+    if (value.trim() === "") return {};
     try {
       return JSON.parse(value) as unknown;
     } catch {
@@ -131,9 +126,9 @@ const skillMappings = z.preprocess(
     .transform((rules): SkillMappings =>
       Object.fromEntries(
         Object.entries(rules).map(([name, globs]) => [
-          pyStrip(name),
+          name.trim(),
           (typeof globs === "string" ? [globs] : globs)
-            .map((glob) => pyStrip(glob))
+            .map((glob) => glob.trim())
             .filter((glob) => glob !== ""),
         ]),
       ),
@@ -152,7 +147,7 @@ const FALSE_WORDS: ReadonlySet<string> = new Set(["0", "false", "no", "off"]);
 function flag(isOnByDefault: boolean) {
   return z.preprocess((value) => {
     if (typeof value !== "string") return value;
-    const word = pyStrip(value).toLowerCase();
+    const word = value.trim().toLowerCase();
     // Nothing returned: the schema's own default answers for an empty value.
     if (word === "") return;
     if (TRUE_WORDS.has(word)) return true;
@@ -163,8 +158,8 @@ function flag(isOnByDefault: boolean) {
 /** An integer, possibly spelled as a string (`"2"`), never a float or a word. */
 const integer = z.preprocess((value) => {
   if (typeof value === "number") return value;
-  return typeof value === "string" && /^[+-]?\d+$/u.test(pyStrip(value))
-    ? Number(pyStrip(value))
+  return typeof value === "string" && /^[+-]?\d+$/u.test(value.trim())
+    ? Number(value.trim())
     : value;
 }, z.number().int());
 
@@ -172,10 +167,10 @@ function rawSchema(providerNames: readonly string[]) {
   return z.object({
     LLM_PROVIDER: text
       .default("local")
-      .transform((value) => pyStrip(value).toLowerCase())
+      .transform((value) => value.trim().toLowerCase())
       .refine((value) => providerNames.includes(value), {
         error: (issue) =>
-          `LLM_PROVIDER must be one of ${pyRepr([...providerNames])}, got: ${pyRepr(issue.input)}`,
+          `LLM_PROVIDER must be one of ${show([...providerNames])}, got: ${show(issue.input)}`,
       }),
     LLM_MODEL: optionalText.default(null),
     LLM_API_KEY: text,
@@ -308,7 +303,7 @@ function csv(raw: string): string[] {
   return raw
     .replaceAll("\n", ",")
     .split(",")
-    .map((item) => pyStrip(item))
+    .map((item) => item.trim())
     .filter((item) => item !== "");
 }
 

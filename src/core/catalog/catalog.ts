@@ -30,7 +30,8 @@
 import { z } from "zod";
 
 import { CatalogError } from "../util/errors";
-import { isDict, isInt, isPyTruthy, pyRepr, pySorted, pyStrip, pyTypeName } from "../util/py";
+import { hasContent, isInteger, isPlainObject, typeNameOf } from "../util/json";
+import { sortedByCodePoint, show } from "../util/text";
 
 /**
  * Schema version this build understands. A file from the future is refused
@@ -200,21 +201,21 @@ export class Catalog {
       const found = this.projects.get(name);
       if (found === undefined) {
         throw new CatalogError(
-          `No project named ${pyRepr(name)} in ${this.source}. Defined: ${this.definedProjects()}`,
+          `No project named ${show(name)} in ${this.source}. Defined: ${this.definedProjects()}`,
         );
       }
       return found;
     }
     const only = this.projects.values().toArray();
     if (only.length === 1 && only[0] !== undefined) return only[0];
-    const defined = pyRepr(pySorted(this.projects.keys()));
+    const defined = show(sortedByCodePoint(this.projects.keys()));
     throw new CatalogError(
       `${this.source} defines ${this.projects.size} projects (${defined}); choose one with --project.`,
     );
   }
 
   private definedProjects(): string {
-    return this.projects.size > 0 ? pyRepr(pySorted(this.projects.keys())) : "(none)";
+    return this.projects.size > 0 ? show(sortedByCodePoint(this.projects.keys())) : "(none)";
   }
 }
 
@@ -251,12 +252,12 @@ export function resolveSecret(
   environmentFile: string,
   isRequired = true,
 ): string {
-  const spelled = pyStrip(value);
+  const spelled = value.trim();
   if (!ENVIRONMENT_NAME.test(spelled)) return spelled;
-  const resolved = pyStrip(lookup[spelled] ?? "");
+  const resolved = (lookup[spelled] ?? "").trim();
   if (resolved === "" && isRequired) {
     throw new CatalogError(
-      `${what} names ${pyRepr(spelled)}, which is not set. Put it in ${environmentFile} or export it.`,
+      `${what} names ${show(spelled)}, which is not set. Put it in ${environmentFile} or export it.`,
     );
   }
   return resolved;
@@ -266,13 +267,13 @@ export function resolveSecret(
 
 /** The value as an object section, or nothing. */
 function sectionOf(value: unknown): Record<string, unknown> | undefined {
-  return isDict(value) ? value : undefined;
+  return isPlainObject(value) ? value : undefined;
 }
 
 /** `_require_mapping`: the value as an object, or the error the file deserves. */
 function requireObject(value: unknown, what: string): Record<string, unknown> {
-  if (!isDict(value)) {
-    throw new CatalogError(`${what} must be an object, got ${pyTypeName(value)}`);
+  if (!isPlainObject(value)) {
+    throw new CatalogError(`${what} must be an object, got ${typeNameOf(value)}`);
   }
   return value;
 }
@@ -282,7 +283,7 @@ function requireObject(value: unknown, what: string): Record<string, unknown> {
  * value (`null`, `[]`, `""`) reads as an empty section, like Python's `or {}`.
  */
 function requireSection(value: unknown, what: string): Record<string, unknown> {
-  return isPyTruthy(value) ? requireObject(value, what) : {};
+  return hasContent(value) ? requireObject(value, what) : {};
 }
 
 /** Validate a decoded catalogue body into a `Catalog`. */
@@ -292,9 +293,9 @@ export function parseCatalog(payload: unknown, source: string): Catalog {
   const version = Object.hasOwn(root, "version") ? root["version"] : SCHEMA_VERSION;
   // Python's `bool` is an `int`, so `true` reads as 1 here as it does there.
   const versionNumber = typeof version === "boolean" ? Number(version) : version;
-  if (!isInt(versionNumber) || versionNumber > SCHEMA_VERSION) {
+  if (!isInteger(versionNumber) || versionNumber > SCHEMA_VERSION) {
     throw new CatalogError(
-      `${source} declares schema version ${pyRepr(version)}, but this build understands up to ${SCHEMA_VERSION}. Upgrade the reviewer.`,
+      `${source} declares schema version ${show(version)}, but this build understands up to ${SCHEMA_VERSION}. Upgrade the reviewer.`,
     );
   }
 
@@ -304,7 +305,7 @@ export function parseCatalog(payload: unknown, source: string): Catalog {
   for (const [gone, instead] of Object.entries(REMOVED_ROOT_KEYS)) {
     if (Object.hasOwn(root, gone)) {
       throw new CatalogError(
-        `${source}: ${pyRepr(gone)} was removed in schema version ${SCHEMA_VERSION}: ${instead}.`,
+        `${source}: ${show(gone)} was removed in schema version ${SCHEMA_VERSION}: ${instead}.`,
       );
     }
   }
@@ -352,8 +353,8 @@ function validateSections(
 }
 
 function parseProject(name: string, entry: Record<string, unknown>): ProjectSpec {
-  rejectUnknownKeys(PROJECT_SECTION, entry, `Project ${pyRepr(name)}`);
-  validateSections(entry, `Project ${pyRepr(name)}`, SKILLS_SECTION);
+  rejectUnknownKeys(PROJECT_SECTION, entry, `Project ${show(name)}`);
+  validateSections(entry, `Project ${show(name)}`, SKILLS_SECTION);
   return { name, settings: settingsOf(entry) };
 }
 
@@ -407,7 +408,7 @@ function rejectUnknownKeys(
   const renamed = unknown.find((key) => Object.hasOwn(section.renamed ?? {}, key));
   if (renamed !== undefined) {
     throw new CatalogError(
-      `${what}: ${pyRepr(renamed)} was renamed to ${pyRepr(section.renamed?.[renamed])} in schema version ${SCHEMA_VERSION}.`,
+      `${what}: ${show(renamed)} was renamed to ${show(section.renamed?.[renamed])} in schema version ${SCHEMA_VERSION}.`,
     );
   }
   // A key the posting era owned is answered with what replaced it. Asked
@@ -417,11 +418,11 @@ function rejectUnknownKeys(
   if (removed !== undefined) {
     const instead = section.removed?.[removed] ?? "remove it";
     throw new CatalogError(
-      `${what}: ${pyRepr(removed)} was removed in schema version ${SCHEMA_VERSION}: ${instead}.`,
+      `${what}: ${show(removed)} was removed in schema version ${SCHEMA_VERSION}: ${instead}.`,
     );
   }
-  const known = pySorted(section.known ?? Object.keys(section.schema.shape));
+  const known = sortedByCodePoint(section.known ?? Object.keys(section.schema.shape));
   throw new CatalogError(
-    `${what} has unrecognised ${section.noun}(s) ${pyRepr(pySorted(unknown))}; known: ${pyRepr(known)}`,
+    `${what} has unrecognised ${section.noun}(s) ${show(sortedByCodePoint(unknown))}; known: ${show(known)}`,
   );
 }

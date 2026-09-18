@@ -26,7 +26,7 @@
 import { type FindingRecord, type SummaryRecord } from "../../core/ports/review-reporter";
 import { type LineWriter, type SummaryWriter } from "../../core/reporting/format-registry";
 import { severityLabel, severityRankOf } from "../../core/review/severity";
-import { compareCodePoints } from "../../core/util/py";
+import { compareCodePoints } from "../../core/util/text";
 
 import { type CollectedFinding, CollectingReporter } from "./collecting";
 

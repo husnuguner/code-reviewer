@@ -6,7 +6,7 @@
  * be read as a sequence of decisions rather than a sequence of strings.
  */
 
-import { compareCodePoints } from "../util/py";
+import { compareCodePoints } from "../util/text";
 
 import { type FileDecision, isSelected, skipCounts, skipDetail } from "./selection";
 import { severityLabel } from "./severity";

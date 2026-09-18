@@ -49,6 +49,38 @@ function fakeContext(files: Record<string, string>): CodeContext {
   };
 }
 
+/**
+ * A context that never answers before the next tick and records what was
+ * asked and how much was in flight -- the two things the pool is about.
+ */
+function recordingContext(): {
+  context: CodeContext;
+  searched: string[];
+  peakInFlight: () => number;
+} {
+  const searched: string[] = [];
+  let inFlight = 0;
+  let peak = 0;
+  const answer = async <T>(value: T): Promise<T> => {
+    inFlight += 1;
+    peak = Math.max(peak, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    inFlight -= 1;
+    return value;
+  };
+  return {
+    context: {
+      readFile: (path) => answer(path.endsWith(".ts") ? `export const x = 1; // ${path}` : null),
+      search: (needle) => {
+        searched.push(needle);
+        return answer([{ path: `users/${needle}.ts`, line: 1, text: needle }]);
+      },
+    },
+    searched,
+    peakInFlight: () => peak,
+  };
+}
+
 describe("what the patch says", () => {
   it("lists the local modules the added lines import, once each", () => {
     expect(localImports(PATCH)).toEqual(["../services/service", "./types.js", "./lazy"]);
@@ -59,11 +91,26 @@ describe("what the patch says", () => {
   });
 
   it("names the exports the patch adds, removes or edits", () => {
-    expect(changedExports(PATCH)).toEqual(["RATE", "total"]);
+    // `total` is on both sides (an edited signature, the case that breaks
+    // callers), so it outranks the added-only `RATE` despite the alphabet.
+    expect(changedExports(PATCH)).toEqual(["total", "RATE"]);
     expect(changedExports("+export default class Foo {}\n+export abstract class Bar {}")).toEqual([
       "Bar",
       "Foo",
     ]);
+  });
+
+  it("ranks edited signatures before new or deleted exports, alphabetically within a rank", () => {
+    const patch = [
+      "+export function apply(a: number): void {",
+      "-export function apply(): void {",
+      "+export const zeta = 1;",
+      "-export class Gone {}",
+      "+export interface Added {}",
+      "-export type Edited = 2;",
+      "+export type Edited = 3;",
+    ].join("\n");
+    expect(changedExports(patch)).toEqual(["Edited", "apply", "Added", "Gone", "zeta"]);
   });
 
   it("resolves a specifier against the importing file, never above the root", () => {
@@ -187,9 +234,76 @@ describe("gathering", () => {
       file,
       changeSet: [file],
       context: fakeContext(repo),
-      limits: { maxChars: 6000, maxDefinitions: 1, maxUsagesPerSymbol: 8, maxRelated: 3 },
+      limits: {
+        maxChars: 6000,
+        maxDefinitions: 1,
+        maxSymbols: 6,
+        maxUsagesPerSymbol: 8,
+        maxRelated: 3,
+      },
     });
     expect(context.definitions).toHaveLength(1);
+  });
+
+  /**
+   * The searches are one repository search each, and the rendered block is
+   * capped: a file that rewrites its whole export surface must not spend a
+   * search per symbol on a section the cap may drop whole.
+   */
+  it("searches at most maxSymbols of the changed exports, the highest-ranked first", async () => {
+    const many = new ChangedFile(
+      "src/api/route.ts",
+      "modified",
+      [
+        "-export function edited(): void {",
+        "+export function edited(a: number): void {",
+        ...Array.from({ length: 30 }, (_, index) => `+export const added${index} = ${index};`),
+      ].join("\n"),
+    );
+    const { context, searched } = recordingContext();
+    const gathered = await gatherContext({
+      file: many,
+      changeSet: [many],
+      context,
+      limits: { ...DEFAULT_CONTEXT_LIMITS, maxSymbols: 3 },
+    });
+    expect(searched).toHaveLength(3);
+    expect(searched[0]).toBe("edited");
+    expect(gathered.usages.map((usage) => usage.symbol)).toEqual(searched);
+  });
+
+  it("overlaps its port calls but keeps the pool bounded and the order stable", async () => {
+    const patch = [
+      ...Array.from({ length: 6 }, (_, index) => `+import { a } from "./mod${index}";`),
+      ...Array.from({ length: 6 }, (_, index) => `+export const sym${index} = ${index};`),
+    ].join("\n");
+    const wide = new ChangedFile("src/api/route.ts", "modified", patch);
+    const { context, peakInFlight } = recordingContext();
+    const gathered = await gatherContext({
+      file: wide,
+      changeSet: [wide],
+      context,
+      limits: { ...DEFAULT_CONTEXT_LIMITS, maxDefinitions: 6, maxSymbols: 6 },
+    });
+    expect(peakInFlight()).toBeGreaterThan(1);
+    expect(peakInFlight()).toBeLessThanOrEqual(4);
+    // Request order, not answer order: the block must not shuffle per run.
+    expect(gathered.definitions.map((d) => d.specifier)).toEqual([
+      "./mod0",
+      "./mod1",
+      "./mod2",
+      "./mod3",
+      "./mod4",
+      "./mod5",
+    ]);
+    expect(gathered.usages.map((u) => u.symbol)).toEqual([
+      "sym0",
+      "sym1",
+      "sym2",
+      "sym3",
+      "sym4",
+      "sym5",
+    ]);
   });
 });
 

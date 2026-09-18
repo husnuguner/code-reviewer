@@ -20,9 +20,9 @@
  */
 
 import { type FindingRecord, type SummaryRecord } from "../ports/review-reporter";
-import { severityLabel, severityRankOf } from "../review/severity";
+import { severityGate, severityLabel, severityRankOf } from "../review/severity";
 import { type JsonObject, type JsonValue, isJsonArray, isJsonObject } from "../util/json";
-import { compareCodePoints } from "../util/py";
+import { compareCodePoints } from "../util/text";
 
 import { type ReviewEvent } from "./review-poster";
 
@@ -210,8 +210,8 @@ export function reviewEventFor(
   findings: readonly Finding[],
   requestChangesOn: readonly string[],
 ): ReviewEvent {
-  const gate = new Set(requestChangesOn.map((name) => name.toLowerCase()));
-  return findings.some((finding) => gate.has(finding.severity)) ? "request-changes" : "comment";
+  const isGated = severityGate(requestChangesOn);
+  return findings.some((finding) => isGated(finding.severity)) ? "request-changes" : "comment";
 }
 
 /**

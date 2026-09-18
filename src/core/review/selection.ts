@@ -31,7 +31,7 @@ import { type FileReviewSettings } from "../config/settings";
 import { type ChangedFileRecord, SKIP_STATUSES } from "../domain/changed-file";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { isGlobMatch } from "../skills/glob";
-import { pyLength, pySlice, pyString } from "../util/py";
+import { countCodePoints, cutToLength, asText } from "../util/text";
 
 import { ChangedFile } from "./changed-file";
 import { addedLines, annotatePatch } from "./diff";
@@ -177,13 +177,13 @@ function reviewed(
   settings: FileReviewSettings,
 ): SelectedFile {
   const annotated = annotatePatch(file.patch);
-  const diffChars = pyLength(annotated);
+  const diffChars = countCodePoints(annotated);
   return {
     path: file.path,
     status: file.status,
     reason: "none",
     file,
-    annotatedPatch: pySlice(annotated, 0, settings.maxFileChars),
+    annotatedPatch: cutToLength(annotated, settings.maxFileChars),
     addedLines: lines,
     diffChars,
     truncated: diffChars > settings.maxFileChars,
@@ -201,9 +201,11 @@ function reviewed(
 export function decideFile(entry: ChangedFileRecord, settings: FileReviewSettings): FileDecision {
   const file = ChangedFile.fromEntry(entry);
   // The only branch with no `ChangedFile` to name the file by, so it is the
-  // only one that has to read the raw record.
+  // only one that has to read the raw record. An absent field reads as "":
+  // this decision is reported to a human, and a record with no path has no
+  // path rather than one spelled `null`.
   if (file === null) {
-    return skipped(pyString(entry.filename ?? null), pyString(entry.status ?? null), "no_patch");
+    return skipped(asText(entry.filename ?? ""), asText(entry.status ?? ""), "no_patch");
   }
 
   const gate = GATES.find((candidate) => candidate.rejects(file, settings));

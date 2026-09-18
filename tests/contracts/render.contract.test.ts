@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { RETRY_PROMPT, buildUserPrompt, systemPrompt } from "../../src/core/review/prompts";
 import { textBody } from "../../src/core/review/render";
-import { pySorted } from "../../src/core/util/py";
+import { sortedByCodePoint } from "../../src/core/util/text";
 import { shippedFile } from "../../src/infra/shipped-files";
 
 import { casesUnder, loadFixture } from "./fixtures";
@@ -31,7 +31,7 @@ interface PromptInput {
 
 /** A prompt's non-empty lines, section headers dropped, in code-point order. */
 function sentences(text: string): string[] {
-  return pySorted(
+  return sortedByCodePoint(
     text
       .split("\n")
       .map((line) => line.trim())

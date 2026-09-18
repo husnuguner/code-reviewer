@@ -243,6 +243,23 @@ describe("building the review", () => {
     expect(reviewEventFor([], ["bug", "security"])).toBe("comment");
   });
 
+  it("meets the gate however the record spelled the severity", () => {
+    // The gate is validated (`severityList`), so it is canonical; a severity
+    // read off a record stream is not. A gate that read `"Bug"` as something
+    // other than `bug` would fail open -- posting a comment where the
+    // operator asked for a block.
+    for (const spelling of ["bug", "Bug", "BUG", " bug "]) {
+      const records = parseRecords(ndjson({ type: "finding", ...finding({ severity: spelling }) }));
+      expect(reviewEventFor(records.findings, ["bug"])).toBe("request-changes");
+      expect(buildReview(records, { requestChangesOn: ["bug"] }).event).toBe("request-changes");
+    }
+  });
+
+  it("does not let an unknown severity trip a gate it does not name", () => {
+    const records = parseRecords(ndjson({ type: "finding", ...finding({ severity: "typo" }) }));
+    expect(reviewEventFor(records.findings, ["bug", "security"])).toBe("comment");
+  });
+
   it("offers the example as a plain fence, never a one-click suggestion", () => {
     // A ```suggestion would let someone commit text nobody checked against
     // the surrounding lines.

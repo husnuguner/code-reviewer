@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { SkillRegistry } from "../src/core/skills/registry";
-import { pySorted } from "../src/core/util/py";
+import { sortedByCodePoint } from "../src/core/util/text";
 import {
   DirectorySkillSource,
   WorktreeSkillSource,
@@ -37,7 +37,7 @@ function checkout(): string {
 describe("skills read from the working tree", () => {
   it("reads markdown recursively and skips non-skill documents", async () => {
     const skills = await new WorktreeSkillSource(checkout(), ".review/skills").load();
-    expect(pySorted(skills.map((s) => s.name))).toEqual(["medusa-model", "medusa-route"]);
+    expect(sortedByCodePoint(skills.map((s) => s.name))).toEqual(["medusa-model", "medusa-route"]);
   });
 
   it("loads nothing for an empty path or a missing directory", async () => {
@@ -81,7 +81,7 @@ describe("skills read from a directory on this machine", () => {
   it("reads the directory itself, wherever it is", async () => {
     const directory = join(checkout(), ".review", "skills");
     const skills = await new DirectorySkillSource(directory).load();
-    expect(pySorted(skills.map((s) => s.name))).toEqual(["medusa-model", "medusa-route"]);
+    expect(sortedByCodePoint(skills.map((s) => s.name))).toEqual(["medusa-model", "medusa-route"]);
   });
 
   it("loads nothing for an empty or missing directory", async () => {

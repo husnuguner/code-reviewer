@@ -22,10 +22,12 @@
  * TypeScript/JavaScript first.
  */
 
+import pLimit from "p-limit";
+
 import { type CodeContext } from "../ports/code-context";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { errorMessage } from "../util/errors";
-import { pySlice, pySorted } from "../util/py";
+import { cutToLength, sortedByCodePoint } from "../util/text";
 
 import { type ChangedFile } from "./changed-file";
 
@@ -35,6 +37,12 @@ export interface ContextLimits {
   readonly maxChars: number;
   /** Local imports resolved per file. */
   readonly maxDefinitions: number;
+  /**
+   * Changed exports searched for per file -- one repository search each, so
+   * this is what keeps a file that rewrites thirty exports from spending
+   * thirty searches on a section the char cap may drop whole.
+   */
+  readonly maxSymbols: number;
   /** Paths listed per changed export. */
   readonly maxUsagesPerSymbol: number;
   /** Related diffs included. */
@@ -44,9 +52,20 @@ export interface ContextLimits {
 export const DEFAULT_CONTEXT_LIMITS: ContextLimits = {
   maxChars: 6000,
   maxDefinitions: 4,
+  maxSymbols: 6,
   maxUsagesPerSymbol: 8,
   maxRelated: 3,
 };
+
+/**
+ * Port calls in flight for one file's gathering. The file loop above is
+ * already concurrent (`maxConcurrentFiles`), so the two multiply: a small
+ * pool overlaps a file's reads and searches without letting one review fan
+ * out into dozens of git subprocesses at once -- and each of those is itself
+ * a parallel, CPU-bound search, which oversubscription makes slower rather
+ * than faster.
+ */
+const MAX_CONCURRENT_LOOKUPS = 4;
 
 export interface DefinitionContext {
   /** The import specifier as written (`./service`). */
@@ -111,20 +130,35 @@ export function localImports(patch: string): string[] {
 const EXPORTED_SYMBOL =
   /^\s*export\s+(?:default\s+)?(?:async\s+)?(?:const|let|var|function\*?|class|interface|type|enum|abstract\s+class)\s+([A-Za-z_$][\w$]*)/u;
 
-/**
- * Names the patch adds, removes or edits an `export` declaration of. A symbol
- * that appears on both sides (an edited signature) is the interesting case;
- * one that only appears on one side is a new or deleted export, also worth
- * knowing the users of.
- */
-export function changedExports(patch: string): string[] {
-  const { added, removed } = changedLines(patch);
+/** The names the lines declare an `export` of. */
+function exportedNames(lines: readonly string[]): Set<string> {
   const names = new Set<string>();
-  for (const line of [...added, ...removed]) {
+  for (const line of lines) {
     const match = EXPORTED_SYMBOL.exec(line);
     if (match?.[1] !== undefined) names.add(match[1]);
   }
-  return pySorted(names);
+  return names;
+}
+
+/**
+ * Names the patch adds, removes or edits an `export` declaration of, **most
+ * worth asking about first**. A symbol on both sides is an edited signature --
+ * the case that breaks callers -- so it outranks one that appears on a single
+ * side, which is a new or deleted export. Within a rank the order is
+ * alphabetical, so the answer is the same on every run.
+ *
+ * The rank is what makes `maxSymbols` safe to apply: a cap over an
+ * alphabetical list would drop the breaking change because its name starts
+ * with a `t`.
+ */
+export function changedExports(patch: string): string[] {
+  const { added, removed } = changedLines(patch);
+  const inAdded = exportedNames(added);
+  const inRemoved = exportedNames(removed);
+  const edited = (name: string): number => (inAdded.has(name) && inRemoved.has(name) ? 0 : 1);
+  return sortedByCodePoint(exportedNames([...added, ...removed])).toSorted(
+    (a, b) => edited(a) - edited(b),
+  );
 }
 
 // -- what the repository says -------------------------------------------------
@@ -198,7 +232,7 @@ export function exportSignatures(text: string, maxChars: number): string {
     kept.push(...documentBlockAbove(lines, index), line.trimEnd(), ...continuationOf(lines, index));
   }
   const body = kept.length > 0 ? kept.join("\n") : lines.slice(0, 30).join("\n");
-  return pySlice(body, 0, maxChars);
+  return cutToLength(body, maxChars);
 }
 
 /** The lines that finish a signature the `export` line left open, at most four. */
@@ -272,6 +306,11 @@ export interface GatherContextOptions {
  * Everything the review can say about a file's surroundings, within the
  * limits. A port call that fails costs that one item, never the review: the
  * model then judges with less context, as it does today.
+ *
+ * The two kinds that need the repository are fetched through one bounded
+ * pool, so a file's gathering overlaps instead of running one subprocess at a
+ * time -- and the results are read back in request order, so what the model
+ * sees does not depend on which call happened to answer first.
  */
 export async function gatherContext(options: GatherContextOptions): Promise<ReviewContext> {
   const limits = options.limits ?? DEFAULT_CONTEXT_LIMITS;
@@ -279,41 +318,62 @@ export async function gatherContext(options: GatherContextOptions): Promise<Revi
   const log = (options.logger ?? NULL_LOGGER).child("review.context");
   const { file, context } = options;
   const perItem = Math.max(400, Math.floor(limits.maxChars / 4));
+  const lookup = pLimit(MAX_CONCURRENT_LOOKUPS);
 
-  const definitions: DefinitionContext[] = [];
-  for (const specifier of localImports(file.patch).slice(0, limits.maxDefinitions)) {
-    try {
-      const resolved = await resolveModule(file.path, specifier, context);
-      if (resolved === null) continue;
-      definitions.push({
-        specifier,
-        path: resolved.path,
-        signatures: exportSignatures(resolved.text, perItem),
-      });
-    } catch (error) {
-      log.debug(
-        `context: could not resolve ${specifier} from ${file.path}: ${errorMessage(error)}`,
-      );
-    }
-  }
+  const defined = localImports(file.patch)
+    .slice(0, limits.maxDefinitions)
+    .map((specifier) =>
+      lookup(async (): Promise<DefinitionContext | null> => {
+        try {
+          const resolved = await resolveModule(file.path, specifier, context);
+          return resolved === null
+            ? null
+            : {
+                specifier,
+                path: resolved.path,
+                signatures: exportSignatures(resolved.text, perItem),
+              };
+        } catch (error) {
+          log.debug(
+            `context: could not resolve ${specifier} from ${file.path}: ${errorMessage(error)}`,
+          );
+          return null;
+        }
+      }),
+    );
 
-  const usages: UsageContext[] = [];
-  for (const symbol of changedExports(file.patch)) {
-    try {
-      const hits = await context.search(symbol, limits.maxUsagesPerSymbol * 4);
-      const paths = pySorted(new Set(hits.map((hit) => hit.path).filter((p) => p !== file.path)));
-      if (paths.length > 0)
-        usages.push({ symbol, paths: paths.slice(0, limits.maxUsagesPerSymbol) });
-    } catch (error) {
-      log.debug(`context: search for ${symbol} failed: ${errorMessage(error)}`);
-    }
-  }
+  const used = changedExports(file.patch)
+    .slice(0, limits.maxSymbols)
+    .map((symbol) =>
+      lookup(async (): Promise<UsageContext | null> => {
+        try {
+          const hits = await context.search(symbol, limits.maxUsagesPerSymbol * 4);
+          const paths = sortedByCodePoint(
+            new Set(hits.map((hit) => hit.path).filter((p) => p !== file.path)),
+          );
+          return paths.length === 0
+            ? null
+            : { symbol, paths: paths.slice(0, limits.maxUsagesPerSymbol) };
+        } catch (error) {
+          log.debug(`context: search for ${symbol} failed: ${errorMessage(error)}`);
+          return null;
+        }
+      }),
+    );
+
+  // Definitions are queued first, so when the pool is the binding constraint
+  // the more valuable kind is the one that gets fetched.
+  const [definitions, usages] = await Promise.all([Promise.all(defined), Promise.all(used)]);
 
   const related = relatedChanges(file, options.changeSet)
     .slice(0, limits.maxRelated)
-    .map((other) => ({ path: other.path, patch: pySlice(other.patch, 0, perItem) }));
+    .map((other) => ({ path: other.path, patch: cutToLength(other.patch, perItem) }));
 
-  return { definitions, usages, related };
+  return {
+    definitions: definitions.filter((item) => item !== null),
+    usages: usages.filter((item) => item !== null),
+    related,
+  };
 }
 
 // -- rendering ------------------------------------------------------------------
@@ -342,7 +402,7 @@ export function renderContext(context: ReviewContext, maxChars: number): string 
   let used = 0;
   for (const section of sections) {
     if (used + section.length > maxChars) {
-      if (out.length === 0) out.push(pySlice(section, 0, maxChars));
+      if (out.length === 0) out.push(cutToLength(section, maxChars));
       break;
     }
     out.push(section);

@@ -13,7 +13,7 @@ import { parse as parseYaml } from "yaml";
 
 import { PROJECT_SETTING_KEYS, parseCatalog } from "../src/core/catalog/catalog";
 import { resolveConfig } from "../src/core/config/resolver";
-import { pySorted } from "../src/core/util/py";
+import { sortedByCodePoint } from "../src/core/util/text";
 
 const EXAMPLE = join(import.meta.dirname, "..", "docs", "config.example.yaml");
 
@@ -25,9 +25,11 @@ describe("docs/config.example.yaml", () => {
   });
 
   it("documents every setting the schema accepts in defaults and on the project, and nothing else", () => {
-    expect(pySorted(Object.keys(catalog.defaults))).toEqual(pySorted(PROJECT_SETTING_KEYS));
+    expect(sortedByCodePoint(Object.keys(catalog.defaults))).toEqual(
+      sortedByCodePoint(PROJECT_SETTING_KEYS),
+    );
     const onProject = Object.keys(catalog.project("shop").settings);
-    expect(pySorted(onProject)).toEqual(pySorted(PROJECT_SETTING_KEYS));
+    expect(sortedByCodePoint(onProject)).toEqual(sortedByCodePoint(PROJECT_SETTING_KEYS));
   });
 
   it("resolves into a run's settings", () => {

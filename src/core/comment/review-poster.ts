@@ -14,6 +14,8 @@
  * from an edit.
  */
 
+import { type DescribedEntry } from "../util/registry";
+
 import { type InlineComment } from "./review-payload";
 
 /** A response the hosting system refused, with enough to act on. */
@@ -91,7 +93,7 @@ export interface PosterSettings {
  * provider names its own, so a workflow for GitLab sets GITLAB_TOKEN and
  * nothing has to be renamed on the way.
  */
-export interface ReviewPosterProvider {
+export interface ReviewPosterProvider extends DescribedEntry {
   /** Unique id used in `--provider`. */
   readonly name: string;
   /** One line, shown in `--help`. */

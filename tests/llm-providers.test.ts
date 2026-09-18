@@ -78,8 +78,11 @@ describe("AI SDK chat model adapter", () => {
 });
 
 describe("LLM provider registry", () => {
-  it("knows the built-in providers by name, sorted", () => {
-    expect(builtinLLMProviderRegistry().names()).toEqual(["claude", "local"]);
+  it("knows the built-in providers by name, the default first", () => {
+    // Registration order, whose first is the `LLM_PROVIDER` default; sorted is
+    // what an error message lists.
+    expect(builtinLLMProviderRegistry().names()).toEqual(["local", "claude"]);
+    expect(builtinLLMProviderRegistry().sortedNames()).toEqual(["claude", "local"]);
     expect(BUILTIN_LLM_PROVIDERS.map((p) => p.defaultModel)).toEqual([
       "gpt-4.1",
       "claude-sonnet-4-6",

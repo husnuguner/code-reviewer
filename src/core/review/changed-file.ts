@@ -23,7 +23,8 @@ import { type Finding } from "../domain/finding";
 import { type CodeContext } from "../ports/code-context";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { type SkillMatcher } from "../ports/skill-matcher";
-import { isPyTruthy, pyRepr, pyString } from "../util/py";
+import { hasContent } from "../util/json";
+import { show } from "../util/text";
 
 // The settings group lives with the other groups; re-exported here because
 // this is where callers of the per-file step look for it.
@@ -79,9 +80,9 @@ export class ChangedFile implements ChangedFileEntry {
    * property of the input rather than an error to throw.
    */
   static fromEntry(entry: ChangedFileRecord): ChangedFile | null {
-    if (!isPyTruthy(entry.filename) || !isPyTruthy(entry.patch)) return null;
-    const status = isPyTruthy(entry.status) ? pyString(entry.status) : "";
-    return new ChangedFile(pyString(entry.filename), status, pyString(entry.patch));
+    if (!hasContent(entry.filename) || !hasContent(entry.patch)) return null;
+    const status = hasContent(entry.status) ? String(entry.status) : "";
+    return new ChangedFile(String(entry.filename), status, String(entry.patch));
   }
 }
 
@@ -175,7 +176,7 @@ export async function reviewChangedFile(
   const refuted = verdict.refuted.length;
   const checked = refuted === 0 ? "" : `, ${refuted} refuted`;
   log.info(
-    `review ${file.path}: +${allowed.size} line(s), skills=${pyRepr(skillNames)}, ${verdict.kept.length} finding(s)${checked}.`,
+    `review ${file.path}: +${allowed.size} line(s), skills=${show(skillNames)}, ${verdict.kept.length} finding(s)${checked}.`,
   );
   return { path: file.path, findings: verdict.kept, skillNames, refuted };
 }

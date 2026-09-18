@@ -2,7 +2,7 @@
  * Resolving one run's configuration from every layer that may speak.
  *
  * Four layers, highest precedence first: the command line, the environment
- * (real variables and the `.env` files alike), the `config.json` project
+ * (real variables and the `.env` files alike), the `config.yaml` project
  * entry, and the field default. They collapse into one flat `Config`, so
  * nothing below this module knows a catalogue exists.
  *
@@ -24,7 +24,8 @@ import {
 } from "../catalog/catalog";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { CatalogError } from "../util/errors";
-import { isDict, pyRepr } from "../util/py";
+import { isPlainObject } from "../util/json";
+import { show } from "../util/text";
 
 import {
   CONFIG_ALIASES,
@@ -119,7 +120,7 @@ export interface ResolveOptions extends ConfigOptions {
   /** Command-line settings by field name; they outrank every other layer. */
   readonly overrides?: Readonly<Partial<Record<ConfigField, unknown>>>;
   readonly sources: ConfigSources;
-  /** Where `config.json` and its sibling `.env` live, for error messages. */
+  /** Where `config.yaml` and its sibling `.env` live, for error messages. */
   readonly configHome: string;
   readonly logger?: Logger;
 }
@@ -182,7 +183,7 @@ export interface ProjectValuesOptions {
   readonly catalogDirectory: string;
   /** The merged environment the settings loader also reads. */
   readonly environment: Readonly<Record<string, string>>;
-  /** Where `config.json` and its sibling `.env` live, for error messages. */
+  /** Where `config.yaml` and its sibling `.env` live, for error messages. */
   readonly configHome: string;
   /**
    * False for a flow that builds no model (`--preview`), so a key the
@@ -227,7 +228,7 @@ function flattenedSettings(settings: ProjectSettings): Values {
 
 /** The `skills` section: one section in the file, two settings in the run. */
 function skillsValues(settings: ProjectSettings): Values {
-  const skills = isDict(settings.skills) ? settings.skills : {};
+  const skills = isPlainObject(settings.skills) ? settings.skills : {};
   const values: Values = {};
   for (const key of SKILLS_SECTION_KEYS) {
     if (Object.hasOwn(skills, key)) values[SKILLS_FIELDS[key]] = skills[key];
@@ -251,7 +252,7 @@ interface SecretContext {
  * catalogue is found) or the value itself.
  */
 function llmValues(settings: ProjectSettings, secret: SecretContext): Values {
-  const llm = isDict(settings.llm) ? settings.llm : {};
+  const llm = isPlainObject(settings.llm) ? settings.llm : {};
   const values: Values = {};
   for (const key of LLM_SECTION_KEYS) {
     if (!Object.hasOwn(llm, key)) continue;
@@ -327,7 +328,7 @@ export function projectValues({
   );
 
   const where = typeof values.localPath === "string" ? values.localPath : "the current directory";
-  logger.child("config_resolver").info(`Project ${pyRepr(spec.name)}: reviewing ${where}.`);
+  logger.child("config_resolver").info(`Project ${show(spec.name)}: reviewing ${where}.`);
   return values;
 }
 
@@ -359,7 +360,7 @@ export function resolveConfig(options: ResolveOptions): Config {
     );
   } else if (project !== null && project !== "") {
     throw new CatalogError(
-      `--project ${pyRepr(project)} needs a catalogue, but none was found at ${options.configHome}/config.yaml. Run 'reviewer init' to create one.`,
+      `--project ${show(project)} needs a catalogue, but none was found at ${options.configHome}/config.yaml. Run 'reviewer init' to create one.`,
     );
   }
 

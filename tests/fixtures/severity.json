@@ -325,7 +325,8 @@
       "input": {
         "value": "custom thing"
       },
-      "expected": "Custom Thing"
+      "expected": "Custom thing",
+      "divergence": "an unknown severity is sentence-cased rather than title-cased: the replacement for Python's str.title() upper-cases only the first character, which avoids its \"they're\" -> \"They'Re\" and \"a1b2\" -> \"A1B2\" readings and leaves the rest of the text as the model wrote it"
     },
     {
       "name": "parse/'foo-bar baz'",
@@ -356,7 +357,8 @@
       "input": {
         "value": "foo-bar baz"
       },
-      "expected": "Foo-Bar Baz"
+      "expected": "Foo-bar baz",
+      "divergence": "an unknown severity is sentence-cased rather than title-cased: the replacement for Python's str.title() upper-cases only the first character, which avoids its \"they're\" -> \"They'Re\" and \"a1b2\" -> \"A1B2\" readings and leaves the rest of the text as the model wrote it"
     },
     {
       "name": "parse/'Bug/Correctness'",
@@ -536,7 +538,8 @@
       "input": {
         "value": "under_score value"
       },
-      "expected": "Under_Score Value"
+      "expected": "Under_score value",
+      "divergence": "an unknown severity is sentence-cased rather than title-cased: the replacement for Python's str.title() upper-cases only the first character, which avoids its \"they're\" -> \"They'Re\" and \"a1b2\" -> \"A1B2\" readings and leaves the rest of the text as the model wrote it"
     },
     {
       "name": "parse/'ünïcode word'",
@@ -567,7 +570,8 @@
       "input": {
         "value": "ünïcode word"
       },
-      "expected": "Ünïcode Word"
+      "expected": "Ünïcode word",
+      "divergence": "an unknown severity is sentence-cased rather than title-cased: the replacement for Python's str.title() upper-cases only the first character, which avoids its \"they're\" -> \"They'Re\" and \"a1b2\" -> \"A1B2\" readings and leaves the rest of the text as the model wrote it"
     },
     {
       "name": "parse/'a1b2 c3'",
@@ -598,7 +602,8 @@
       "input": {
         "value": "a1b2 c3"
       },
-      "expected": "A1B2 C3"
+      "expected": "A1b2 c3",
+      "divergence": "an unknown severity is sentence-cased rather than title-cased: the replacement for Python's str.title() upper-cases only the first character, which avoids its \"they're\" -> \"They'Re\" and \"a1b2\" -> \"A1B2\" readings and leaves the rest of the text as the model wrote it"
     },
     {
       "name": "prompt_vocabulary",

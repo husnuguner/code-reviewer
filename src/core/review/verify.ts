@@ -27,8 +27,8 @@ import { type Finding } from "../domain/finding";
 import { type ChatMessage, type ChatModel } from "../ports/chat-model";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { errorMessage } from "../util/errors";
-import { type JsonValue, isJsonArray, isJsonObject } from "../util/json";
-import { isInt, isPyTruthy, pySplit, pyString, pyStrip } from "../util/py";
+import { type JsonValue, hasContent, isInteger, isJsonArray, isJsonObject } from "../util/json";
+import { asText, collapseWhitespace } from "../util/text";
 
 import { extractJson } from "./file-reviewer";
 
@@ -73,19 +73,19 @@ const GROUNDS: ReadonlySet<string> = new Set(["A", "B"]);
 
 /** One line of text with its whitespace collapsed, as the prompt lists it. */
 function oneLine(text: string): string {
-  return pySplit(text).join(" ");
+  return collapseWhitespace(text);
 }
 
 /** One removal entry, or `null` when it is not usable. */
 function removalFrom(item: JsonValue): Removal | null {
   // A model that answers `{"remove": [2]}` means the same thing as the full
   // entry, minus the evidence; that is a removal without a stated ground.
-  if (isInt(item)) return { index: item, ground: "", reason: "" };
+  if (isInteger(item)) return { index: item, ground: "", reason: "" };
   if (!isJsonObject(item)) return null;
   const index = item["index"];
-  if (!isInt(index)) return null;
-  const ground = pyStrip(isPyTruthy(item["ground"]) ? pyString(item["ground"]) : "").toUpperCase();
-  const reason = oneLine(isPyTruthy(item["reason"]) ? pyString(item["reason"]) : "");
+  if (!isInteger(index)) return null;
+  const ground = (hasContent(item["ground"]) ? asText(item["ground"]) : "").trim().toUpperCase();
+  const reason = oneLine(hasContent(item["reason"]) ? asText(item["reason"]) : "");
   return { index, ground: GROUNDS.has(ground) ? ground : "", reason };
 }
 
@@ -123,7 +123,7 @@ function entryOf(index: number, finding: Finding): string {
     `${index}. [${finding.severity}] ${whereOf(finding)}`,
     `   says: ${oneLine(finding.body)}`,
   ];
-  const quote = pyStrip(finding.existing_code);
+  const quote = finding.existing_code.trim();
   if (quote !== "") {
     lines.push("   quotes:");
     for (const line of quote.split("\n")) lines.push(`     ${line}`);

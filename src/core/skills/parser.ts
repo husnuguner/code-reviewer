@@ -12,7 +12,8 @@ import { parse as parseYaml } from "yaml";
 import { type Skill } from "../domain/skill";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { errorMessage } from "../util/errors";
-import { PY_WHITESPACE_CLASS, isDict, pyString, pyStrip } from "../util/py";
+import { isPlainObject } from "../util/json";
+import { asText } from "../util/text";
 
 export interface SkillParser {
   /** A skill, or `null` when `text` is not a valid skill document. */
@@ -20,10 +21,7 @@ export interface SkillParser {
 }
 
 // Leading YAML frontmatter block: ---\n ... \n---\n
-const FRONTMATTER = new RegExp(
-  String.raw`^---${PY_WHITESPACE_CLASS}*\n([^]*?)\n---${PY_WHITESPACE_CLASS}*\n?([^]*)$`,
-  "u",
-);
+const FRONTMATTER = /^---\s*\n([^]*?)\n---\s*\n?([^]*)$/u;
 
 /**
  * Parse Markdown with a leading YAML frontmatter block (the default strategy).
@@ -49,7 +47,7 @@ export class FrontmatterSkillParser implements SkillParser {
     const [meta, body] = split;
 
     const rawName = meta["name"];
-    const name = typeof rawName === "string" ? pyStrip(rawName) : "";
+    const name = typeof rawName === "string" ? rawName.trim() : "";
     if (name === "") {
       this.log.warn(`Skipping skill (${source}): missing 'name'.`);
       return null;
@@ -60,9 +58,9 @@ export class FrontmatterSkillParser implements SkillParser {
       // The document has no say over its own scope; the catalogue's mapping
       // fills this in, and an unmapped skill never matches.
       globs: [],
-      body: pyStrip(body),
+      body: body.trim(),
       source,
-      description: pyStrip(pyString(meta["description"] ?? "")),
+      description: asText(meta["description"] ?? "").trim(),
     };
   }
 
@@ -81,7 +79,7 @@ export class FrontmatterSkillParser implements SkillParser {
       this.log.warn(`Skipping skill (${source}): invalid frontmatter: ${detail}`);
       return null;
     }
-    return isDict(meta) ? [meta, match[2]] : null;
+    return isPlainObject(meta) ? [meta, match[2]] : null;
   }
 }
 

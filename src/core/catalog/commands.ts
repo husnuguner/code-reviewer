@@ -8,7 +8,7 @@
  */
 
 import { type ConsoleOutput } from "../ports/console";
-import { pyLength, pySorted } from "../util/py";
+import { countCodePoints, sortedByCodePoint } from "../util/text";
 
 import { type Catalog } from "./catalog";
 
@@ -250,8 +250,8 @@ export function listProjects(
     out.line("  (no projects defined)");
     return 1;
   }
-  const names = pySorted(catalog.projects.keys());
-  const width = Math.max(...names.map((name) => pyLength(name)));
+  const names = sortedByCodePoint(catalog.projects.keys());
+  const width = Math.max(...names.map((name) => countCodePoints(name)));
   for (const name of names) {
     const project = catalog.projects.get(name);
     if (project === undefined) continue;

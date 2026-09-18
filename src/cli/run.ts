@@ -14,7 +14,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { Command, CommanderError, InvalidArgumentError } from "commander";
+import { type Command, InvalidArgumentError } from "commander";
 
 import { type CatalogFiles, addProject, initCatalog, listProjects } from "../core/catalog/commands";
 import { type ConfigField, ConfigError } from "../core/config/config";
@@ -25,17 +25,19 @@ import {
   previewBranch,
   streamBranchReview,
 } from "../core/review/branch-review";
-import { CatalogError, GitError } from "../core/util/errors";
+import { severityGate } from "../core/review/severity";
+import { CatalogError, GitError, ReportFileError } from "../core/util/errors";
 import { FsCatalogFiles } from "../infra/config/catalog-files";
 import { loadCatalog } from "../infra/config/loader";
 import { expandUser, findGitRoot, repoConfigPath } from "../infra/config/paths";
 import { GitCodeContext } from "../infra/git/git-code-context";
 import { builtinReportFormatRegistry } from "../infra/reporters/index";
+import { closeReporter } from "../infra/reporters/stdout";
 import { shippedFile } from "../infra/shipped-files";
 import { isLocalSkillsPath } from "../infra/skills/sources";
 
 import { type ReportFormat, type RunCradle, type RunRequest, buildContainer } from "./container";
-import { UsageError, severityList } from "./program";
+import { UsageError, commandLine, parseCommandLine, runCommand, severityList } from "./program";
 
 export { UsageError } from "./program";
 
@@ -115,13 +117,13 @@ function choice<T extends string>(allowed: readonly T[]): (value: string) => T {
 
 /** The command line as a `Command`; exposed so `--help` output can be tested. */
 export function buildProgram(): Command {
-  const program = new Command("reviewer")
-    .description(
-      "Review a branch against a base from local git and report the findings " +
-        "(bug/security/performance/readability). Nothing is posted: the findings go to stdout " +
-        "as text, NDJSON or GitHub Actions annotations, and whatever comments on a pull request " +
-        "reads them from there.",
-    )
+  const program = commandLine(
+    "reviewer",
+    "Review a branch against a base from local git and report the findings " +
+      "(bug/security/performance/readability). Nothing is posted: the findings go to stdout " +
+      "as text, NDJSON or GitHub Actions annotations, and whatever comments on a pull request " +
+      "reads them from there.",
+  )
     .argument(
       "[command]",
       "'review' (default) reviews; 'init' writes a starter config.yaml; 'add' defines a project in it; 'projects' lists what it defines.",
@@ -198,22 +200,14 @@ export function buildProgram(): Command {
       "-v, --verbose",
       "Debug logging: DEBUG-level detail for reviewer.* (per-file decisions, skill matches).",
       false,
-    )
-    .allowExcessArguments(false)
-    .exitOverride()
-    .configureOutput({ writeErr: (text) => process.stderr.write(text) });
+    );
   return program;
 }
 
 /** Parse `argv` (without the executable and script) into typed arguments. */
 export function parseArguments(argv: readonly string[]): CliArguments {
   const program = buildProgram();
-  try {
-    program.parse([...argv], { from: "user" });
-  } catch (error) {
-    if (error instanceof CommanderError) throw new UsageError(error.message, error.exitCode);
-    throw error;
-  }
+  parseCommandLine(program, argv);
   const options = program.opts<{
     project?: string;
     config?: string;
@@ -334,19 +328,27 @@ function addNewProject(
  * Asked of the reported findings, not of everything the model said: a finding
  * verification refuted or the volume policy withheld is not a reason to fail
  * a build the reviewer never showed it to.
+ *
+ * The comparison goes through `severityGate` rather than being spelled here,
+ * so this gate and `--request-changes-on`'s cannot drift in how they read a
+ * severity -- which is exactly how they drifted before.
  */
 export function hasFailingFinding(
   result: Pick<BranchReviewResult, "findings">,
   severities: readonly string[],
 ): boolean {
-  if (severities.length === 0) return false;
-  const gating = new Set(severities);
-  return result.findings.some((finding) => gating.has(finding.severity.toLowerCase()));
+  const isGated = severityGate(severities);
+  return result.findings.some((finding) => isGated(finding.severity));
 }
 
 /** Branch review: local git in, a reporter out. */
 async function runBranchReview(arguments_: CliArguments, cradle: RunCradle): Promise<number> {
   const { config, logger, checkoutRoot, gitReader } = cradle;
+  // Resolved first, before anything expensive: the container is lazy, so this
+  // line is where `--out` actually opens its file. A path the filesystem
+  // refuses must cost nothing, and after the first model call it would cost
+  // the whole run.
+  const reporter = cradle.branchReporter;
   const options = {
     base: arguments_.base,
     branch: arguments_.branch,
@@ -367,7 +369,16 @@ async function runBranchReview(arguments_: CliArguments, cradle: RunCradle): Pro
   // the format's business, not this function's. That is also what makes
   // `--out` orthogonal, so a human-readable run still leaves behind the
   // machine-readable copy a CI bot reads.
-  const result = await streamBranchReview(options, cradle.branchReporter);
+  let result: BranchReviewResult;
+  try {
+    result = await streamBranchReview(options, reporter);
+  } finally {
+    // The record file is handed back here rather than left to process exit: a
+    // line still in its buffer is a line the CI bot downstream never reads,
+    // and a write that failed late is only knowable once the last one has
+    // been flushed.
+    await closeReporter(reporter);
+  }
   return hasFailingFinding(result, arguments_.failOn) ? FINDINGS_EXIT_CODE : 0;
 }
 
@@ -421,53 +432,50 @@ async function runReview(arguments_: CliArguments, cradle: RunCradle): Promise<n
   return runBranchReview(arguments_, cradle);
 }
 
-/** The process entry: parse, dispatch, and turn operator errors into plain messages. */
-export async function main(argv: readonly string[]): Promise<number> {
-  let arguments_: CliArguments;
-  try {
-    arguments_ = parseArguments(argv);
-  } catch (error) {
-    if (error instanceof UsageError) {
-      if (error.exitCode !== 0) process.stderr.write(`${error.message}\n`);
-      return error.exitCode;
-    }
-    throw error;
-  }
+/**
+ * Which of this command's failures are the operator's to fix.
+ *
+ * Configuration and working-tree problems are theirs, so they get one plain
+ * `error:` line rather than a stack trace pointing into our code. An `--out`
+ * path the filesystem refuses is the same kind of problem, which is why
+ * `ReportFileError` is named here alongside the rest.
+ */
+function isOperatorError(error: unknown): boolean {
+  return (
+    error instanceof CatalogError ||
+    error instanceof GitError ||
+    error instanceof ConfigError ||
+    error instanceof ReportFileError
+  );
+}
 
+/** Dispatch one parsed command line to the flow that answers it. */
+async function dispatch(arguments_: CliArguments): Promise<number> {
   // Resolution is lazy, so `init` and `projects` never touch the settings or
   // the model: they only take the console, the paths and the logger.
   const { cradle } = buildContainer(requestFrom(arguments_));
   const { console: out, catalogPath, configHomePath, logger } = cradle;
 
-  try {
-    if (arguments_.command === "init")
-      return initialise(arguments_, catalogPath, configHomePath, out);
-    if (arguments_.command === "add") {
-      return addNewProject(
-        arguments_,
-        new FsCatalogFiles(catalogPath, configHomePath),
-        out,
-        logger,
-      );
-    }
-    return arguments_.command === "projects"
-      ? listProjects(loadCatalog(arguments_.config, process.env, logger), catalogPath, out)
-      : await runReview(arguments_, cradle);
-  } catch (error) {
-    // Configuration and working-tree problems are the operator's to fix, so
-    // they get a plain message rather than a stack trace.
-    if (
-      error instanceof CatalogError ||
-      error instanceof GitError ||
-      error instanceof ConfigError
-    ) {
-      process.stderr.write(`error: ${error.message}\n`);
-      return 2;
-    }
-    if (error instanceof UsageError) {
-      process.stderr.write(`${error.message}\n`);
-      return error.exitCode;
-    }
-    throw error;
+  if (arguments_.command === "init") {
+    return initialise(arguments_, catalogPath, configHomePath, out);
   }
+  if (arguments_.command === "add") {
+    return addNewProject(arguments_, new FsCatalogFiles(catalogPath, configHomePath), out, logger);
+  }
+  return arguments_.command === "projects"
+    ? listProjects(loadCatalog(arguments_.config, process.env, logger), catalogPath, out)
+    : runReview(arguments_, cradle);
+}
+
+/**
+ * The process entry: parse, dispatch, and turn operator errors into plain
+ * messages.
+ *
+ * Both halves run inside one `runCommand`, so the exit-code contract every
+ * executable here shares is stated once (`program.ts`) rather than copied:
+ * a usage error from the parse and one from `add` are the same kind of
+ * failure and must not be told apart by which line raised them.
+ */
+export async function main(argv: readonly string[]): Promise<number> {
+  return runCommand(() => dispatch(parseArguments(argv)), { isOperatorError });
 }

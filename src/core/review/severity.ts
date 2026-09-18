@@ -8,7 +8,8 @@
  */
 
 import { ValueError } from "../util/errors";
-import { isPyTruthy, pyString, pyStrip, pyTitle } from "../util/py";
+import { hasContent } from "../util/json";
+import { capitalised, asText } from "../util/text";
 
 /** What kind of problem a finding reports, most severe first. */
 export const SEVERITIES = ["bug", "security", "performance", "readability"] as const;
@@ -30,6 +31,19 @@ function isSeverity(text: string): text is Severity {
   return RANKS.has(text);
 }
 
+/**
+ * A raw severity value spelled the way the vocabulary spells it: stripped and
+ * lower-cased.
+ *
+ * One function because a severity arrives from three places that agree about
+ * nothing else -- a model's JSON, a command line, and a record stream read
+ * off disk -- and every comparison in this program has to treat those three
+ * the same way.
+ */
+function normalised(value: unknown): string {
+  return (hasContent(value) ? String(value) : "").trim().toLowerCase();
+}
+
 /** The human label a comment opens with. */
 export function severityLabelOf(severity: Severity): string {
   return LABELS[severity];
@@ -48,7 +62,7 @@ export function severityRank(severity: Severity): number {
  * fallback, an unknown value throws a `ValueError`.
  */
 export function parseSeverity(value: unknown, fallback?: Severity): Severity {
-  const text = pyStrip(isPyTruthy(value) ? pyString(value) : "").toLowerCase();
+  const text = normalised(value);
   if (isSeverity(text)) return text;
   if (fallback === undefined) {
     throw new ValueError(`'${text}' is not a valid Severity`);
@@ -65,6 +79,28 @@ export function severityRankOf(value: unknown): number {
   }
 }
 
+/**
+ * A severity gate: whether a finding carries one of the severities a caller
+ * named.
+ *
+ * Both sides are normalised here, and that is the entire reason this exists.
+ * The two gates in this program -- `--fail-on`, which decides an exit code,
+ * and `--request-changes-on`, which decides a review's verdict -- each used
+ * to normalise one side and trust the other, and they chose opposite sides.
+ * A gate value can be trusted (`severityList` validates it against the
+ * vocabulary); a finding's severity cannot, because a record stream read off
+ * disk carries whatever was written into it. So a finding spelled
+ * `{"severity": "Bug"}` did not meet a `bug` gate -- a gate that fails open,
+ * which is the one way a gate must not fail.
+ *
+ * An empty gate matches nothing: a caller who named no severity asked for no
+ * gate, and that is not the same as asking for every one.
+ */
+export function severityGate(severities: readonly string[]): (severity: unknown) => boolean {
+  const gate = new Set(severities.map((name) => normalised(name)).filter((name) => name !== ""));
+  return (severity) => gate.has(normalised(severity));
+}
+
 /** The `a|b|c` alternation the prompt shows the model. */
 export function severityPromptVocabulary(): string {
   return SEVERITIES.join("|");
@@ -72,10 +108,10 @@ export function severityPromptVocabulary(): string {
 
 /** The label for a raw value, falling back to a title-cased echo of it. */
 export function severityLabel(value: unknown): string {
-  const text = value === null || value === undefined ? "" : pyString(value);
+  const text = value === null || value === undefined ? "" : asText(value);
   try {
     return severityLabelOf(parseSeverity(text));
   } catch {
-    return pyTitle(text);
+    return capitalised(text);
   }
 }

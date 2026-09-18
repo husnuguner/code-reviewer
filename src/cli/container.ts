@@ -51,7 +51,12 @@ import { builtinLLMProviderRegistry } from "../infra/llm/index";
 import { PinoLogger } from "../infra/logging/pino-logger";
 import { catalogDirectory, readReviewPolicy } from "../infra/prompts/policy-files";
 import { builtinReportFormatRegistry } from "../infra/reporters/index";
-import { NdjsonReporter, StreamConsole, TeeReporter, lineWriter } from "../infra/reporters/stdout";
+import {
+  NdjsonFileReporter,
+  StreamConsole,
+  TeeReporter,
+  lineWriter,
+} from "../infra/reporters/stdout";
 import { shippedFile } from "../infra/shipped-files";
 import {
   DirectorySkillSource,
@@ -134,6 +139,10 @@ function skillSource(root: string, path: string, logger: Logger): DirectorySkill
  * diff* (annotations) and a machine-readable copy for whatever posts the
  * comments afterwards, and making those two the same choice would force one
  * run per consumer -- which means paying the model twice for one answer.
+ *
+ * Building this opens the `--out` file, so a path the filesystem refuses is
+ * refused here -- which is why the review flow resolves the reporter before
+ * it asks a model anything.
  */
 function buildBranchReporter(
   request: RunRequest,
@@ -147,7 +156,7 @@ function buildBranchReporter(
   });
   return request.outFile === null
     ? primary
-    : new TeeReporter([primary, NdjsonReporter.toFile(request.outFile)]);
+    : new TeeReporter([primary, NdjsonFileReporter.open(request.outFile)]);
 }
 
 /**
@@ -185,7 +194,7 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
         configFile: r.configFile,
         overrides: r.overrides,
         requiresModel: r.requiresModel,
-        providerNames: llmProviders.names(),
+        providerNames: llmProviders.sortedNames(),
         cpuCount: availableParallelism(),
         logger,
       }),

@@ -19,8 +19,6 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 
-import { pyStrip } from "../../core/util/py";
-
 const ENV_OVERRIDE = "REVIEWER_CONFIG";
 const APP_DIR = "reviewer";
 /** The directory a repository keeps its own review configuration in. */
@@ -39,14 +37,14 @@ export function expandUser(path: string, home: string = homedir()): string {
 }
 
 /**
- * The directory holding `config.json` and its sibling `.env`. Honours
+ * The directory holding `config.yaml` and its sibling `.env`. Honours
  * `XDG_CONFIG_HOME` and falls back to `~/.config`.
  */
 export function configHome(
   environment: Environment = process.env,
   home: string = homedir(),
 ): string {
-  const xdg = pyStrip(environment["XDG_CONFIG_HOME"] ?? "");
+  const xdg = (environment["XDG_CONFIG_HOME"] ?? "").trim();
   const base = xdg === "" ? join(home, ".config") : resolve(expandUser(xdg, home));
   return join(base, APP_DIR);
 }
@@ -133,7 +131,7 @@ export function configPath(
   if (explicit !== null && explicit !== undefined && explicit !== "") {
     return resolve(expandUser(explicit, home));
   }
-  const fromEnvironment = pyStrip(environment[ENV_OVERRIDE] ?? "");
+  const fromEnvironment = (environment[ENV_OVERRIDE] ?? "").trim();
   if (fromEnvironment !== "") return resolve(expandUser(fromEnvironment, home));
   const inRepo = findRepoConfig(cwd, isPresent);
   if (inRepo !== null) return inRepo;

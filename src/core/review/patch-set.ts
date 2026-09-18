@@ -8,7 +8,6 @@
  */
 
 import { type ChangedFileEntry } from "../domain/changed-file";
-import { pyStrip } from "../util/py";
 
 import { type PatchedFile, parseUnifiedDiff, renderPatchedFile } from "./unified-diff";
 
@@ -20,7 +19,7 @@ import { type PatchedFile, parseUnifiedDiff, renderPatchedFile } from "./unified
  * lines to anchor a finding to, so a review of it could only be noise.
  */
 export function splitPatches(raw: string): ChangedFileEntry[] {
-  return pyStrip(raw) === ""
+  return raw.trim() === ""
     ? []
     : parseUnifiedDiff(raw)
         .filter((file) => !file.isRemovedFile && file.hunks.length > 0)

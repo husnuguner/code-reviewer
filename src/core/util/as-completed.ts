@@ -26,10 +26,24 @@ async function settle<T>(promise: Promise<T>, index: number): Promise<Tagged<T>>
   }
 }
 
-export async function* asCompleted<T>(promises: readonly Promise<T>[]): AsyncGenerator<Settled<T>> {
-  // Attach to every promise now, before the consumer awaits anything: a
-  // rejection must land in `settle`'s catch, not on the process.
+/**
+ * Deliberately NOT an `async function*`.
+ *
+ * An async generator's body does not run until its first `next()`, so the
+ * attachment below would be deferred for as long as the consumer took to
+ * start iterating -- and a promise that rejected in that window would be
+ * reported as an unhandled rejection, which is the one thing this module
+ * exists to prevent. Attaching here, in an ordinary function that returns
+ * the generator, is what makes "attached immediately" true rather than
+ * merely intended.
+ */
+export function asCompleted<T>(promises: readonly Promise<T>[]): AsyncGenerator<Settled<T>> {
   const pending = new Map(promises.map((promise, index) => [index, settle(promise, index)]));
+  return drain(pending);
+}
+
+/** Yield each settled outcome once, soonest first, until none is left. */
+async function* drain<T>(pending: Map<number, Promise<Tagged<T>>>): AsyncGenerator<Settled<T>> {
   while (pending.size > 0) {
     const winner = await Promise.race(pending.values());
     pending.delete(winner.index);

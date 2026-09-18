@@ -15,16 +15,8 @@ import { type Finding } from "../domain/finding";
 import { type ChatMessage, type ChatModel } from "../ports/chat-model";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { errorMessage } from "../util/errors";
-import { type JsonValue, decodeJson, isJsonArray, isJsonObject } from "../util/json";
-import {
-  PY_WHITESPACE_CLASS,
-  isPyTruthy,
-  pyRepr,
-  pySlice,
-  pySplit,
-  pyString,
-  pyStrip,
-} from "../util/py";
+import { type JsonValue, decodeJson, hasContent, isJsonArray, isJsonObject } from "../util/json";
+import { asText, collapseWhitespace, cutToLength, show } from "../util/text";
 
 import { type Anchor, CONFLICT, EXACT, FAILED, REPAIRED, resolveAnchor } from "./anchor";
 import { type NewSideEntry } from "./diff";
@@ -36,10 +28,7 @@ export class JsonDecodeError extends Error {
   override readonly name = "JSONDecodeError";
 }
 
-const FENCE = new RegExp(
-  String.raw`^${"```"}(?:json)?${PY_WHITESPACE_CLASS}*([^]*?)${PY_WHITESPACE_CLASS}*${"```"}$`,
-  "u",
-);
+const FENCE = /^```(?:json)?\s*([^]*?)\s*```$/u;
 
 /**
  * The span from the first `{` to the last `}`, or `null`.
@@ -59,9 +48,9 @@ function parseJson(text: string): JsonValue {
 
 /** Parse a findings payload from model text, tolerating stray fences/prose. */
 export function extractJson(raw: string): JsonValue {
-  let text = pyStrip(raw);
+  let text = raw.trim();
   const fenced = FENCE.exec(text);
-  if (fenced?.[1] !== undefined) text = pyStrip(fenced[1]);
+  if (fenced?.[1] !== undefined) text = fenced[1].trim();
   try {
     return parseJson(text);
   } catch (error) {
@@ -173,13 +162,13 @@ export class FileReviewer {
   /** One raw finding item as a validated, anchored `Finding` -- or nothing. */
   private toFinding(input: ReviewFileInput, item: JsonValue): Finding[] {
     if (!isJsonObject(item)) return [];
-    const body = pyStrip(pyString(item["body"] ?? ""));
+    const body = asText(item["body"] ?? "").trim();
     if (body === "") return [];
     // An unrecognised severity keeps the finding under the mildest one rather
     // than losing it: the text is the model's, the problem it describes may
     // still be real.
     const severity = parseSeverity(item["severity"], "readability");
-    const quote = isPyTruthy(item["existing_code"]) ? pyString(item["existing_code"]) : "";
+    const quote = hasContent(item["existing_code"]) ? asText(item["existing_code"]) : "";
     const claimed = item["line"];
     const spot = resolveAnchor({
       line: claimed,
@@ -193,7 +182,7 @@ export class FileReviewer {
         line: spot.line,
         severity,
         body,
-        example: isPyTruthy(item["example"]) ? pyStrip(pyString(item["example"])) : "",
+        example: hasContent(item["example"]) ? asText(item["example"]).trim() : "",
         start_line: spot.startLine,
         anchor: spot.outcome,
         existing_code: quote,
@@ -214,7 +203,7 @@ export class FileReviewer {
       case REPAIRED: {
         const where = spot.startLine === null ? String(line) : `${spot.startLine}-${line}`;
         this.log.info(
-          `${path}: line ${pyRepr(claimed)} was not commentable; the quoted code places the finding at ${where} instead.`,
+          `${path}: line ${show(claimed)} was not commentable; the quoted code places the finding at ${where} instead.`,
         );
         break;
       }
@@ -225,9 +214,9 @@ export class FileReviewer {
         break;
       }
       case FAILED: {
-        const shortQuote = pySlice(pySplit(quote).join(" "), 0, 80);
+        const shortQuote = cutToLength(collapseWhitespace(quote), 80);
         this.log.warn(
-          `${path}: could not place a finding (line ${pyRepr(claimed)}, quote ${pyRepr(shortQuote)}); reporting it without a line.`,
+          `${path}: could not place a finding (line ${show(claimed)}, quote ${show(shortQuote)}); reporting it without a line.`,
         );
         break;
       }

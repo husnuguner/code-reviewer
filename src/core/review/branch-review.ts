@@ -30,7 +30,7 @@ import {
 import { type SkillMatcher } from "../ports/skill-matcher";
 import { asCompleted } from "../util/as-completed";
 import { errorMessage } from "../util/errors";
-import { compareCodePoints } from "../util/py";
+import { compareCodePoints } from "../util/text";
 
 import {
   type FileReviewSettings,

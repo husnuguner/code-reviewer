@@ -13,8 +13,7 @@
  */
 
 import { type ChatModel } from "../ports/chat-model";
-import { ValueError } from "../util/errors";
-import { pyRepr, pySorted } from "../util/py";
+import { Registry, type RegistryEntry } from "../util/registry";
 
 /** The universal knobs a provider is built from. */
 export interface ProviderSettings {
@@ -27,7 +26,7 @@ export interface ProviderSettings {
 }
 
 /** Everything the registry needs to know about one vendor. */
-export interface LLMProvider {
+export interface LLMProvider extends RegistryEntry {
   /** Unique id used in `LLM_PROVIDER`. */
   readonly name: string;
   /** Model used when `LLM_MODEL` is not set. */
@@ -36,35 +35,23 @@ export interface LLMProvider {
   build(settings: ProviderSettings, model: string): ChatModel;
 }
 
-export class LLMProviderRegistry {
-  private readonly providers = new Map<string, LLMProvider>();
-
+/**
+ * A `Registry` of vendors. Selection, listing and the refusal a wrong name
+ * meets are the shared ones; only the build below is this registry's own,
+ * because only here does a name carry a second setting (the model) that the
+ * entry itself supplies a default for.
+ *
+ * There is deliberately no `description`: a provider is named in the
+ * environment rather than in a `--help` line, so nothing would read one.
+ */
+export class LLMProviderRegistry extends Registry<LLMProvider> {
   constructor(providers: readonly LLMProvider[] = []) {
-    for (const provider of providers) this.register(provider);
-  }
-
-  register(provider: LLMProvider): void {
-    this.providers.set(provider.name, provider);
-  }
-
-  /** Sorted names of all registered providers (for validation/help text). */
-  names(): string[] {
-    return pySorted(this.providers.keys());
-  }
-
-  has(name: string): boolean {
-    return this.providers.has(name);
+    super("LLM provider", providers);
   }
 
   /** The chat model `settings.provider` names, with the model override applied. */
   build(settings: ProviderSettings): ChatModel {
-    const provider = this.providers.get(settings.provider);
-    if (provider === undefined) {
-      throw new ValueError(
-        `Unknown LLM provider ${pyRepr(settings.provider)}; available: ${pyRepr(this.names())}`,
-      );
-    }
-    const model = settings.modelName ?? provider.defaultModel;
-    return provider.build(settings, model);
+    const provider = this.get(settings.provider);
+    return provider.build(settings, settings.modelName ?? provider.defaultModel);
   }
 }

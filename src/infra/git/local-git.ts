@@ -12,7 +12,6 @@
 
 import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { execa } from "execa";
@@ -22,16 +21,11 @@ import { type GitReader } from "../../core/ports/git-reader";
 import { type Logger, NULL_LOGGER } from "../../core/ports/logger";
 import { splitPatches } from "../../core/review/patch-set";
 import { GitError, errorMessage } from "../../core/util/errors";
-import { pyRepr, pySlice } from "../../core/util/py";
+import { cutToLength, show } from "../../core/util/text";
+import { expandUser } from "../config/paths";
 
 /** Runs one git command in a directory and returns its stdout, or throws `GitError`. */
 export type GitRunner = (root: string, arguments_: readonly string[]) => Promise<string>;
-
-/** `~/x` expands to the home directory, as `Path.expanduser()` does. */
-function expandUser(path: string): string {
-  if (path === "~") return homedir();
-  return path.startsWith("~/") ? join(homedir(), path.slice(2)) : path;
-}
 
 /**
  * The working tree to read, and proof that it is one.
@@ -39,7 +33,7 @@ function expandUser(path: string): string {
  * Defaults to the current directory: branch review is the pre-pull-request
  * check you run from inside the repository you are working in. An explicit
  * path (`REVIEW_LOCAL_PATH`) overrides it, which is why that setting lives in
- * the environment rather than in `config.json` -- it is machine-specific and
+ * the environment rather than in `config.yaml` -- it is machine-specific and
  * the catalogue is meant to be shareable.
  */
 export function worktree(localPath = "", cwd: string = process.cwd()): string {
@@ -88,7 +82,7 @@ export class LocalGitReader implements GitReader {
       out = await this.run(this.root, ["merge-base", base, branch]);
     } catch (error) {
       const detail = errorMessage(error);
-      this.log.warn(`No merge-base for ${pyRepr(base)} and ${pyRepr(branch)}: ${detail}`);
+      this.log.warn(`No merge-base for ${show(base)} and ${show(branch)}: ${detail}`);
       return null;
     }
     const sha = out.trim();
@@ -120,7 +114,7 @@ export class LocalGitReader implements GitReader {
     try {
       const bytes = await readFile(join(this.root, path));
       const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-      return pySlice(text, 0, limit);
+      return cutToLength(text, limit);
     } catch (error) {
       const detail = errorMessage(error);
       this.log.debug(`No worktree content for ${path}: ${detail}`);

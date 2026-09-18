@@ -16,7 +16,7 @@ import {
   defaultConcurrency,
 } from "../src/core/config/config";
 import { CatalogError } from "../src/core/util/errors";
-import { pySorted } from "../src/core/util/py";
+import { sortedByCodePoint } from "../src/core/util/text";
 import { loadCatalog, loadRunConfig } from "../src/infra/config/loader";
 import { configHome, configPath, findGitRoot, findRepoConfig } from "../src/infra/config/paths";
 
@@ -204,7 +204,7 @@ describe("loading the catalogue", () => {
     const s = scratch();
     const catalog = loadCatalog(s.catalogFile, cleanEnvironment(s), undefined, s.home);
     expect(catalog).not.toBeNull();
-    expect(pySorted(catalog?.projects.keys() ?? [])).toEqual(["app", "legacy"]);
+    expect(sortedByCodePoint(catalog?.projects.keys() ?? [])).toEqual(["app", "legacy"]);
     expect(catalog?.project("app").name).toBe("app");
   });
 

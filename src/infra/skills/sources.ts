@@ -22,7 +22,7 @@ import {
   parseSkillDocuments,
 } from "../../core/skills/parser";
 import { errorMessage } from "../../core/util/errors";
-import { compareCodePoints, pyStripChars } from "../../core/util/py";
+import { compareCodePoints, trimSlashes } from "../../core/util/text";
 
 /**
  * Shared by both readers deliberately: they read the same repository's own
@@ -52,7 +52,7 @@ abstract class MarkdownSkillSource implements SkillSource {
   private readonly parser: SkillParser;
 
   constructor(path: string, options: SkillSourceOptions) {
-    this.path = pyStripChars(path.trim(), "/");
+    this.path = trimSlashes(path.trim());
     this.log = (options.logger ?? NULL_LOGGER).child("skills.source");
     this.parser = options.parser ?? new FrontmatterSkillParser(options.logger);
   }
@@ -101,7 +101,7 @@ export class DirectorySkillSource extends MarkdownSkillSource {
 /** Skills read from a local checkout at a repo-relative path, for branch review. */
 export class WorktreeSkillSource extends DirectorySkillSource {
   constructor(root: string, path: string, options: SkillSourceOptions = {}) {
-    const relative = pyStripChars(path.trim(), "/");
+    const relative = trimSlashes(path.trim());
     super(relative === "" ? "" : join(root, relative), options);
   }
 }

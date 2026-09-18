@@ -19,7 +19,7 @@ import { expandUser } from "../config/paths";
  * The policy text the files spell, or `undefined` when there are none (the
  * shipped policy applies). A relative path is taken from `baseDirectory` --
  * the catalogue's own directory, so `prompts/system.md` sits beside
- * `config.json`. A file that is missing is an error at startup, not a silent
+ * `config.yaml`. A file that is missing is an error at startup, not a silent
  * fallback: the operator said which policy to apply.
  */
 export function readReviewPolicy(files: PromptFiles, baseDirectory: string): string | undefined {

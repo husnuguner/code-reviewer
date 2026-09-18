@@ -25,9 +25,22 @@ function validCatalog(): Catalog {
   return parseCatalog(valid.input.payload, SOURCE);
 }
 
+/**
+ * The one case whose *shape* differs: Python did not raise at parse time at
+ * all, so there is no expectation the generic runner below could assert. It
+ * is asserted on its own terms further down.
+ *
+ * Every other `divergence` in this fixture is a value spelled the JavaScript
+ * way inside an otherwise identical message -- `null` for `None`, `'a'` for
+ * `str`. Those expectations were updated in place and must keep being
+ * checked: excluding them would retire a real assertion to record a wording
+ * change, which is how the next one goes unnoticed.
+ */
+const ASSERTED_SEPARATELY: ReadonlySet<string> = new Set(["project_unknown_key_parses_in_python"]);
+
 describe("parsing config.yaml", () => {
   const parseCases = casesUnder<{ payload: unknown }>(cases, "parse").filter(
-    (c) => c.divergence === undefined,
+    (c) => !ASSERTED_SEPARATELY.has(c.name),
   );
 
   it.each(parseCases)("%s", ({ input, expected }) => {

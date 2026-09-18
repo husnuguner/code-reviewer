@@ -28,7 +28,8 @@
  * question actually arises.
  */
 
-import { PY_WHITESPACE_CLASS, isInt, pySplitlines, pyStrip } from "../util/py";
+import { isInteger } from "../util/json";
+import { splitLines } from "../util/text";
 
 import { type NewSideEntry } from "./diff";
 
@@ -64,15 +65,15 @@ export interface ResolveInput {
 }
 
 // The annotated diff prefixes added lines with `[L<n>] `; a quote copied
-// straight out of the prompt carries it. Trailing whitespace after the tag is
-// consumed with Python's notion of whitespace, like the rest of the matcher.
-const LINE_TAG = new RegExp(String.raw`^\[L\d+\]${PY_WHITESPACE_CLASS}*`, "u");
+// straight out of the prompt carries it, so the tag and the run of space
+// after it are removed before a quoted line is compared to a diff line.
+const LINE_TAG = /^\[L\d+\]\s*/u;
 
 type Span = readonly [start: number, end: number];
 
 /** One line reduced to its comparable core: no indent, no diff marker. */
 function core(text: string): string {
-  return pyStrip(pyStrip(text).replace(LINE_TAG, ""));
+  return text.trim().replace(LINE_TAG, "").trim();
 }
 
 /**
@@ -87,7 +88,7 @@ function quoteForms(text: string): ReadonlySet<string> {
   const stripped = core(text);
   const first = stripped.slice(0, 1);
   const hasMarker = first === "+" || first === "-";
-  return new Set(hasMarker ? [stripped, pyStrip(stripped.slice(1))] : [stripped]);
+  return new Set(hasMarker ? [stripped, stripped.slice(1).trim()] : [stripped]);
 }
 
 /**
@@ -98,7 +99,7 @@ function quoteForms(text: string): ReadonlySet<string> {
  */
 function quoteLines(existingCode: string): ReadonlySet<string>[] {
   const out: ReadonlySet<string>[] = [];
-  for (const raw of pySplitlines(existingCode)) {
+  for (const raw of splitLines(existingCode)) {
     const forms = quoteForms(raw);
     if ([...forms].some((form) => form !== "")) out.push(forms);
   }
@@ -151,7 +152,7 @@ function spanAnchor(span: Span, outcome: AnchorOutcome): Anchor {
 
 /** Decide where one finding may be posted. Never throws. */
 export function resolveAnchor({ line, existingCode, index, allowed }: ResolveInput): Anchor {
-  const claimed = isInt(line) && allowed.has(line) ? line : null;
+  const claimed = isInteger(line) && allowed.has(line) ? line : null;
   const candidates = spans(index, quoteLines(existingCode))
     .map((span) => postable(span, allowed))
     .filter((span): span is Span => span !== null);
