@@ -421,7 +421,7 @@
       "input": {
         "env": {
           "LLM_API_KEY": "k",
-          "PR_REVIEW_MAX_FILE_CHARS": "123",
+          "REVIEW_MAX_FILE_CHARS": "123",
           "REVIEW_MAX_FINDINGS_PER_FILE": "2",
           "REVIEW_MAX_CONCURRENT_FILES": "9"
         },
@@ -451,7 +451,7 @@
       "input": {
         "env": {
           "LLM_API_KEY": "k",
-          "PR_REVIEW_MAX_FILE_CHARS": "abc"
+          "REVIEW_MAX_FILE_CHARS": "abc"
         },
         "cpu": 8
       },

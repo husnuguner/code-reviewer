@@ -396,26 +396,27 @@ Setting keys (`defaults` and project): `llm` (`provider`, `model`, `base-url`, `
 
 The environment is the override layer: any variable below beats its `config.yaml` counterpart for every project. Without a catalogue, these describe the whole run.
 
-| Variable                        | Default          | Purpose                                                                                |
-| ------------------------------- | ---------------- | -------------------------------------------------------------------------------------- |
-| `LLM_PROVIDER`                  | `local`          | `local` (any OpenAI-compatible endpoint) or `claude` (Anthropic).                      |
-| `LLM_API_KEY`                   | _required_       | Credential; must be non-empty even for a local server.                                 |
-| `LLM_BASE_URL`                  | —                | Endpoint URL including the API prefix (e.g. `http://localhost:11434/v1`).              |
-| `LLM_MODEL`                     | provider default | `local` → `gpt-4.1`, `claude` → `claude-sonnet-4-6`.                                   |
-| `REVIEW_LOCAL_PATH`             | the cwd          | The checkout to review. Machine-specific, which is why it is not only a catalogue key. |
-| `REVIEW_LANG`                   | `en`             | Language of finding bodies (`tr` / `en`).                                              |
-| `REVIEW_EXCLUDE_PATHS`          | —                | Comma-separated globs skipped entirely.                                                |
-| `REVIEW_MAX_FINDINGS_PER_FILE`  | `3`              | Max findings reported per file; the most severe survive. `0` = uncapped.               |
-| `REVIEW_SKILLS_PATH`            | —                | Directory of review skills inside the reviewed repo; empty disables skills.            |
-| `REVIEW_SKILL_MAPPINGS`         | `{}`             | The project's `skills` map as JSON; normally set in `config.yaml`.                     |
-| `REVIEW_PROMPT_FILES`           | —                | Comma-separated review-policy files; normally set in `config.yaml`.                    |
-| `REVIEW_VERIFY`                 | `true`           | Check findings against the diff and drop the refuted ones. `--no-verify` wins.         |
-| `REVIEW_MAX_SKILL_CHARS`        | `10000`          | Per-skill body cap.                                                                    |
-| `REVIEW_MAX_SKILLS_TOTAL_CHARS` | `18000`          | Per-file cap for the whole skills block.                                               |
-| `REVIEW_MAX_CONTEXT_CHARS`      | `6000`           | Cap on the pre-context block; `0` switches it off.                                     |
-| `PR_REVIEW_MAX_FILE_CHARS`      | `8000`           | Per-file diff/context cap fed to the LLM.                                              |
-| `REVIEW_MAX_CONCURRENT_FILES`   | CPU-derived      | Global cap on simultaneous file reviews (content read + LLM call).                     |
-| `REVIEWER_CONFIG`               | —                | Path to `config.yaml`, overriding the default location.                                |
+| Variable                        | Default          | Purpose                                                                                               |
+| ------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------- |
+| `LLM_PROVIDER`                  | `local`          | `local` (any OpenAI-compatible endpoint) or `claude` (Anthropic).                                     |
+| `LLM_API_KEY`                   | _required_       | Credential; must be non-empty even for a local server.                                                |
+| `LLM_BASE_URL`                  | —                | Endpoint URL including the API prefix (e.g. `http://localhost:11434/v1`).                             |
+| `LLM_MODEL`                     | provider default | `local` → `gpt-4.1`, `claude` → `claude-sonnet-4-6`.                                                  |
+| `REVIEW_LOCAL_PATH`             | the cwd          | The checkout to review. Machine-specific, which is why it is not only a catalogue key.                |
+| `REVIEW_LANG`                   | `en`             | Language of finding bodies (`tr` / `en`).                                                             |
+| `REVIEW_EXCLUDE_PATHS`          | —                | Comma-separated globs skipped entirely.                                                               |
+| `REVIEW_MAX_FINDINGS_PER_FILE`  | `3`              | Max findings reported per file; the most severe survive. `0` = uncapped.                              |
+| `REVIEW_SKILLS_PATH`            | —                | Directory of review skills inside the reviewed repo; empty disables skills.                           |
+| `REVIEW_SKILL_MAPPINGS`         | `{}`             | The project's `skills` map as JSON; normally set in `config.yaml`.                                    |
+| `REVIEW_PROMPT_FILES`           | —                | Comma-separated review-policy files; normally set in `config.yaml`.                                   |
+| `REVIEW_VERIFY`                 | `true`           | Check findings against the diff and drop the refuted ones. `--no-verify` wins.                        |
+| `REVIEW_MAX_SKILL_CHARS`        | `10000`          | Per-skill body cap.                                                                                   |
+| `REVIEW_MAX_SKILLS_TOTAL_CHARS` | `18000`          | Per-file cap for the whole skills block.                                                              |
+| `REVIEW_MAX_CONTEXT_CHARS`      | `6000`           | Cap on the pre-context block; `0` switches it off.                                                    |
+| `REVIEW_MAX_FILE_CHARS`         | `8000`           | Per-file diff/context cap fed to the LLM.                                                             |
+| `REVIEW_MAX_CONCURRENT_FILES`   | CPU-derived      | Global cap on simultaneous file reviews (content read + LLM call).                                    |
+| `REVIEWER_CONFIG`               | —                | Path to `config.yaml`, overriding the default location.                                               |
+| `XDG_CONFIG_HOME`               | `~/.config`      | Base of the machine-wide home: `$XDG_CONFIG_HOME/reviewer` holds `config.yaml`, `.env` and `skills/`. |
 
 ### What is never sent to the model
 
