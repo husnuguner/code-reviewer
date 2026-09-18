@@ -209,8 +209,15 @@ runs:
         REVIEWER: ${{ github.action_path }}/../../src/cli/main.ts
         BASE_REF: ${{ steps.base.outputs.ref }}
       run: |
+        # The runner starts this shell with -e, which `set -uo pipefail`
+        # does not undo. Off it goes, for two reasons: the reviewer's exit
+        # status is this step's to report (read below, after the outputs are
+        # written), and a guard that declines is an answer, not a failure --
+        # a function whose body ends in a false test returns 1, and under -e
+        # that ends the step before the reviewer is ever spawned.
+        set +e
         set -uo pipefail
-        set_if_given() { [ -n "${2}" ] && export "${1}=${2}"; }
+        set_if_given() { [ -n "${2}" ] && export "${1}=${2}"; return 0; }
         set_if_given LLM_PROVIDER "${IN_PROVIDER}"
         set_if_given LLM_MODEL "${IN_MODEL}"
         set_if_given LLM_BASE_URL "${IN_BASE_URL}"
@@ -234,7 +241,9 @@ runs:
         else
           args+=(--format github --out "${OUT_FILE}")
         fi
-        [ -n "${PROJECT}" ] && args+=(--project "${PROJECT}")
+        if [ -n "${PROJECT}" ]; then
+          args+=(--project "${PROJECT}")
+        fi
         if [ -n "${REVIEWER_CONFIG}" ]; then
           args+=(--config "${REVIEWER_CONFIG}")
         else
