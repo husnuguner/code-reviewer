@@ -9,10 +9,10 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { ConfigError } from "../src/core/config/config";
-import { systemPrompt } from "../src/core/review/prompts";
-import { readReviewPolicy, resolvePromptPath } from "../src/infra/prompts/policy-files";
-import { shippedFile } from "../src/infra/shipped-files";
+import { ConfigError } from "../../../src/core/config/config";
+import { systemPrompt } from "../../../src/core/review/prompts";
+import { readReviewPolicy, resolvePromptPath } from "../../../src/infra/prompts/policy-files";
+import { shippedFile } from "../../../src/infra/shipped-files";
 
 function home(): string {
   const root = mkdtempSync(join(tmpdir(), "reviewer-prompts-"));

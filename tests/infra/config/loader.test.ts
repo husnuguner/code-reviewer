@@ -14,13 +14,17 @@ import {
   ConfigError,
   buildConfig,
   defaultConcurrency,
-} from "../src/core/config/config";
-import { CatalogError } from "../src/core/util/errors";
-import { sortedByCodePoint } from "../src/core/util/text";
-import { loadCatalog, loadRunConfig } from "../src/infra/config/loader";
-import { configHome, configPath, findGitRoot, findRepoConfig } from "../src/infra/config/paths";
-
-import { isErrorContract, loadFixture } from "./contracts/fixtures";
+} from "../../../src/core/config/config";
+import { CatalogError } from "../../../src/core/util/errors";
+import { sortedByCodePoint } from "../../../src/core/util/text";
+import { loadCatalog, loadRunConfig } from "../../../src/infra/config/loader";
+import {
+  configHome,
+  configPath,
+  findGitRoot,
+  findRepoConfig,
+} from "../../../src/infra/config/paths";
+import { isErrorContract, loadFixture } from "../../contracts/fixtures";
 
 const CATALOG = {
   version: 3,

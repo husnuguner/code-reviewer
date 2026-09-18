@@ -8,8 +8,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_FILE_REVIEW_SETTINGS } from "../src/core/config/settings";
-import { previewReport } from "../src/core/review/render";
+import { DEFAULT_FILE_REVIEW_SETTINGS } from "../../../src/core/config/settings";
+import { previewReport } from "../../../src/core/review/render";
 import {
   type SelectionReason,
   decideFile,
@@ -20,9 +20,8 @@ import {
   skipCounts,
   skipDetail,
   skippedFiles,
-} from "../src/core/review/selection";
-
-import { recordingLogger } from "./helpers/logging";
+} from "../../../src/core/review/selection";
+import { recordingLogger } from "../../helpers/logging";
 
 const PATCH = "@@ -1 +1,2 @@\n old\n+added line\n";
 const BINARY = "diff --git a/x.png b/x.png\nBinary files a/x.png and b/x.png differ\n";

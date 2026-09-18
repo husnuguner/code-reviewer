@@ -6,7 +6,7 @@ import { PassThrough } from "node:stream";
 
 import { describe, expect, it } from "vitest";
 
-import { PinoLogger, formatConsoleLine } from "../src/infra/logging/pino-logger";
+import { PinoLogger, formatConsoleLine } from "../../../src/infra/logging/pino-logger";
 
 function capture(): { sink: PassThrough; lines: () => string[] } {
   const sink = new PassThrough();

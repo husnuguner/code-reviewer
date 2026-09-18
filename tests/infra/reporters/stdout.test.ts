@@ -16,15 +16,15 @@ import { Writable } from "node:stream";
 
 import { describe, expect, it } from "vitest";
 
-import { buildContainer } from "../src/cli/container";
-import { type FindingRecord, type SummaryRecord } from "../src/core/ports/review-reporter";
-import { ReportFileError } from "../src/core/util/errors";
+import { buildContainer } from "../../../src/cli/container";
+import { type FindingRecord, type SummaryRecord } from "../../../src/core/ports/review-reporter";
+import { ReportFileError } from "../../../src/core/util/errors";
 import {
   NdjsonFileReporter,
   NdjsonReporter,
   TeeReporter,
   closeReporter,
-} from "../src/infra/reporters/stdout";
+} from "../../../src/infra/reporters/stdout";
 
 const FINDING: FindingRecord = {
   type: "finding",

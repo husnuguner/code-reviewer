@@ -5,8 +5,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import { ValueError } from "../src/core/util/errors";
-import { DescribedRegistry, Registry } from "../src/core/util/registry";
+import { ValueError } from "../../../src/core/util/errors";
+import { DescribedRegistry, Registry } from "../../../src/core/util/registry";
 
 interface Entry {
   readonly name: string;

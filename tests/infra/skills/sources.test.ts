@@ -10,13 +10,13 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { SkillRegistry } from "../src/core/skills/registry";
-import { sortedByCodePoint } from "../src/core/util/text";
+import { SkillRegistry } from "../../../src/core/skills/registry";
+import { sortedByCodePoint } from "../../../src/core/util/text";
 import {
   DirectorySkillSource,
   WorktreeSkillSource,
   isLocalSkillsPath,
-} from "../src/infra/skills/sources";
+} from "../../../src/infra/skills/sources";
 
 // A skill document carries no scope of its own; the mapping gives it one.
 const ROUTE = "---\nname: medusa-route\n---\nRoute rules.\n";

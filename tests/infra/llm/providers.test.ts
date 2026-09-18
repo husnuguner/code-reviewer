@@ -9,10 +9,13 @@ import { type LanguageModelV3GenerateResult } from "@ai-sdk/provider";
 import { MockLanguageModelV3 } from "ai/test";
 import { describe, expect, it } from "vitest";
 
-import { LLMProviderRegistry, type ProviderSettings } from "../src/core/llm/provider-registry";
-import { ValueError } from "../src/core/util/errors";
-import { AiSdkChatModel, splitSystem } from "../src/infra/llm/ai-sdk-chat-model";
-import { BUILTIN_LLM_PROVIDERS, builtinLLMProviderRegistry } from "../src/infra/llm/index";
+import {
+  LLMProviderRegistry,
+  type ProviderSettings,
+} from "../../../src/core/llm/provider-registry";
+import { ValueError } from "../../../src/core/util/errors";
+import { AiSdkChatModel, splitSystem } from "../../../src/infra/llm/ai-sdk-chat-model";
+import { BUILTIN_LLM_PROVIDERS, builtinLLMProviderRegistry } from "../../../src/infra/llm/index";
 
 const TOKENS = { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined };
 

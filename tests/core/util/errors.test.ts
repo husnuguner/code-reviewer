@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { errorMessage } from "../src/core/util/errors";
+import { errorMessage } from "../../../src/core/util/errors";
 
 describe("errorMessage", () => {
   it("takes an Error's message", () => {

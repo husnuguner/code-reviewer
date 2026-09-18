@@ -11,8 +11,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { GitError } from "../src/core/util/errors";
-import { LocalGitReader, worktree } from "../src/infra/git/local-git";
+import { GitError } from "../../../src/core/util/errors";
+import { LocalGitReader, worktree } from "../../../src/infra/git/local-git";
 
 function git(root: string, ...arguments_: string[]): void {
   execFileSync("git", arguments_, { cwd: root, stdio: "ignore" });

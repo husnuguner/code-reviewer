@@ -13,9 +13,9 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { type Finding, finding } from "../src/core/domain/finding";
-import { type BranchReviewRecord } from "../src/core/ports/review-reporter";
-import { type SkillMatcher } from "../src/core/ports/skill-matcher";
+import { type Finding, finding } from "../../../src/core/domain/finding";
+import { type BranchReviewRecord } from "../../../src/core/ports/review-reporter";
+import { type SkillMatcher } from "../../../src/core/ports/skill-matcher";
 import {
   type BranchReviewOptions,
   branchReviewText,
@@ -23,14 +23,16 @@ import {
   previewBranch,
   reviewBranch,
   streamBranchReview,
-} from "../src/core/review/branch-review";
-import { type ReviewFileInput } from "../src/core/review/file-reviewer";
-import { DEFAULT_FILE_REVIEW_SETTINGS, type PerFileReviewer } from "../src/core/review/review-file";
-import { type Verdict, type VerifyInput } from "../src/core/review/verify";
-import { sortedByCodePoint } from "../src/core/util/text";
-import { LocalGitReader } from "../src/infra/git/local-git";
-
-import { loadFixture } from "./contracts/fixtures";
+} from "../../../src/core/review/branch-review";
+import { type ReviewFileInput } from "../../../src/core/review/file-reviewer";
+import {
+  DEFAULT_FILE_REVIEW_SETTINGS,
+  type PerFileReviewer,
+} from "../../../src/core/review/review-file";
+import { type Verdict, type VerifyInput } from "../../../src/core/review/verify";
+import { sortedByCodePoint } from "../../../src/core/util/text";
+import { LocalGitReader } from "../../../src/infra/git/local-git";
+import { loadFixture } from "../../contracts/fixtures";
 
 function git(root: string, ...arguments_: string[]): void {
   execFileSync("git", arguments_, { cwd: root, stdio: "ignore" });

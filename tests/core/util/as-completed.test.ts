@@ -19,7 +19,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { asCompleted } from "../src/core/util/as-completed";
+import { asCompleted } from "../../../src/core/util/as-completed";
 
 /** A promise that settles after `ms`, so completion order can be arranged. */
 function after<T>(ms: number, value: T): Promise<T> {

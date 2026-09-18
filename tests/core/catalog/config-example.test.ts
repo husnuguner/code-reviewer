@@ -11,11 +11,14 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 
-import { PROJECT_SETTING_KEYS, parseCatalog } from "../src/core/catalog/catalog";
-import { resolveConfig } from "../src/core/config/resolver";
-import { sortedByCodePoint } from "../src/core/util/text";
+import { PROJECT_SETTING_KEYS, parseCatalog } from "../../../src/core/catalog/catalog";
+import { resolveConfig } from "../../../src/core/config/resolver";
+import { sortedByCodePoint } from "../../../src/core/util/text";
 
-const EXAMPLE = join(import.meta.dirname, "..", "docs", "config.example.yaml");
+// Up out of tests/core/catalog/ to the repository root. The only test that
+// reads a file by walking out of its own directory, which is why moving it
+// into the mirror broke it and nothing else.
+const EXAMPLE = join(import.meta.dirname, "..", "..", "..", "docs", "config.example.yaml");
 
 describe("docs/config.example.yaml", () => {
   const catalog = parseCatalog(parseYaml(readFileSync(EXAMPLE, "utf8")), EXAMPLE);

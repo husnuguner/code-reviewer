@@ -10,21 +10,20 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 
-import { UsageError, cliOverrides, hasFailingFinding, parseArguments } from "../src/cli/run";
-import { type Catalog, PROJECT_SETTING_KEYS, parseCatalog } from "../src/core/catalog/catalog";
+import { UsageError, cliOverrides, hasFailingFinding, parseArguments } from "../../src/cli/run";
+import { type Catalog, PROJECT_SETTING_KEYS, parseCatalog } from "../../src/core/catalog/catalog";
 import {
   type CatalogFiles,
   addProject,
   initCatalog,
   listProjects,
-} from "../src/core/catalog/commands";
-import { type ConsoleOutput } from "../src/core/ports/console";
-import { type BranchReviewResult } from "../src/core/review/branch-review";
-import { FsCatalogFiles } from "../src/infra/config/catalog-files";
-import { loadCatalog } from "../src/infra/config/loader";
-import { shippedFile } from "../src/infra/shipped-files";
-
-import { loadFixture } from "./contracts/fixtures";
+} from "../../src/core/catalog/commands";
+import { type ConsoleOutput } from "../../src/core/ports/console";
+import { type BranchReviewResult } from "../../src/core/review/branch-review";
+import { FsCatalogFiles } from "../../src/infra/config/catalog-files";
+import { loadCatalog } from "../../src/infra/config/loader";
+import { shippedFile } from "../../src/infra/shipped-files";
+import { loadFixture } from "../contracts/fixtures";
 
 function recorder(): ConsoleOutput & { text: () => string } {
   const lines: string[] = [];

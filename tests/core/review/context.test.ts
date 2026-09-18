@@ -6,8 +6,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import { ChangedFile } from "../src/core/domain/changed-file";
-import { type CodeContext, type CodeSearchHit } from "../src/core/ports/code-context";
+import { ChangedFile } from "../../../src/core/domain/changed-file";
+import { type CodeContext, type CodeSearchHit } from "../../../src/core/ports/code-context";
 import {
   DEFAULT_CONTEXT_LIMITS,
   EMPTY_CONTEXT,
@@ -18,8 +18,8 @@ import {
   relatedChanges,
   renderContext,
   resolveSpecifier,
-} from "../src/core/review/context";
-import { buildUserPrompt } from "../src/core/review/prompts";
+} from "../../../src/core/review/context";
+import { buildUserPrompt } from "../../../src/core/review/prompts";
 
 const PATCH = [
   "@@ -1,4 +1,6 @@",

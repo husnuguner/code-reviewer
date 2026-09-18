@@ -14,12 +14,12 @@ import { setTimeout } from "node:timers/promises";
 
 import { describe, expect, it } from "vitest";
 
-import { buildContainer } from "../src/cli/container";
-import { type Finding, finding } from "../src/core/domain/finding";
-import { type FindingRecord, type SummaryRecord } from "../src/core/ports/review-reporter";
-import { type LineWriter } from "../src/core/reporting/format-registry";
-import { capPerFile } from "../src/core/review/volume";
-import { GithubReporter, annotationFor, summaryFor } from "../src/infra/reporters/github";
+import { buildContainer } from "../../../src/cli/container";
+import { type Finding, finding } from "../../../src/core/domain/finding";
+import { type FindingRecord, type SummaryRecord } from "../../../src/core/ports/review-reporter";
+import { type LineWriter } from "../../../src/core/reporting/format-registry";
+import { capPerFile } from "../../../src/core/review/volume";
+import { GithubReporter, annotationFor, summaryFor } from "../../../src/infra/reporters/github";
 
 function record(over: Partial<Omit<FindingRecord, "type">> = {}): Omit<FindingRecord, "type"> {
   return {
