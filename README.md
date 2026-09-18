@@ -188,7 +188,7 @@ jobs:
         with:
           fetch-depth: 0 # the reviewer diffs locally and needs the merge-base
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: husnuguner/code-reviewer@v0.0.1
+      - uses: husnuguner/code-reviewer@v0.0.2
         with:
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           language: tr
@@ -215,7 +215,7 @@ jobs:
         if: ${{ steps.findings.outcome == 'success' }}
         with:
           repository: husnuguner/code-reviewer
-          ref: v0.0.1 # the same version the review job used
+          ref: v0.0.2 # the same version the review job used
           path: .reviewer
       - uses: oven-sh/setup-bun@v2
         if: ${{ steps.findings.outcome == 'success' }}
@@ -509,7 +509,7 @@ There is deliberately **no extension allowlist**. What is worth skipping for val
 Releases follow GitHub's action convention: an **immutable** `vX.Y.Z` tag per release, and a **moving** major tag (`v0`) that always points at the latest `v0.*`. A workflow that says `@v0` gets fixes without editing; one that wants no surprises pins the full version or the commit SHA, as it would for `actions/checkout`.
 
 ```yaml
-- uses: husnuguner/code-reviewer@v0.0.1 # this exact release; recommended while 0.x
+- uses: husnuguner/code-reviewer@v0.0.2 # this exact release; recommended while 0.x
 - uses: husnuguner/code-reviewer@v0 # latest 0.x
 - uses: husnuguner/code-reviewer@<full-sha> # what a hardened workflow pins
 ```
@@ -521,14 +521,14 @@ The version line starts at `v0.0.1`, and the leading zero is the whole statement
 Cutting a release (maintainers):
 
 ```bash
-bun pm version 0.0.2 --no-git-tag-version  # package.json
-git commit -am "release: v0.0.2"
-git tag -a v0.0.2 -m "v0.0.2"
-git tag -f v0 v0.0.2                        # move the major tag
-git push origin main v0.0.2 && git push -f origin v0
+bun pm version 0.0.3 --no-git-tag-version  # package.json
+git commit -am "release: v0.0.3"
+git tag -a v0.0.3 -m "v0.0.3"
+git tag -f v0 v0.0.3                        # move the major tag
+git push origin main v0.0.3 && git push -f origin v0
 ```
 
-A tag is not a GitHub Release: nothing here creates one, so a release worth announcing is published separately (`gh release create v0.0.2 --verify-tag --notes-file …`).
+A tag is not a GitHub Release: nothing here creates one, so a release worth announcing is published separately (`gh release create v0.0.3 --verify-tag --notes-file …`).
 
 ## When it does not run
 
