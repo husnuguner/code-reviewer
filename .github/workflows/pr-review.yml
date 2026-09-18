@@ -43,7 +43,8 @@ jobs:
 
       - name: Review
         id: review
-        uses: ./ # in another repository: husnuguner/code-reviewer@v2
+        # In another repository: husnuguner/code-reviewer@v0.0.1
+        uses: ./
         with:
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           provider: claude
@@ -91,7 +92,8 @@ jobs:
       # next step ask whether anything actually arrived.
       - name: Download the findings
         id: findings
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        # v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
           name: code-review-findings
         continue-on-error: true
@@ -102,7 +104,8 @@ jobs:
       # found nothing".
       - name: Comment
         if: ${{ steps.findings.outcome == 'success' }}
-        uses: ./comment-action # in another repository: husnuguner/code-reviewer/comment-action@v2
+        # In another repository: husnuguner/code-reviewer/comment-action@v0.0.1
+        uses: ./comment-action
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           findings: code-review.ndjson

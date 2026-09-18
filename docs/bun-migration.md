@@ -1,6 +1,6 @@
 # Bun'a geçiş — kayıt
 
-Durum: **uygulandı** (v2.0.0). Bu belge, geçişin neden ve nasıl yapıldığını,
+Durum: **uygulandı**. Bu belge, geçişin neden ve nasıl yapıldığını,
 hangi kütüphanenin neyle değiştirildiğini ve geçişin değiştirdiği
 semantiklerin nasıl karşılandığını kayda geçirir. Ölçümler 2026-09-18'de,
 macOS üzerinde Bun 1.4.2 ile yapıldı.
@@ -90,7 +90,7 @@ Karşılığı üç yerde, her biri doğrulanmış:
 
 ## 4. Değişen dosyalar
 
-- `package.json` — v2.0.0; `bin` → `src/cli/main.ts` (v2.1.0'da tek yürütülebilir, bkz. §7);
+- `package.json` — `bin` → `src/cli/main.ts` (tek yürütülebilir, bkz. §7);
   `exports["./core"]` → `src/core/index.ts`; `files` `dist` → `src`; script'ler
   Bun; `engines.bun`, `packageManager`; `prepare`/`volta` yok.
 - `bunfig.toml`, `.bun-version`, `bun.lock` — yeni. `package-lock.json`,
@@ -107,11 +107,9 @@ Karşılığı üç yerde, her biri doğrulanmış:
   `bun.lock` formatlanmaz.
 - `action.yml`, `comment-action/action.yml` — `setup-bun` (SHA-pinli v2.2.0),
   `bun install --frozen-lockfile --production --ignore-scripts`, derleme yok,
-  `bun --no-env-file src/cli/…`. `node-version` girdisi → `bun-version`:
-  README politikasına göre **yeni major (v2)**; `v1` tag'i eski runtime'da
-  kalır.
-- `.github/workflows/pr-review.yml`, `README.md` — `@v2`, kurulum ve geliştirme
-  bölümleri.
+  `bun --no-env-file src/cli/…`. `node-version` girdisi → `bun-version`.
+- `.github/workflows/pr-review.yml`, `README.md` — kurulum ve geliştirme
+  bölümleri, `@v0.0.1` referansları.
 
 ## 5. Doğrulama
 
@@ -130,9 +128,11 @@ shipped dosyaları buluyor.
 ## 6. Geri alma
 
 Tek revert: `package-lock.json`, `dist` tabanlı `action.yml` ve `vitest`
-geçmişte; `v1` tag'i o dünyada kalır.
+geçmişte kaldı; geri dönüş o commit'leri revert etmek demek, çünkü Node
+çalıştırıcısını işaret eden bir tag artık yok (sürüm çizgisi `v0.0.1`'den
+yeniden başladı).
 
-## 7. Ardından: tek yürütülebilir, kayıtlı komutlar (v2.1.0)
+## 7. Ardından: tek yürütülebilir, kayıtlı komutlar
 
 `review-comment` ayrı bir yürütülebilir olmaktan çıktı; `reviewer comment` bir
 alt komut. Güvenlik ayrımı yürütülebilirler arasında değil **koşular**

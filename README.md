@@ -169,7 +169,7 @@ Colour is decided against **stderr**, not stdout: piping the report into another
 
 Reviewing a pull request means checking it out and reviewing the branch — no API, no token. The shipped action does that, and a **second job** does the talking.
 
-Copy [`.github/workflows/pr-review.yml`](.github/workflows/pr-review.yml) into the repository you want reviewed and change `uses: ./` to `uses: husnuguner/code-reviewer@v2`:
+Copy [`.github/workflows/pr-review.yml`](.github/workflows/pr-review.yml) into the repository you want reviewed and change `uses: ./` to `uses: husnuguner/code-reviewer@v0.0.1`:
 
 ```yaml
 name: PR review
@@ -189,7 +189,7 @@ jobs:
         with:
           fetch-depth: 0 # the reviewer diffs locally and needs the merge-base
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: husnuguner/code-reviewer@v2
+      - uses: husnuguner/code-reviewer@v0.0.1
         with:
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           language: tr
@@ -210,7 +210,7 @@ jobs:
         id: findings
         with: { name: code-review-findings }
         continue-on-error: true
-      - uses: husnuguner/code-reviewer/comment-action@v2
+      - uses: husnuguner/code-reviewer/comment-action@v0.0.1
         if: ${{ steps.findings.outcome == 'success' }} # skipped, not green, when there is nothing to post
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -484,29 +484,29 @@ There is deliberately **no extension allowlist**. What is worth skipping for val
 
 ## Versioning
 
-Releases follow GitHub's action convention: an **immutable** `vX.Y.Z` tag per release, and a **moving** major tag (`v2`) that always points at the latest `v2.*`. A workflow that says `@v2` gets fixes without editing; one that wants no surprises pins the full commit SHA, as it would for `actions/checkout`.
+Releases follow GitHub's action convention: an **immutable** `vX.Y.Z` tag per release, and a **moving** major tag (`v0`) that always points at the latest `v0.*`. A workflow that says `@v0` gets fixes without editing; one that wants no surprises pins the full version or the commit SHA, as it would for `actions/checkout`.
 
 ```yaml
-- uses: husnuguner/code-reviewer@v2 # latest 2.x; recommended
-- uses: husnuguner/code-reviewer@v2.0.0 # this exact release
+- uses: husnuguner/code-reviewer@v0.0.1 # this exact release; recommended while 0.x
+- uses: husnuguner/code-reviewer@v0 # latest 0.x
 - uses: husnuguner/code-reviewer@<full-sha> # what a hardened workflow pins
 ```
 
-`v2` runs on Bun and replaced the actions' `node-version` input with `bun-version`; nothing else about the inputs or the NDJSON contract changed. A `v1` workflow keeps working on the `v1` tag.
+The version line starts at `v0.0.1`, and the leading zero is the whole statement: **while the major is 0, any release may change the action's inputs or the NDJSON contract.** That is why pinning the exact version is the recommendation here and `@v0` is the convenience, which is the reverse of the advice a 1.x action would give. `1.0.0` is the release that turns those two into promises — and from then on a breaking change is a new major, never a moved `v1`.
 
 `@main` is the development branch. It works, but it is what a security review will — correctly — flag: a mutable reference in a step that receives a secret.
 
 Cutting a release (maintainers):
 
 ```bash
-bun pm version 2.1.3 --no-git-tag-version  # package.json
-git commit -am "release: v2.1.3"
-git tag -a v2.1.3 -m "v2.1.3"
-git tag -f v2 v2.1.3                        # move the major tag
-git push origin main v2.1.3 && git push -f origin v2
+bun pm version 0.0.2 --no-git-tag-version  # package.json
+git commit -am "release: v0.0.2"
+git tag -a v0.0.2 -m "v0.0.2"
+git tag -f v0 v0.0.2                        # move the major tag
+git push origin main v0.0.2 && git push -f origin v0
 ```
 
-A breaking change to the action's inputs or the NDJSON contract is a new major (`v2`), never a moved `v1`.
+A tag is not a GitHub Release: nothing here creates one, so a release worth announcing is published separately (`gh release create v0.0.2 --verify-tag --notes-file …`).
 
 ## When it does not run
 
