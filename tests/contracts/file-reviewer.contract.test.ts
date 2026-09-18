@@ -77,7 +77,6 @@ describe("reviewing one file through the model", () => {
     "no_allowed_lines_skips_model",
     "model_error_returns_empty",
     "no_anchor_index_uses_line_only",
-    "float_line_is_not_int_in_python",
   ]);
   const ordinary = casesUnder<ReviewInput, ReviewExpectation>(cases, "review_file").filter(
     (c) => !special.has(c.name),
@@ -118,14 +117,12 @@ describe("reviewing one file through the model", () => {
     expect(findings).toEqual(expected);
   });
 
-  it("treats a float line JSON.parse reads as an integer as the claimed line (documented divergence)", async () => {
-    // Python sees `2.0` as "no line" and repairs the finding to the quoted
-    // line (3). Here `2.0` parses to the integer 2, a commentable line, so the
-    // claimed line stands and the disagreeing quote is counted as a conflict.
-    const { input, expected, divergence } = reviewCase("float_line_is_not_int_in_python");
-    expect(divergence).toBeDefined();
+  it("takes a float line JSON.parse reads as an integer as the claimed line", async () => {
+    // `"line": 2.0` parses to the integer 2, which is commentable, so the
+    // claimed line stands -- and the quote, which points at line 3, is
+    // recorded as a conflict rather than allowed to move the comment.
+    const { input } = reviewCase("float_line_parses_as_an_integer");
     const findings = await review(new FakeModel(input.responses), input.patch);
-    expect(findings).toHaveLength(expected.findings.length);
     expect(findings[0]).toMatchObject({ line: 2, anchor: "conflict", body: "x" });
   });
 

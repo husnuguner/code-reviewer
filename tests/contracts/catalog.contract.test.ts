@@ -25,39 +25,17 @@ function validCatalog(): Catalog {
   return parseCatalog(valid.input.payload, SOURCE);
 }
 
-/**
- * The one case whose *shape* differs: Python did not raise at parse time at
- * all, so there is no expectation the generic runner below could assert. It
- * is asserted on its own terms further down.
- *
- * Every other `divergence` in this fixture is a value spelled the JavaScript
- * way inside an otherwise identical message -- `null` for `None`, `'a'` for
- * `str`. Those expectations were updated in place and must keep being
- * checked: excluding them would retire a real assertion to record a wording
- * change, which is how the next one goes unnoticed.
- */
-const ASSERTED_SEPARATELY: ReadonlySet<string> = new Set(["project_unknown_key_parses_in_python"]);
-
 describe("parsing config.yaml", () => {
-  const parseCases = casesUnder<{ payload: unknown }>(cases, "parse").filter(
-    (c) => !ASSERTED_SEPARATELY.has(c.name),
-  );
+  // Every case runs the same way, including the ones whose message names a
+  // value the JavaScript way (`null`, `'a'`) and the unrecognised-key case
+  // this build refuses at parse time. Each expectation says what this
+  // program does; there is no second implementation to be measured against.
+  const parseCases = casesUnder<{ payload: unknown }>(cases, "parse");
 
   it.each(parseCases)("%s", ({ input, expected }) => {
     expectContract(() => catalogDict(parseCatalog(input.payload, SOURCE)), expected, {
       exactMessage: true,
     });
-  });
-
-  it("rejects an unrecognised project key when the file is parsed (documented divergence)", () => {
-    const { input, divergence } = cases.find(
-      (c) => c.name === "parse/project_unknown_key_parses_in_python",
-    ) as FixtureCase<{ payload: unknown }>;
-    expect(divergence).toBeDefined();
-    const message = (
-      cases.find((c) => c.name === "project_values/unknown_key")?.expected as { message: string }
-    ).message;
-    expect(() => parseCatalog(input.payload, SOURCE)).toThrow(new CatalogError(message));
   });
 });
 

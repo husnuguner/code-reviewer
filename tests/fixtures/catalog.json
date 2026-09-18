@@ -160,8 +160,7 @@
       "expected": {
         "error": "CatalogError",
         "message": "/x/config.yaml declares schema version null, but this build understands up to 3. Upgrade the reviewer."
-      },
-      "divergence": "the offending value is named the JavaScript way: a null version reads as 'null' where Python's repr() wrote 'None'"
+      }
     },
     {
       "name": "parse/root_not_object",
@@ -175,8 +174,7 @@
       "expected": {
         "error": "CatalogError",
         "message": "config.yaml must be an object, got array"
-      },
-      "divergence": "a value's type is named the JavaScript way: 'array'/'null'/'number'/'string' where Python's type(...).__name__ gave 'list'/'NoneType'/'int'/'str'"
+      }
     },
     {
       "name": "parse/root_null",
@@ -186,8 +184,7 @@
       "expected": {
         "error": "CatalogError",
         "message": "config.yaml must be an object, got null"
-      },
-      "divergence": "a value's type is named the JavaScript way: 'array'/'null'/'number'/'string' where Python's type(...).__name__ gave 'list'/'NoneType'/'int'/'str'"
+      }
     },
     {
       "name": "parse/projects_not_object",
@@ -213,11 +210,10 @@
       "expected": {
         "error": "CatalogError",
         "message": "projects.x must be an object, got number"
-      },
-      "divergence": "a value's type is named the JavaScript way: 'array'/'null'/'number'/'string' where Python's type(...).__name__ gave 'list'/'NoneType'/'int'/'str'"
+      }
     },
     {
-      "name": "parse/project_unknown_key_parses_in_python",
+      "name": "parse/project_unknown_key",
       "input": {
         "payload": {
           "projects": {
@@ -232,8 +228,7 @@
       "expected": {
         "error": "CatalogError",
         "message": "Project 'x' has unrecognised setting(s) ['exlude']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'prompts', 'skills', 'verify']"
-      },
-      "divergence": "node rejects unknown project keys at parse time (zod strict)"
+      }
     },
     {
       "name": "project/'app'",
@@ -391,8 +386,7 @@
       "expected": {
         "error": "CatalogError",
         "message": "Project 'x' has unrecognised setting(s) ['exlude']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'prompts', 'skills', 'verify']"
-      },
-      "divergence": "node raises the same CatalogError message at parse time"
+      }
     },
     {
       "name": "project_values/renamed_key_hint",
@@ -502,8 +496,7 @@
       "expected": {
         "error": "CatalogError",
         "message": "defaults must be an object, got number"
-      },
-      "divergence": "a value's type is named the JavaScript way: 'array'/'null'/'number'/'string' where Python's type(...).__name__ gave 'list'/'NoneType'/'int'/'str'"
+      }
     },
     {
       "name": "parse/defaults_skills_mappings_rejected",
@@ -575,8 +568,7 @@
       "expected": {
         "error": "CatalogError",
         "message": "Project 'x'.llm must be an object, got string"
-      },
-      "divergence": "a value's type is named the JavaScript way: 'array'/'null'/'number'/'string' where Python's type(...).__name__ gave 'list'/'NoneType'/'int'/'str'"
+      }
     }
   ]
 }

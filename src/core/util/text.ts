@@ -81,14 +81,19 @@ export function trimSlashes(path: string): string {
 }
 
 /**
- * Whether the text contains a surrogate, i.e. whether code points and UTF-16
- * units can disagree about it.
+ * Whether the text reaches beyond the basic plane, i.e. whether code points
+ * and UTF-16 units can disagree about it.
  *
  * Checked first by the two functions below so that the overwhelmingly common
  * case -- text entirely in the basic plane -- costs one scan rather than
  * building an array of every character in a diff.
+ *
+ * Written as an astral *range*, not as the surrogate range `[\uD800-\uDFFF]`.
+ * Under the `u` flag a string is matched as code points, so that range can
+ * only ever match a *lone* surrogate -- never a well-formed pair -- and the
+ * check it was supposed to make silently answered "no" for every emoji.
  */
-const SURROGATE_PATTERN = /[\uD800-\uDFFF]/u;
+const ASTRAL_PATTERN = /[\u{10000}-\u{10FFFF}]/u;
 
 /**
  * How many code points the text is, which is what this tool's character
@@ -100,7 +105,7 @@ const SURROGATE_PATTERN = /[\uD800-\uDFFF]/u;
  */
 export function countCodePoints(text: string): number {
   // eslint-disable-next-line @typescript-eslint/no-misused-spread -- code-point semantics are the point
-  return SURROGATE_PATTERN.test(text) ? [...text].length : text.length;
+  return ASTRAL_PATTERN.test(text) ? [...text].length : text.length;
 }
 
 /**
@@ -113,7 +118,7 @@ export function countCodePoints(text: string): number {
  */
 export function cutToLength(text: string, maxLength: number): string {
   if (maxLength <= 0) return "";
-  if (!SURROGATE_PATTERN.test(text)) return text.slice(0, maxLength);
+  if (!ASTRAL_PATTERN.test(text)) return text.slice(0, maxLength);
   // eslint-disable-next-line @typescript-eslint/no-misused-spread -- code-point semantics are the point
   const points = [...text];
   return points.length <= maxLength ? text : points.slice(0, maxLength).join("");

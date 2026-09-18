@@ -781,8 +781,7 @@
         "body": "Body.",
         "source": "repo",
         "description": "true"
-      },
-      "divergence": "a non-string description is spelled the JavaScript way: YAML 1.1 reads 'yes' as a boolean, which Python's str() wrote as 'True' and Node writes as 'true'"
+      }
     },
     {
       "name": "parse/valid_numeric_description",

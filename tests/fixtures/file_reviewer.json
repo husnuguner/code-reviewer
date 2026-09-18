@@ -839,7 +839,7 @@
       }
     },
     {
-      "name": "review_file/float_line_is_not_int_in_python",
+      "name": "review_file/float_line_parses_as_an_integer",
       "input": {
         "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n",
         "responses": [
@@ -854,17 +854,16 @@
         ],
         "findings": [
           {
-            "line": 3,
+            "line": 2,
             "severity": "bug",
             "body": "x",
             "example": "",
             "start_line": null,
-            "anchor": "repaired",
+            "anchor": "conflict",
             "existing_code": "return rows;"
           }
         ]
-      },
-      "divergence": "JSON.parse(\"2.0\") is the integer 2; the Node port anchors it as line 2"
+      }
     },
     {
       "name": "review_file/no_allowed_lines_skips_model",

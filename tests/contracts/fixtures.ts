@@ -1,12 +1,17 @@
 /**
  * Loader for the behavioural contract fixtures in `tests/fixtures/`.
  *
- * Each fixture file freezes one module's input/output pairs. A case whose
- * `expected` is `{ error, message }` is an error contract: the call must throw
- * an error of that class name (and, when the message is asserted, with that
- * message). A case carrying `divergence` documents a behaviour this
- * implementation intentionally does not reproduce; the module's contract test
- * handles those explicitly rather than skipping them silently.
+ * Each fixture file is a table of one module's input/output pairs. A case
+ * whose `expected` is `{ error, message }` is an error contract: the call
+ * must throw an error of that class name (and, when the message is asserted,
+ * with that message).
+ *
+ * Every expectation states what *this* program does. The tables began as a
+ * recording of the Python implementation this tool was ported from, and for
+ * a while a case could carry a `divergence` note saying "ours differs, on
+ * purpose" -- a second source of truth that only made sense while the other
+ * implementation was still the reference. It is not, so the notes are gone
+ * and each expectation was settled on its own terms.
  */
 
 import { readFileSync } from "node:fs";
@@ -21,7 +26,6 @@ export interface FixtureCase<I = unknown, E = unknown> {
   name: string;
   input: I;
   expected: E;
-  divergence?: string;
 }
 
 export interface ErrorContract {

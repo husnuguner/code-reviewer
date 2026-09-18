@@ -40,13 +40,14 @@ function sentences(text: string): string[] {
 }
 
 describe("prompts", () => {
-  // The shipped policy + contract say everything the Python prompt said, in
-  // a different order -- policy first, the JSON contract last -- plus the
-  // sentences this implementation added (documented divergence; the fixture
-  // keeps the Python text). Nothing of the reference may go missing.
-  it("keeps every sentence of the reference system prompt, regrouped", () => {
+  // A baseline of instructions the system prompt must still give. The text
+  // is held in the fixture and the shipped prompt is free to reorder it,
+  // reword around it and add to it -- what this refuses is an instruction
+  // quietly disappearing when `prompts/*.md` is edited, which is invisible
+  // in review and only shows up as worse findings.
+  it("still gives every instruction of the baseline prompt, regrouped", () => {
     const reference = prompts.find((c) => c.name === "system_prompt");
-    expect(reference?.divergence).toBeDefined();
+    expect(reference?.expected).toBeDefined();
     const shipped = systemPrompt(
       shippedFile("prompts/system.md"),
       shippedFile("prompts/output-contract.md"),

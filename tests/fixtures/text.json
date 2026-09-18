@@ -1,57 +1,50 @@
 {
-  "module": "pystr",
+  "module": "text",
   "cases": [
     {
-      "name": "split/''",
+      "name": "splitLines/\"\"",
       "input": {
         "s": ""
       },
       "expected": []
     },
     {
-      "name": "splitlines/''",
-      "input": {
-        "s": ""
-      },
-      "expected": []
-    },
-    {
-      "name": "strip/''",
+      "name": "trim/\"\"",
       "input": {
         "s": ""
       },
       "expected": ""
     },
     {
-      "name": "title/''",
+      "name": "collapseWhitespace/\"\"",
       "input": {
         "s": ""
       },
       "expected": ""
     },
     {
-      "name": "lower/''",
+      "name": "toLowerCase/\"\"",
       "input": {
         "s": ""
       },
       "expected": ""
     },
     {
-      "name": "join_split/''",
+      "name": "countCodePoints/\"\"",
+      "input": {
+        "s": ""
+      },
+      "expected": 0
+    },
+    {
+      "name": "capitalised/\"\"",
       "input": {
         "s": ""
       },
       "expected": ""
     },
     {
-      "name": "split/'   '",
-      "input": {
-        "s": "   "
-      },
-      "expected": []
-    },
-    {
-      "name": "splitlines/'   '",
+      "name": "splitLines/\"   \"",
       "input": {
         "s": "   "
       },
@@ -60,45 +53,42 @@
       ]
     },
     {
-      "name": "strip/'   '",
+      "name": "trim/\"   \"",
       "input": {
         "s": "   "
       },
       "expected": ""
     },
     {
-      "name": "title/'   '",
-      "input": {
-        "s": "   "
-      },
-      "expected": "   "
-    },
-    {
-      "name": "lower/'   '",
-      "input": {
-        "s": "   "
-      },
-      "expected": "   "
-    },
-    {
-      "name": "join_split/'   '",
+      "name": "collapseWhitespace/\"   \"",
       "input": {
         "s": "   "
       },
       "expected": ""
     },
     {
-      "name": "split/'a b'",
+      "name": "toLowerCase/\"   \"",
       "input": {
-        "s": "a b"
+        "s": "   "
       },
-      "expected": [
-        "a",
-        "b"
-      ]
+      "expected": "   "
     },
     {
-      "name": "splitlines/'a b'",
+      "name": "countCodePoints/\"   \"",
+      "input": {
+        "s": "   "
+      },
+      "expected": 3
+    },
+    {
+      "name": "capitalised/\"   \"",
+      "input": {
+        "s": "   "
+      },
+      "expected": "   "
+    },
+    {
+      "name": "splitLines/\"a b\"",
       "input": {
         "s": "a b"
       },
@@ -107,45 +97,42 @@
       ]
     },
     {
-      "name": "strip/'a b'",
+      "name": "trim/\"a b\"",
       "input": {
         "s": "a b"
       },
       "expected": "a b"
     },
     {
-      "name": "title/'a b'",
-      "input": {
-        "s": "a b"
-      },
-      "expected": "A B"
-    },
-    {
-      "name": "lower/'a b'",
+      "name": "collapseWhitespace/\"a b\"",
       "input": {
         "s": "a b"
       },
       "expected": "a b"
     },
     {
-      "name": "join_split/'a b'",
+      "name": "toLowerCase/\"a b\"",
       "input": {
         "s": "a b"
       },
       "expected": "a b"
     },
     {
-      "name": "split/'  a   b  '",
+      "name": "countCodePoints/\"a b\"",
       "input": {
-        "s": "  a   b  "
+        "s": "a b"
       },
-      "expected": [
-        "a",
-        "b"
-      ]
+      "expected": 3
     },
     {
-      "name": "splitlines/'  a   b  '",
+      "name": "capitalised/\"a b\"",
+      "input": {
+        "s": "a b"
+      },
+      "expected": "A b"
+    },
+    {
+      "name": "splitLines/\"  a   b  \"",
       "input": {
         "s": "  a   b  "
       },
@@ -154,47 +141,42 @@
       ]
     },
     {
-      "name": "strip/'  a   b  '",
+      "name": "trim/\"  a   b  \"",
       "input": {
         "s": "  a   b  "
       },
       "expected": "a   b"
     },
     {
-      "name": "title/'  a   b  '",
-      "input": {
-        "s": "  a   b  "
-      },
-      "expected": "  A   B  "
-    },
-    {
-      "name": "lower/'  a   b  '",
-      "input": {
-        "s": "  a   b  "
-      },
-      "expected": "  a   b  "
-    },
-    {
-      "name": "join_split/'  a   b  '",
+      "name": "collapseWhitespace/\"  a   b  \"",
       "input": {
         "s": "  a   b  "
       },
       "expected": "a b"
     },
     {
-      "name": "split/'a\\tb\\nc\\r\\nd'",
+      "name": "toLowerCase/\"  a   b  \"",
       "input": {
-        "s": "a\tb\nc\r\nd"
+        "s": "  a   b  "
       },
-      "expected": [
-        "a",
-        "b",
-        "c",
-        "d"
-      ]
+      "expected": "  a   b  "
     },
     {
-      "name": "splitlines/'a\\tb\\nc\\r\\nd'",
+      "name": "countCodePoints/\"  a   b  \"",
+      "input": {
+        "s": "  a   b  "
+      },
+      "expected": 9
+    },
+    {
+      "name": "capitalised/\"  a   b  \"",
+      "input": {
+        "s": "  a   b  "
+      },
+      "expected": "  a   b  "
+    },
+    {
+      "name": "splitLines/\"a\\tb\\nc\\r\\nd\"",
       "input": {
         "s": "a\tb\nc\r\nd"
       },
@@ -205,35 +187,42 @@
       ]
     },
     {
-      "name": "strip/'a\\tb\\nc\\r\\nd'",
+      "name": "trim/\"a\\tb\\nc\\r\\nd\"",
       "input": {
         "s": "a\tb\nc\r\nd"
       },
       "expected": "a\tb\nc\r\nd"
     },
     {
-      "name": "title/'a\\tb\\nc\\r\\nd'",
-      "input": {
-        "s": "a\tb\nc\r\nd"
-      },
-      "expected": "A\tB\nC\r\nD"
-    },
-    {
-      "name": "lower/'a\\tb\\nc\\r\\nd'",
-      "input": {
-        "s": "a\tb\nc\r\nd"
-      },
-      "expected": "a\tb\nc\r\nd"
-    },
-    {
-      "name": "join_split/'a\\tb\\nc\\r\\nd'",
+      "name": "collapseWhitespace/\"a\\tb\\nc\\r\\nd\"",
       "input": {
         "s": "a\tb\nc\r\nd"
       },
       "expected": "a b c d"
     },
     {
-      "name": "split/'line1\\nline2\\n'",
+      "name": "toLowerCase/\"a\\tb\\nc\\r\\nd\"",
+      "input": {
+        "s": "a\tb\nc\r\nd"
+      },
+      "expected": "a\tb\nc\r\nd"
+    },
+    {
+      "name": "countCodePoints/\"a\\tb\\nc\\r\\nd\"",
+      "input": {
+        "s": "a\tb\nc\r\nd"
+      },
+      "expected": 8
+    },
+    {
+      "name": "capitalised/\"a\\tb\\nc\\r\\nd\"",
+      "input": {
+        "s": "a\tb\nc\r\nd"
+      },
+      "expected": "A\tb\nc\r\nd"
+    },
+    {
+      "name": "splitLines/\"line1\\nline2\\n\"",
       "input": {
         "s": "line1\nline2\n"
       },
@@ -243,56 +232,42 @@
       ]
     },
     {
-      "name": "splitlines/'line1\\nline2\\n'",
-      "input": {
-        "s": "line1\nline2\n"
-      },
-      "expected": [
-        "line1",
-        "line2"
-      ]
-    },
-    {
-      "name": "strip/'line1\\nline2\\n'",
+      "name": "trim/\"line1\\nline2\\n\"",
       "input": {
         "s": "line1\nline2\n"
       },
       "expected": "line1\nline2"
     },
     {
-      "name": "title/'line1\\nline2\\n'",
-      "input": {
-        "s": "line1\nline2\n"
-      },
-      "expected": "Line1\nLine2\n"
-    },
-    {
-      "name": "lower/'line1\\nline2\\n'",
-      "input": {
-        "s": "line1\nline2\n"
-      },
-      "expected": "line1\nline2\n"
-    },
-    {
-      "name": "join_split/'line1\\nline2\\n'",
+      "name": "collapseWhitespace/\"line1\\nline2\\n\"",
       "input": {
         "s": "line1\nline2\n"
       },
       "expected": "line1 line2"
     },
     {
-      "name": "split/'line1\\r\\nline2\\rline3\\n\\n'",
+      "name": "toLowerCase/\"line1\\nline2\\n\"",
       "input": {
-        "s": "line1\r\nline2\rline3\n\n"
+        "s": "line1\nline2\n"
       },
-      "expected": [
-        "line1",
-        "line2",
-        "line3"
-      ]
+      "expected": "line1\nline2\n"
     },
     {
-      "name": "splitlines/'line1\\r\\nline2\\rline3\\n\\n'",
+      "name": "countCodePoints/\"line1\\nline2\\n\"",
+      "input": {
+        "s": "line1\nline2\n"
+      },
+      "expected": 12
+    },
+    {
+      "name": "capitalised/\"line1\\nline2\\n\"",
+      "input": {
+        "s": "line1\nline2\n"
+      },
+      "expected": "Line1\nline2\n"
+    },
+    {
+      "name": "splitLines/\"line1\\r\\nline2\\rline3\\n\\n\"",
       "input": {
         "s": "line1\r\nline2\rline3\n\n"
       },
@@ -304,35 +279,42 @@
       ]
     },
     {
-      "name": "strip/'line1\\r\\nline2\\rline3\\n\\n'",
+      "name": "trim/\"line1\\r\\nline2\\rline3\\n\\n\"",
       "input": {
         "s": "line1\r\nline2\rline3\n\n"
       },
       "expected": "line1\r\nline2\rline3"
     },
     {
-      "name": "title/'line1\\r\\nline2\\rline3\\n\\n'",
-      "input": {
-        "s": "line1\r\nline2\rline3\n\n"
-      },
-      "expected": "Line1\r\nLine2\rLine3\n\n"
-    },
-    {
-      "name": "lower/'line1\\r\\nline2\\rline3\\n\\n'",
-      "input": {
-        "s": "line1\r\nline2\rline3\n\n"
-      },
-      "expected": "line1\r\nline2\rline3\n\n"
-    },
-    {
-      "name": "join_split/'line1\\r\\nline2\\rline3\\n\\n'",
+      "name": "collapseWhitespace/\"line1\\r\\nline2\\rline3\\n\\n\"",
       "input": {
         "s": "line1\r\nline2\rline3\n\n"
       },
       "expected": "line1 line2 line3"
     },
     {
-      "name": "split/'x\\u2028y\\u2029z\\x85w\\x0bv\\x0cu\\x1ct\\x1ds\\x1er'",
+      "name": "toLowerCase/\"line1\\r\\nline2\\rline3\\n\\n\"",
+      "input": {
+        "s": "line1\r\nline2\rline3\n\n"
+      },
+      "expected": "line1\r\nline2\rline3\n\n"
+    },
+    {
+      "name": "countCodePoints/\"line1\\r\\nline2\\rline3\\n\\n\"",
+      "input": {
+        "s": "line1\r\nline2\rline3\n\n"
+      },
+      "expected": 20
+    },
+    {
+      "name": "capitalised/\"line1\\r\\nline2\\rline3\\n\\n\"",
+      "input": {
+        "s": "line1\r\nline2\rline3\n\n"
+      },
+      "expected": "Line1\r\nline2\rline3\n\n"
+    },
+    {
+      "name": "splitLines/\"x y zw\\u000bv\\fu\\u001ct\\u001ds\\u001er\"",
       "input": {
         "s": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
       },
@@ -349,62 +331,42 @@
       ]
     },
     {
-      "name": "splitlines/'x\\u2028y\\u2029z\\x85w\\x0bv\\x0cu\\x1ct\\x1ds\\x1er'",
-      "input": {
-        "s": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
-      },
-      "expected": [
-        "x",
-        "y",
-        "z",
-        "w",
-        "v",
-        "u",
-        "t",
-        "s",
-        "r"
-      ]
-    },
-    {
-      "name": "strip/'x\\u2028y\\u2029z\\x85w\\x0bv\\x0cu\\x1ct\\x1ds\\x1er'",
+      "name": "trim/\"x y zw\\u000bv\\fu\\u001ct\\u001ds\\u001er\"",
       "input": {
         "s": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
       },
       "expected": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
     },
     {
-      "name": "title/'x\\u2028y\\u2029z\\x85w\\x0bv\\x0cu\\x1ct\\x1ds\\x1er'",
+      "name": "collapseWhitespace/\"x y zw\\u000bv\\fu\\u001ct\\u001ds\\u001er\"",
       "input": {
         "s": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
       },
-      "expected": "X Y ZW\u000bV\fU\u001cT\u001dS\u001eR"
+      "expected": "x y zw v u\u001ct\u001ds\u001er"
     },
     {
-      "name": "lower/'x\\u2028y\\u2029z\\x85w\\x0bv\\x0cu\\x1ct\\x1ds\\x1er'",
+      "name": "toLowerCase/\"x y zw\\u000bv\\fu\\u001ct\\u001ds\\u001er\"",
       "input": {
         "s": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
       },
       "expected": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
     },
     {
-      "name": "join_split/'x\\u2028y\\u2029z\\x85w\\x0bv\\x0cu\\x1ct\\x1ds\\x1er'",
+      "name": "countCodePoints/\"x y zw\\u000bv\\fu\\u001ct\\u001ds\\u001er\"",
       "input": {
         "s": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
       },
-      "expected": "x y z w v u t s r"
+      "expected": 17
     },
     {
-      "name": "split/'\\xa0nbsp\\xa0 padded\\u3000'",
+      "name": "capitalised/\"x y zw\\u000bv\\fu\\u001ct\\u001ds\\u001er\"",
       "input": {
-        "s": " nbsp  padded　"
+        "s": "x y zw\u000bv\fu\u001ct\u001ds\u001er"
       },
-      "expected": [
-        "nbsp",
-        "padded"
-      ]
+      "expected": "X y zw\u000bv\fu\u001ct\u001ds\u001er"
     },
     {
-      "name": "splitlines/'\\xa0nbsp\\xa0 padded\\u3000'",
+      "name": "splitLines/\" nbsp  padded　\"",
       "input": {
         "s": " nbsp  padded　"
       },
@@ -413,35 +375,42 @@
       ]
     },
     {
-      "name": "strip/'\\xa0nbsp\\xa0 padded\\u3000'",
+      "name": "trim/\" nbsp  padded　\"",
       "input": {
         "s": " nbsp  padded　"
       },
       "expected": "nbsp  padded"
     },
     {
-      "name": "title/'\\xa0nbsp\\xa0 padded\\u3000'",
-      "input": {
-        "s": " nbsp  padded　"
-      },
-      "expected": " Nbsp  Padded　"
-    },
-    {
-      "name": "lower/'\\xa0nbsp\\xa0 padded\\u3000'",
-      "input": {
-        "s": " nbsp  padded　"
-      },
-      "expected": " nbsp  padded　"
-    },
-    {
-      "name": "join_split/'\\xa0nbsp\\xa0 padded\\u3000'",
+      "name": "collapseWhitespace/\" nbsp  padded　\"",
       "input": {
         "s": " nbsp  padded　"
       },
       "expected": "nbsp padded"
     },
     {
-      "name": "split/'\\ufeffbom'",
+      "name": "toLowerCase/\" nbsp  padded　\"",
+      "input": {
+        "s": " nbsp  padded　"
+      },
+      "expected": " nbsp  padded　"
+    },
+    {
+      "name": "countCodePoints/\" nbsp  padded　\"",
+      "input": {
+        "s": " nbsp  padded　"
+      },
+      "expected": 14
+    },
+    {
+      "name": "capitalised/\" nbsp  padded　\"",
+      "input": {
+        "s": " nbsp  padded　"
+      },
+      "expected": " nbsp  padded　"
+    },
+    {
+      "name": "splitLines/\"﻿bom\"",
       "input": {
         "s": "﻿bom"
       },
@@ -450,54 +419,42 @@
       ]
     },
     {
-      "name": "splitlines/'\\ufeffbom'",
+      "name": "trim/\"﻿bom\"",
       "input": {
         "s": "﻿bom"
       },
-      "expected": [
-        "﻿bom"
-      ]
+      "expected": "bom"
     },
     {
-      "name": "strip/'\\ufeffbom'",
+      "name": "collapseWhitespace/\"﻿bom\"",
       "input": {
         "s": "﻿bom"
       },
-      "expected": "﻿bom"
+      "expected": "bom"
     },
     {
-      "name": "title/'\\ufeffbom'",
-      "input": {
-        "s": "﻿bom"
-      },
-      "expected": "﻿Bom"
-    },
-    {
-      "name": "lower/'\\ufeffbom'",
+      "name": "toLowerCase/\"﻿bom\"",
       "input": {
         "s": "﻿bom"
       },
       "expected": "﻿bom"
     },
     {
-      "name": "join_split/'\\ufeffbom'",
+      "name": "countCodePoints/\"﻿bom\"",
+      "input": {
+        "s": "﻿bom"
+      },
+      "expected": 4
+    },
+    {
+      "name": "capitalised/\"﻿bom\"",
       "input": {
         "s": "﻿bom"
       },
       "expected": "﻿bom"
     },
     {
-      "name": "split/'hello world'",
-      "input": {
-        "s": "hello world"
-      },
-      "expected": [
-        "hello",
-        "world"
-      ]
-    },
-    {
-      "name": "splitlines/'hello world'",
+      "name": "splitLines/\"hello world\"",
       "input": {
         "s": "hello world"
       },
@@ -506,45 +463,42 @@
       ]
     },
     {
-      "name": "strip/'hello world'",
+      "name": "trim/\"hello world\"",
       "input": {
         "s": "hello world"
       },
       "expected": "hello world"
     },
     {
-      "name": "title/'hello world'",
-      "input": {
-        "s": "hello world"
-      },
-      "expected": "Hello World"
-    },
-    {
-      "name": "lower/'hello world'",
+      "name": "collapseWhitespace/\"hello world\"",
       "input": {
         "s": "hello world"
       },
       "expected": "hello world"
     },
     {
-      "name": "join_split/'hello world'",
+      "name": "toLowerCase/\"hello world\"",
       "input": {
         "s": "hello world"
       },
       "expected": "hello world"
     },
     {
-      "name": "split/'hello-world foo_bar'",
+      "name": "countCodePoints/\"hello world\"",
       "input": {
-        "s": "hello-world foo_bar"
+        "s": "hello world"
       },
-      "expected": [
-        "hello-world",
-        "foo_bar"
-      ]
+      "expected": 11
     },
     {
-      "name": "splitlines/'hello-world foo_bar'",
+      "name": "capitalised/\"hello world\"",
+      "input": {
+        "s": "hello world"
+      },
+      "expected": "Hello world"
+    },
+    {
+      "name": "splitLines/\"hello-world foo_bar\"",
       "input": {
         "s": "hello-world foo_bar"
       },
@@ -553,47 +507,42 @@
       ]
     },
     {
-      "name": "strip/'hello-world foo_bar'",
+      "name": "trim/\"hello-world foo_bar\"",
       "input": {
         "s": "hello-world foo_bar"
       },
       "expected": "hello-world foo_bar"
     },
     {
-      "name": "title/'hello-world foo_bar'",
-      "input": {
-        "s": "hello-world foo_bar"
-      },
-      "expected": "Hello-World Foo_Bar"
-    },
-    {
-      "name": "lower/'hello-world foo_bar'",
+      "name": "collapseWhitespace/\"hello-world foo_bar\"",
       "input": {
         "s": "hello-world foo_bar"
       },
       "expected": "hello-world foo_bar"
     },
     {
-      "name": "join_split/'hello-world foo_bar'",
+      "name": "toLowerCase/\"hello-world foo_bar\"",
       "input": {
         "s": "hello-world foo_bar"
       },
       "expected": "hello-world foo_bar"
     },
     {
-      "name": "split/\"they're 2nd 3rd O'neil\"",
+      "name": "countCodePoints/\"hello-world foo_bar\"",
       "input": {
-        "s": "they're 2nd 3rd O'neil"
+        "s": "hello-world foo_bar"
       },
-      "expected": [
-        "they're",
-        "2nd",
-        "3rd",
-        "O'neil"
-      ]
+      "expected": 19
     },
     {
-      "name": "splitlines/\"they're 2nd 3rd O'neil\"",
+      "name": "capitalised/\"hello-world foo_bar\"",
+      "input": {
+        "s": "hello-world foo_bar"
+      },
+      "expected": "Hello-world foo_bar"
+    },
+    {
+      "name": "splitLines/\"they're 2nd 3rd O'neil\"",
       "input": {
         "s": "they're 2nd 3rd O'neil"
       },
@@ -602,46 +551,42 @@
       ]
     },
     {
-      "name": "strip/\"they're 2nd 3rd O'neil\"",
+      "name": "trim/\"they're 2nd 3rd O'neil\"",
       "input": {
         "s": "they're 2nd 3rd O'neil"
       },
       "expected": "they're 2nd 3rd O'neil"
     },
     {
-      "name": "title/\"they're 2nd 3rd O'neil\"",
+      "name": "collapseWhitespace/\"they're 2nd 3rd O'neil\"",
       "input": {
         "s": "they're 2nd 3rd O'neil"
       },
-      "expected": "They'Re 2Nd 3Rd O'Neil"
+      "expected": "they're 2nd 3rd O'neil"
     },
     {
-      "name": "lower/\"they're 2nd 3rd O'neil\"",
+      "name": "toLowerCase/\"they're 2nd 3rd O'neil\"",
       "input": {
         "s": "they're 2nd 3rd O'neil"
       },
       "expected": "they're 2nd 3rd o'neil"
     },
     {
-      "name": "join_split/\"they're 2nd 3rd O'neil\"",
+      "name": "countCodePoints/\"they're 2nd 3rd O'neil\"",
       "input": {
         "s": "they're 2nd 3rd O'neil"
       },
-      "expected": "they're 2nd 3rd O'neil"
+      "expected": 22
     },
     {
-      "name": "split/'ÜNÎCÖDE şehir İstanbul'",
+      "name": "capitalised/\"they're 2nd 3rd O'neil\"",
       "input": {
-        "s": "ÜNÎCÖDE şehir İstanbul"
+        "s": "they're 2nd 3rd O'neil"
       },
-      "expected": [
-        "ÜNÎCÖDE",
-        "şehir",
-        "İstanbul"
-      ]
+      "expected": "They're 2nd 3rd O'neil"
     },
     {
-      "name": "splitlines/'ÜNÎCÖDE şehir İstanbul'",
+      "name": "splitLines/\"ÜNÎCÖDE şehir İstanbul\"",
       "input": {
         "s": "ÜNÎCÖDE şehir İstanbul"
       },
@@ -650,46 +595,42 @@
       ]
     },
     {
-      "name": "strip/'ÜNÎCÖDE şehir İstanbul'",
+      "name": "trim/\"ÜNÎCÖDE şehir İstanbul\"",
       "input": {
         "s": "ÜNÎCÖDE şehir İstanbul"
       },
       "expected": "ÜNÎCÖDE şehir İstanbul"
     },
     {
-      "name": "title/'ÜNÎCÖDE şehir İstanbul'",
+      "name": "collapseWhitespace/\"ÜNÎCÖDE şehir İstanbul\"",
       "input": {
         "s": "ÜNÎCÖDE şehir İstanbul"
       },
-      "expected": "Ünîcöde Şehir İstanbul"
+      "expected": "ÜNÎCÖDE şehir İstanbul"
     },
     {
-      "name": "lower/'ÜNÎCÖDE şehir İstanbul'",
+      "name": "toLowerCase/\"ÜNÎCÖDE şehir İstanbul\"",
       "input": {
         "s": "ÜNÎCÖDE şehir İstanbul"
       },
       "expected": "ünîcöde şehir i̇stanbul"
     },
     {
-      "name": "join_split/'ÜNÎCÖDE şehir İstanbul'",
+      "name": "countCodePoints/\"ÜNÎCÖDE şehir İstanbul\"",
+      "input": {
+        "s": "ÜNÎCÖDE şehir İstanbul"
+      },
+      "expected": 22
+    },
+    {
+      "name": "capitalised/\"ÜNÎCÖDE şehir İstanbul\"",
       "input": {
         "s": "ÜNÎCÖDE şehir İstanbul"
       },
       "expected": "ÜNÎCÖDE şehir İstanbul"
     },
     {
-      "name": "split/'already Title Case'",
-      "input": {
-        "s": "already Title Case"
-      },
-      "expected": [
-        "already",
-        "Title",
-        "Case"
-      ]
-    },
-    {
-      "name": "splitlines/'already Title Case'",
+      "name": "splitLines/\"already Title Case\"",
       "input": {
         "s": "already Title Case"
       },
@@ -698,45 +639,42 @@
       ]
     },
     {
-      "name": "strip/'already Title Case'",
+      "name": "trim/\"already Title Case\"",
       "input": {
         "s": "already Title Case"
       },
       "expected": "already Title Case"
     },
     {
-      "name": "title/'already Title Case'",
+      "name": "collapseWhitespace/\"already Title Case\"",
       "input": {
         "s": "already Title Case"
       },
-      "expected": "Already Title Case"
+      "expected": "already Title Case"
     },
     {
-      "name": "lower/'already Title Case'",
+      "name": "toLowerCase/\"already Title Case\"",
       "input": {
         "s": "already Title Case"
       },
       "expected": "already title case"
     },
     {
-      "name": "join_split/'already Title Case'",
+      "name": "countCodePoints/\"already Title Case\"",
       "input": {
         "s": "already Title Case"
       },
-      "expected": "already Title Case"
+      "expected": 18
     },
     {
-      "name": "split/'a\\x1fb'",
+      "name": "capitalised/\"already Title Case\"",
       "input": {
-        "s": "a\u001fb"
+        "s": "already Title Case"
       },
-      "expected": [
-        "a",
-        "b"
-      ]
+      "expected": "Already Title Case"
     },
     {
-      "name": "splitlines/'a\\x1fb'",
+      "name": "splitLines/\"a\\u001fb\"",
       "input": {
         "s": "a\u001fb"
       },
@@ -745,32 +683,39 @@
       ]
     },
     {
-      "name": "strip/'a\\x1fb'",
+      "name": "trim/\"a\\u001fb\"",
       "input": {
         "s": "a\u001fb"
       },
       "expected": "a\u001fb"
     },
     {
-      "name": "title/'a\\x1fb'",
-      "input": {
-        "s": "a\u001fb"
-      },
-      "expected": "A\u001fB"
-    },
-    {
-      "name": "lower/'a\\x1fb'",
+      "name": "collapseWhitespace/\"a\\u001fb\"",
       "input": {
         "s": "a\u001fb"
       },
       "expected": "a\u001fb"
     },
     {
-      "name": "join_split/'a\\x1fb'",
+      "name": "toLowerCase/\"a\\u001fb\"",
       "input": {
         "s": "a\u001fb"
       },
-      "expected": "a b"
+      "expected": "a\u001fb"
+    },
+    {
+      "name": "countCodePoints/\"a\\u001fb\"",
+      "input": {
+        "s": "a\u001fb"
+      },
+      "expected": 3
+    },
+    {
+      "name": "capitalised/\"a\\u001fb\"",
+      "input": {
+        "s": "a\u001fb"
+      },
+      "expected": "A\u001fb"
     }
   ]
 }
