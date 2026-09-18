@@ -166,7 +166,7 @@ Colour is decided against **stderr**, not stdout: piping the report into another
 
 ## GitHub Action
 
-Reviewing a pull request means checking it out and reviewing the branch — no API, no token. The shipped action does that, and a **second job** does the talking.
+Reviewing a pull request means checking it out and reviewing the branch — no API, no token. `actions/review` does that, and a **second job**, running `actions/comment`, does the talking. The two halves sit side by side under [`actions/`](actions), and each is used by its own path.
 
 Put this in the repository you want reviewed, as `.github/workflows/pr-review.yml`:
 
@@ -188,7 +188,7 @@ jobs:
         with:
           fetch-depth: 0 # the reviewer diffs locally and needs the merge-base
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: husnuguner/code-reviewer@v0.0.2
+      - uses: husnuguner/code-reviewer/actions/review@v0.0.3
         with:
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           language: tr
@@ -208,38 +208,16 @@ jobs:
         id: findings
         with: { name: code-review-findings }
         continue-on-error: true
-      # There is no poster action: `reviewer comment` is a command of the one
-      # executable, so this job checks it out and runs it. Everything below is
-      # skipped -- not green -- when the review produced nothing to post.
-      - uses: actions/checkout@v5
-        if: ${{ steps.findings.outcome == 'success' }}
+      - uses: husnuguner/code-reviewer/actions/comment@v0.0.3 # the same version the review job used
+        if: ${{ steps.findings.outcome == 'success' }} # skipped, not green, when there is nothing to post
         with:
-          repository: husnuguner/code-reviewer
-          ref: v0.0.2 # the same version the review job used
-          path: .reviewer
-      - uses: oven-sh/setup-bun@v2
-        if: ${{ steps.findings.outcome == 'success' }}
-        with:
-          bun-version-file: .reviewer/.bun-version
-      - if: ${{ steps.findings.outcome == 'success' }}
-        working-directory: .reviewer
-        run: bun install --frozen-lockfile --production --ignore-scripts
-      - name: Post the review
-        if: ${{ steps.findings.outcome == 'success' }}
-        env:
-          # The token reaches the process as an environment variable, never as
-          # an argument, where a process list would show it.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: >-
-          bun --no-env-file .reviewer/src/cli/main.ts comment
-          --findings code-review.ndjson
-          --repo ${{ github.repository }}
-          --pr ${{ github.event.pull_request.number }}
-          --request-changes-on bug,security
-          --supersede
+          token: ${{ secrets.GITHUB_TOKEN }}
+          findings: code-review.ndjson
+          request-changes-on: bug,security # a real review: red badge, merge block where protection asks
+          supersede: true # one current verdict per PR; a clean run lifts the block
 ```
 
-`--request-changes-on bug,security` is what makes it a real review (red badge, merge block where branch protection asks); `--supersede` keeps one current verdict per pull request, so a clean run lifts a block an earlier one raised.
+`request-changes-on: bug,security` is what makes it a real review (red badge, merge block where branch protection asks); `supersede: true` keeps one current verdict per pull request, so a clean run lifts a block an earlier one raised. Both are the `comment` command's own flags under another name; [the poster's flag table](#reviewer-comment--the-poster) is the same list, and [`actions/comment/action.yml`](actions/comment/action.yml) adds only `token` (the credential) and `bun-version` (the toolchain).
 
 What the `review` job produces, without posting anything:
 
@@ -277,7 +255,7 @@ Splitting it removes the question: the job that runs the model has `contents: re
 
 The split is between _runs_, not executables: `reviewer review` and `reviewer comment` are two commands of one program, and no run ever holds both credentials. The review never reads a hosting token; `comment` never builds a model. Each has its own composition root, and the workflow gives each its own job and permissions.
 
-Only the review half is packaged as an action. Posting is the `comment` command, wired by the workflow above — one job, one token, one command — because an action wrapper around it bought nothing but a second inputs table to keep in step with the flags it forwarded.
+Each half is packaged as an action, so a workflow states what it wants rather than how to install a runtime: [`actions/review`](actions/review/action.yml) reviews, [`actions/comment`](actions/comment/action.yml) posts — one directory, one level, one naming rule, and both reach the reviewer's checkout the same way (`${{ github.action_path }}/../..`). The poster's inputs are the `comment` command's flags under another name — one interface written twice, which is exactly how documentation goes stale, so a test ([`tests/cli/commands/comment/action.test.ts`](tests/cli/commands/comment/action.test.ts)) fails when a flag is added to one and not the other, when an input is declared but never forwarded, or when a default in the wrapper stops matching the command's. A workflow that would rather not have the wrapper can check this repository out and run `bun src/cli/main.ts comment` itself; the action does nothing else.
 
 ### `reviewer comment` — the poster
 
@@ -509,9 +487,9 @@ There is deliberately **no extension allowlist**. What is worth skipping for val
 Releases follow GitHub's action convention: an **immutable** `vX.Y.Z` tag per release, and a **moving** major tag (`v0`) that always points at the latest `v0.*`. A workflow that says `@v0` gets fixes without editing; one that wants no surprises pins the full version or the commit SHA, as it would for `actions/checkout`.
 
 ```yaml
-- uses: husnuguner/code-reviewer@v0.0.2 # this exact release; recommended while 0.x
-- uses: husnuguner/code-reviewer@v0 # latest 0.x
-- uses: husnuguner/code-reviewer@<full-sha> # what a hardened workflow pins
+- uses: husnuguner/code-reviewer/actions/review@v0.0.3 # this exact release; recommended while 0.x
+- uses: husnuguner/code-reviewer/actions/review@v0 # latest 0.x
+- uses: husnuguner/code-reviewer/actions/review@<full-sha> # what a hardened workflow pins
 ```
 
 The version line starts at `v0.0.1`, and the leading zero is the whole statement: **while the major is 0, any release may change the action's inputs or the NDJSON contract.** That is why pinning the exact version is the recommendation here and `@v0` is the convenience, which is the reverse of the advice a 1.x action would give. `1.0.0` is the release that turns those two into promises — and from then on a breaking change is a new major, never a moved `v1`.

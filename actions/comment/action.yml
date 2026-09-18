@@ -1,0 +1,127 @@
+name: "code-reviewer: post comments"
+description: >-
+  Post a review run's findings to a pull request, reading the NDJSON that the
+  review action produced. Runs no language model; this is the half of the
+  split that holds a repository token.
+author: "Hüsnü Güner"
+
+branding:
+  icon: "message-square"
+  color: "purple"
+
+inputs:
+  findings:
+    description: "The NDJSON record stream to post."
+    required: false
+    default: "code-review.ndjson"
+  provider:
+    description: >-
+      The hosting system to post to. `github` today; a second provider is a
+      registered adapter and one more accepted value here.
+    required: false
+    default: "github"
+  repo:
+    description: >-
+      The repository the change request belongs to, as the provider names it
+      (GitHub: owner/name).
+    required: false
+    default: ${{ github.repository }}
+  pr:
+    description: "The pull request number."
+    required: false
+    default: ${{ github.event.pull_request.number }}
+  token:
+    description: >-
+      A token that may post a review. The provider says which variable it
+      expects (GitHub: GITHUB_TOKEN); this input is exported under that name.
+      This is the only thing here that can write.
+    required: true
+  max-inline:
+    description: >-
+      Cap on inline comments; the rest are listed in the review body.
+    required: false
+    default: "50"
+  request-changes-on:
+    description: >-
+      Severities that make the review a request for changes (comma-separated,
+      or none). A REQUEST_CHANGES review shows as a red badge under Reviewers
+      and blocks the merge where branch protection asks for it; a COMMENT
+      review only informs. The bot never approves. Default none.
+    required: false
+    default: "none"
+  supersede:
+    description: >-
+      Dismiss this identity's earlier pending reviews on the pull request
+      before posting, so it shows one current verdict rather than a history of
+      them -- and a clean run lifts a block an earlier run raised. Only
+      CHANGES_REQUESTED and APPROVED reviews can be dismissed; comments stay.
+    required: false
+    default: "false"
+  base-url:
+    description: >-
+      API root, for a self-hosted instance (default: the provider's public
+      endpoint).
+    required: false
+    default: ""
+  dry-run:
+    description: "Print the review instead of posting it. Needs no token."
+    required: false
+    default: "false"
+  bun-version:
+    description: >-
+      Bun the poster runs on. Empty takes the version this release was tested
+      with (the repository's .bun-version).
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version: ${{ inputs.bun-version }}
+        bun-version-file: >-
+          ${{ format('{0}/../../.bun-version', github.action_path) }}
+
+    - name: Install the poster
+      shell: bash
+      working-directory: ${{ github.action_path }}/../..
+      run: |
+        set -euo pipefail
+        bun install --frozen-lockfile --production --ignore-scripts
+
+    - name: Post the review
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        PROVIDER: ${{ inputs.provider }}
+        FINDINGS: ${{ inputs.findings }}
+        REPO: ${{ inputs.repo }}
+        PR: ${{ inputs.pr }}
+        MAX_INLINE: ${{ inputs.max-inline }}
+        REQUEST_CHANGES_ON: ${{ inputs.request-changes-on }}
+        SUPERSEDE: ${{ inputs.supersede }}
+        BASE_URL: ${{ inputs.base-url }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        POSTER: ${{ github.action_path }}/../../src/cli/main.ts
+      run: |
+        set -euo pipefail
+        if [ ! -f "${FINDINGS}" ]; then
+          echo "::notice::No ${FINDINGS}; the review produced nothing to post."
+          exit 0
+        fi
+        args=(
+          --findings "${FINDINGS}"
+          --provider "${PROVIDER}"
+          --repo "${REPO}"
+          --pr "${PR}"
+          --max-inline "${MAX_INLINE}"
+        )
+        if [ -n "${REQUEST_CHANGES_ON}" ]; then
+          args+=(--request-changes-on "${REQUEST_CHANGES_ON}")
+        fi
+        [ "${SUPERSEDE}" = "true" ] && args+=(--supersede)
+        [ -n "${BASE_URL}" ] && args+=(--base-url "${BASE_URL}")
+        [ "${DRY_RUN}" = "true" ] && args+=(--dry-run)
+        bun --no-env-file "${POSTER}" comment "${args[@]}"

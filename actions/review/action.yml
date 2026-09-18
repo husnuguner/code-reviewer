@@ -31,15 +31,19 @@ inputs:
     required: false
     default: ""
   model:
-    description: "Model name the provider expects. Empty uses the provider's default."
+    description: >-
+      Model name the provider expects. Empty uses the provider's default.
     required: false
     default: ""
   base-url:
-    description: "OpenAI-compatible endpoint, for provider: local (or a Claude proxy)."
+    description: >-
+      OpenAI-compatible endpoint, for provider: local (or a Claude proxy).
     required: false
     default: ""
   language:
-    description: "Language of the findings' text, e.g. tr or en. Empty takes the checkout's config."
+    description: >-
+      Language of the findings' text, e.g. tr or en. Empty takes the
+      checkout's config.
     required: false
     default: ""
   skills-path:
@@ -67,7 +71,9 @@ inputs:
     required: false
     default: ""
   max-findings-per-file:
-    description: "Max findings reported per file; the most severe survive. 0 = no cap. Empty takes the checkout's config."
+    description: >-
+      Max findings reported per file; the most severe survive. 0 = no cap.
+      Empty takes the checkout's config.
     required: false
     default: ""
   fail-on:
@@ -90,7 +96,8 @@ inputs:
     required: false
     default: "false"
   out:
-    description: "Where the NDJSON record stream is written, for a CI bot to read."
+    description: >-
+      Where the NDJSON record stream is written, for a CI bot to read.
     required: false
     default: "code-review.ndjson"
   upload-artifact:
@@ -122,7 +129,8 @@ inputs:
 
 outputs:
   findings-file:
-    description: "Path to the NDJSON record stream (findings, then one summary record)."
+    description: >-
+      Path to the NDJSON record stream (findings, then one summary record).
     value: ${{ steps.review.outputs.findings-file }}
   findings:
     description: "How many findings were reported."
@@ -131,12 +139,6 @@ outputs:
 runs:
   using: composite
   steps:
-    # The reviewer reads local git, so the base ref has to exist locally. With
-    # `actions/checkout` at `fetch-depth: 0` it already does -- and that is the
-    # only arrangement this step relies on. A fetch is attempted as a courtesy
-    # when the ref is missing, but a checkout with `persist-credentials: false`
-    # (the right default for a job that never pushes) has no credential to
-    # fetch with, so the diagnosis names the fix rather than the symptom.
     - name: Resolve the base ref
       id: base
       shell: bash
@@ -145,42 +147,39 @@ runs:
       run: |
         set -euo pipefail
         if [ -z "${BASE_REF}" ]; then
-          echo "::error::No base ref: pass base-ref, or run this on a pull_request event."
+          echo "::error::No base ref: pass base-ref, or run this on a" \
+            "pull_request event."
           exit 1
         fi
-        # A branch name is attacker-influenceable, and this one reaches a
-        # shell and a step output. Only ordinary ref characters get through,
-        # so neither a newline nor a flag-looking value can be smuggled in.
-        if ! printf '%s' "${BASE_REF}" | grep -qE '^[A-Za-z0-9][A-Za-z0-9._/-]*$'; then
+        if [[ ! "${BASE_REF}" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]]; then
           echo "::error::Refusing a base ref that is not a plain git ref name."
           exit 1
         fi
-        if ! git -C "${GITHUB_WORKSPACE}" rev-parse --verify --quiet "refs/remotes/origin/${BASE_REF}" >/dev/null; then
+        remote="refs/remotes/origin/${BASE_REF}"
+        if ! git -C "${GITHUB_WORKSPACE}" rev-parse --verify --quiet \
+          "${remote}" >/dev/null; then
           echo "origin/${BASE_REF} is not in the checkout; fetching it."
-          if ! git -C "${GITHUB_WORKSPACE}" fetch --no-tags origin "+${BASE_REF}:refs/remotes/origin/${BASE_REF}"; then
-            echo "::error::Could not resolve origin/${BASE_REF}. Check out with 'fetch-depth: 0' so the base branch is present, or leave 'persist-credentials' on so it can be fetched."
+          if ! git -C "${GITHUB_WORKSPACE}" fetch --no-tags origin \
+            "+${BASE_REF}:${remote}"; then
+            echo "::error::Could not resolve origin/${BASE_REF}." \
+              "Check out with 'fetch-depth: 0' so the base branch is" \
+              "present, or leave 'persist-credentials' on so it can be" \
+              "fetched."
             exit 1
           fi
         fi
-        # A step output, never GITHUB_ENV: an environment variable written
-        # from untrusted text is an injection surface for the whole job.
         echo "ref=${BASE_REF}" >> "${GITHUB_OUTPUT}"
 
-    # setup-bun takes a non-empty `bun-version` first and the file otherwise.
     - name: Set up Bun
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       with:
         bun-version: ${{ inputs.bun-version }}
-        bun-version-file: ${{ format('{0}/.bun-version', github.action_path) }}
+        bun-version-file: >-
+          ${{ format('{0}/../../.bun-version', github.action_path) }}
 
-    # The action's own directory is the reviewer's checkout, not the reviewed
-    # repository; its dependencies are installed there so the two never share
-    # a node_modules. Bun runs the TypeScript as it is: there is no build.
-    # Runtime dependencies only, from the lockfile, with no lifecycle scripts
-    # -- a job that holds an API key runs no third party's install hook.
     - name: Install the reviewer
       shell: bash
-      working-directory: ${{ github.action_path }}
+      working-directory: ${{ github.action_path }}/../..
       run: |
         set -euo pipefail
         bun install --frozen-lockfile --production --ignore-scripts
@@ -191,10 +190,6 @@ runs:
       working-directory: ${{ github.workspace }}
       env:
         LLM_API_KEY: ${{ inputs.api-key }}
-        # Optional inputs arrive under IN_* and are exported below only when
-        # set. An empty environment variable still counts as "supplied" to the
-        # tool and would shadow the checkout's own .review/config.yaml --
-        # silently disabling its skills, say.
         IN_PROVIDER: ${{ inputs.provider }}
         IN_MODEL: ${{ inputs.model }}
         IN_BASE_URL: ${{ inputs.base-url }}
@@ -211,35 +206,26 @@ runs:
         PROJECT: ${{ inputs.project }}
         PREVIEW: ${{ inputs.preview }}
         ANNOTATIONS: ${{ inputs.annotations }}
-        ACTION_PATH: ${{ github.action_path }}
+        REVIEWER: ${{ github.action_path }}/../../src/cli/main.ts
         BASE_REF: ${{ steps.base.outputs.ref }}
       run: |
         set -uo pipefail
-        # Only a set input reaches the tool; the rest is the checkout's to say.
-        [ -n "${IN_PROVIDER}" ]     && export LLM_PROVIDER="${IN_PROVIDER}"
-        [ -n "${IN_MODEL}" ]        && export LLM_MODEL="${IN_MODEL}"
-        [ -n "${IN_BASE_URL}" ]     && export LLM_BASE_URL="${IN_BASE_URL}"
-        [ -n "${IN_LANGUAGE}" ]     && export REVIEW_LANG="${IN_LANGUAGE}"
-        [ -n "${IN_SKILLS_PATH}" ]  && export REVIEW_SKILLS_PATH="${IN_SKILLS_PATH}"
-        [ -n "${IN_EXCLUDE}" ]      && export REVIEW_EXCLUDE_PATHS="${IN_EXCLUDE}"
-        [ -n "${IN_MAX_FINDINGS}" ] && export REVIEW_MAX_FINDINGS_PER_FILE="${IN_MAX_FINDINGS}"
-        [ -n "${IN_VERIFY}" ]       && export REVIEW_VERIFY="${IN_VERIFY}"
-        [ -n "${IN_LOG_LEVEL}" ] && export REVIEWER_LOG_LEVEL="${IN_LOG_LEVEL}"
+        set_if_given() { [ -n "${2}" ] && export "${1}=${2}"; }
+        set_if_given LLM_PROVIDER "${IN_PROVIDER}"
+        set_if_given LLM_MODEL "${IN_MODEL}"
+        set_if_given LLM_BASE_URL "${IN_BASE_URL}"
+        set_if_given REVIEW_LANG "${IN_LANGUAGE}"
+        set_if_given REVIEW_SKILLS_PATH "${IN_SKILLS_PATH}"
+        set_if_given REVIEW_EXCLUDE_PATHS "${IN_EXCLUDE}"
+        set_if_given REVIEW_MAX_FINDINGS_PER_FILE "${IN_MAX_FINDINGS}"
+        set_if_given REVIEW_VERIFY "${IN_VERIFY}"
+        set_if_given REVIEWER_LOG_LEVEL "${IN_LOG_LEVEL}"
         args=(
           --base "origin/${BASE_REF}"
           --branch "${HEAD_REF}"
           --fail-on "${FAIL_ON}"
         )
-        # Log lines as workflow commands, so the runner folds and colours
-        # them: ::debug:: is hidden unless the job was re-run with debug
-        # logging, which is the same threshold the reviewer calls DEBUG.
-        # This is `--log-format auto` on a runner anyway; stating it keeps
-        # the action's behaviour from depending on that inference.
         args+=(--log-format github)
-        # `--out` keeps the machine copy either way, so one model call serves
-        # both the humans and the CI bot. `--format github` adds annotations
-        # on the diff; a workflow whose comment job posts the same findings
-        # turns that off, or each shows twice.
         if [ "${PREVIEW}" = "true" ]; then
           args+=(--preview)
         elif [ "${ANNOTATIONS}" = "false" ]; then
@@ -249,21 +235,16 @@ runs:
           args+=(--format github --out "${OUT_FILE}")
         fi
         [ -n "${PROJECT}" ] && args+=(--project "${PROJECT}")
-        if [ -n "${REVIEWER_CONFIG}" ]; then args+=(--config "${REVIEWER_CONFIG}"); else unset REVIEWER_CONFIG; fi
-
-        # Without annotations, stdout would only repeat the file record for
-        # record; logs are on stderr and still show. With them, stdout is
-        # where the runner reads the ::error/::warning commands from.
-        #
-        # `--no-env-file`: the working directory is the reviewed checkout, and
-        # Bun would otherwise read its `.env` into the environment before the
-        # reviewer runs -- letting the pull request under review set, say,
-        # LLM_BASE_URL. The reviewer reads `.env` files itself, and ranks the
-        # working directory's last.
-        if [ "${quiet:-0}" = "1" ]; then
-          bun --no-env-file "${ACTION_PATH}/src/cli/main.ts" "${args[@]}" >/dev/null
+        if [ -n "${REVIEWER_CONFIG}" ]; then
+          args+=(--config "${REVIEWER_CONFIG}")
         else
-          bun --no-env-file "${ACTION_PATH}/src/cli/main.ts" "${args[@]}"
+          unset REVIEWER_CONFIG
+        fi
+
+        if [ "${quiet:-0}" = "1" ]; then
+          bun --no-env-file "${REVIEWER}" "${args[@]}" >/dev/null
+        else
+          bun --no-env-file "${REVIEWER}" "${args[@]}"
         fi
         status=$?
 
@@ -275,13 +256,14 @@ runs:
         fi
         echo "findings=${count}" >> "${GITHUB_OUTPUT}"
 
-        # Exit 3 is "findings matched --fail-on", which is a verdict, not a
-        # crash; anything else is passed through as the failure it is.
         exit $status
 
     - name: Upload the findings
-      if: ${{ always() && inputs.upload-artifact == 'true' && inputs.preview != 'true' }}
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      if: >-
+        ${{ always() && inputs.upload-artifact == 'true'
+        && inputs.preview != 'true' }}
+      # v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
       with:
         name: code-review-findings
         path: ${{ inputs.out }}
