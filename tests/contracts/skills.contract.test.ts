@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { type Skill } from "../../src/core/domain/skill";
 import { isGlobMatch } from "../../src/core/skills/glob";
@@ -7,13 +7,13 @@ import { SkillRegistry, applyMappings } from "../../src/core/skills/registry";
 import { compareCodePoints } from "../../src/core/util/text";
 import { recordingLogger } from "../helpers/logging";
 
-import { casesUnder, loadFixture } from "./fixtures";
+import { caseNamed, casesUnder, loadFixture } from "./fixtures";
 
 const cases = loadFixture("skills");
 
 describe("glob matching with PurePosixPath.full_match semantics", () => {
   it.each(casesUnder<{ path: string; pattern: string }, boolean>(cases, "glob"))(
-    "%s",
+    "$name",
     ({ input, expected }) => {
       expect(isGlobMatch(input.path, input.pattern)).toBe(expected);
     },
@@ -43,7 +43,7 @@ describe("frontmatter skill parser", () => {
   const parser = new FrontmatterSkillParser();
   const parseCases = casesUnder<{ text: string }, Skill | null>(cases, "parse");
 
-  it.each(parseCases)("%s", ({ input, expected }) => {
+  it.each(parseCases)("$name", ({ input, expected }) => {
     expect(parser.parse(input.text, "repo")).toEqual(expected);
   });
 
@@ -108,7 +108,7 @@ describe("skill registry", () => {
   ]);
 
   it("keeps one skill per name, the last declaration winning", () => {
-    const expected = cases.find((c) => c.name === "registry/names")?.expected;
+    const { expected } = caseNamed<unknown, string[]>(cases, "registry/names");
     expect(registry.skillsFor("x/y.js").map((s) => s.body)).toContain("second");
     // Every skill in this registry matches one of the paths below (`nums`
     // declares the literal globs "1", "2.5" and "True"); the union of matches
@@ -127,7 +127,7 @@ describe("skill registry", () => {
   });
 
   it.each(casesUnder<{ path: string }, string[]>(cases, "skills_for"))(
-    "skills_for %s",
+    "skills_for $name",
     ({ input, expected }) => {
       expect(registry.skillsFor(input.path).map((s) => s.name)).toEqual(expected);
     },
@@ -138,7 +138,7 @@ describe("skill registry", () => {
       cases,
       "render_for",
     ),
-  )("render_for %s", ({ input, expected }) => {
+  )("render_for $name", ({ input, expected }) => {
     expect(registry.renderFor(input.path, input.max_skill_chars, input.max_total_chars)).toBe(
       expected,
     );

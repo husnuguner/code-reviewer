@@ -10,7 +10,7 @@
  * crash on the first line anyone tried to log.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { NULL_LOGGER } from "../../../src/core/ports/logger";
 

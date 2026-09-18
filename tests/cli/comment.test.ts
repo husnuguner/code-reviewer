@@ -2,7 +2,7 @@
  * `review-comment`'s command line: the flags that decide a verdict.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { parseArguments } from "../../src/cli/comment";
 import { UsageError } from "../../src/cli/program";

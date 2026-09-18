@@ -4,11 +4,10 @@
  * matching on top of them is what makes a review use a file's own rules.
  */
 
+import { describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-import { describe, expect, it } from "vitest";
 
 import { SkillRegistry } from "../../../src/core/skills/registry";
 import { sortedByCodePoint } from "../../../src/core/util/text";

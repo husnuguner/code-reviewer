@@ -15,7 +15,7 @@
  * recorded from this build and says what this build does.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import {
   asText,

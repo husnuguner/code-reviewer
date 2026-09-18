@@ -3,7 +3,7 @@
  * what order a listing comes back in, and what a wrong name is told.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { ValueError } from "../../../src/core/util/errors";
 import { DescribedRegistry, Registry } from "../../../src/core/util/registry";

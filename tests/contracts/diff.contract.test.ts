@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { splitPatches } from "../../src/core/diff/patch-set";
 import { addedLines, annotatePatch, newSideIndex } from "../../src/core/diff/patch-view";

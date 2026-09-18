@@ -1,5 +1,6 @@
+import { describe, expect, it } from "bun:test";
+
 import pLimit from "p-limit";
-import { describe, expect, it } from "vitest";
 
 import { ChangedFile } from "../../src/core/domain/changed-file";
 import { type Finding, finding } from "../../src/core/domain/finding";
@@ -13,7 +14,7 @@ import {
 import { type SelectedFile, decideFile, isSelected } from "../../src/core/review/selection";
 import { recordingLogger } from "../helpers/logging";
 
-import { loadFixture } from "./fixtures";
+import { caseNamed, loadFixture } from "./fixtures";
 
 const helpers = loadFixture("changed_file_helpers");
 
@@ -70,14 +71,17 @@ describe("anchor tallies", () => {
       finding({ line: 1, severity: "weird", body: "w", anchor: "conflict" }),
     ];
     expect(Object.fromEntries(countAnchors(findings))).toEqual(
-      helpers.find((c) => c.name === "count_anchors")?.expected,
+      caseNamed<unknown, Record<string, number>>(helpers, "count_anchors").expected,
     );
     const blank = {
       ...finding({ line: 1, severity: "bug", body: "x" }),
       anchor: "" as Finding["anchor"],
     };
     expect(Object.fromEntries(countAnchors([blank]))).toEqual(
-      helpers.find((c) => c.name === "count_anchors/empty_anchor_counts_as_exact")?.expected,
+      caseNamed<unknown, Record<string, number>>(
+        helpers,
+        "count_anchors/empty_anchor_counts_as_exact",
+      ).expected,
     );
   });
 

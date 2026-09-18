@@ -1,5 +1,4 @@
 import js from "@eslint/js";
-import vitest from "@vitest/eslint-plugin";
 import { defineConfig } from "eslint/config";
 import prettier from "eslint-config-prettier";
 import importX from "eslint-plugin-import-x";
@@ -10,7 +9,7 @@ import tseslint from "typescript-eslint";
 
 export default defineConfig(
   {
-    ignores: ["dist/**", "coverage/**", "node_modules/**", "tests/fixtures/**"],
+    ignores: ["coverage/**", "node_modules/**", "tests/fixtures/**"],
   },
 
   js.configs.recommended,
@@ -33,6 +32,9 @@ export default defineConfig(
     },
     settings: {
       "import-x/resolver": { typescript: true, node: true },
+      // Bun's own modules are not files a resolver can find.
+      "import-x/core-modules": ["bun", "bun:test"],
+      n: { allowModules: ["bun"] },
     },
     rules: {
       // -- hexagonal layering: the core never imports an adapter or the CLI --
@@ -63,11 +65,10 @@ export default defineConfig(
         },
       ],
       "import-x/no-default-export": "error",
-      // Relative imports name the source file, without an extension: the project is
-      // bundled (tsup) and run by bundler-style resolvers (vitest, tsx), so there is no
-      // emitted-extension (".js") to spell. `import-x/extensions` catches an explicit
-      // ".ts"; it does not see a ".js" that resolves to a .ts file, so that spelling is
-      // refused by name.
+      // Relative imports name the source file, without an extension: Bun runs the
+      // TypeScript as it is, so there is no emitted-extension (".js") to spell.
+      // `import-x/extensions` catches an explicit ".ts"; it does not see a ".js" that
+      // resolves to a .ts file, so that spelling is refused by name.
       "import-x/extensions": ["error", "never", { ignorePackages: true, checkTypeImports: true }],
       "no-restricted-imports": [
         "error",
@@ -101,9 +102,16 @@ export default defineConfig(
       "@typescript-eslint/prefer-readonly": "error",
       "@typescript-eslint/member-ordering": "error",
 
-      // -- node --
+      // -- runtime: Bun, through Node's API surface --
       "n/no-missing-import": "off", // handled by import-x with the TS resolver
-      "n/no-unsupported-features/node-builtins": ["error", { version: ">=24" }],
+      // These three read `engines.node` to gate the API; the runtime is Bun, and
+      // what it implements is not a Node version.
+      "n/no-unsupported-features/node-builtins": "off",
+      "n/no-unsupported-features/es-builtins": "off",
+      "n/no-unsupported-features/es-syntax": "off",
+      // The executables' shebang carries a flag (`-S bun --no-env-file`); the rule
+      // knows only bare interpreters.
+      "n/hashbang": "off",
       "n/no-process-exit": "off", // the CLI entry point owns the exit code
 
       // -- unicorn: keep the signal, drop the style noise that fights the port --
@@ -119,22 +127,38 @@ export default defineConfig(
       "unicorn/prefer-module": "error",
       "unicorn/prefer-node-protocol": "error",
       "unicorn/import-style": "off",
-      "unicorn/prefer-iterator-zip": "off", // Iterator.zip is not in Node 24
+      "unicorn/prefer-iterator-zip": "off", // Iterator.zip is not in Bun
       "unicorn/consistent-class-member-order": "off", // public API first; @typescript-eslint/member-ordering governs
       "@typescript-eslint/non-nullable-type-assertion-style": "off", // conflicts with no-non-null-assertion
       "unicorn/single-line-block-comment-style": "off",
     },
   },
 
-  // Tests: vitest rules on, boundary-type noise off.
+  // Tests: boundary-type noise off, and no test left focused or switched off.
   {
     files: ["tests/**/*.ts"],
-    plugins: { vitest },
     rules: {
-      ...vitest.configs.recommended.rules,
-      "vitest/expect-expect": ["error", { assertFunctionNames: ["expect", "expectContract"] }],
-      "vitest/no-focused-tests": "error",
-      "vitest/no-disabled-tests": "warn",
+      // `bun test` runs a `.only` silently -- the rest of the file vanishes from
+      // the run with no report -- and a `.skip` is a test that no longer counts.
+      // Neither belongs in a commit; there is no test-runner plugin for Bun, so
+      // the shape is refused by syntax.
+      "no-restricted-syntax": [
+        "error",
+        {
+          // `it.only(`, `describe.skip(`, `test.todo(`, and `it.skip.each(` through
+          // its inner member expression.
+          selector:
+            "MemberExpression[object.name=/^(it|test|describe)$/][property.name=/^(only|skip|todo)$/]",
+          message:
+            "A focused, skipped or todo test does not go in: every test in the file must run.",
+        },
+      ],
+      // `await expect(p).rejects.toThrow()` is how an async rejection is asserted,
+      // and the await is load-bearing; bun-types declares `rejects` as plain
+      // `Matchers` whose methods return void, so the type checker sees an
+      // awaited void. The types are wrong, not the tests.
+      "@typescript-eslint/await-thenable": "off",
+      "@typescript-eslint/no-confusing-void-expression": "off",
       "@typescript-eslint/explicit-module-boundary-types": "off",
       "@typescript-eslint/no-non-null-assertion": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",
@@ -145,10 +169,10 @@ export default defineConfig(
     },
   },
 
-  // Config files export a default by convention of their tools, and ESLint
+  // The ESLint config exports a default by convention of its tool, and ESLint
   // plugins are published as default exports that also carry named members.
   {
-    files: ["*.config.ts", "eslint.config.ts"],
+    files: ["eslint.config.ts"],
     rules: {
       "import-x/no-default-export": "off",
       "import-x/no-named-as-default": "off",

@@ -4,19 +4,14 @@
  * compute the diff, so a fake git would test the wrong thing.
  */
 
-import { execFileSync } from "node:child_process";
+import { describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
-
 import { GitError } from "../../../src/core/util/errors";
 import { LocalGitReader, worktree } from "../../../src/infra/git/local-git";
-
-function git(root: string, ...arguments_: string[]): void {
-  execFileSync("git", arguments_, { cwd: root, stdio: "ignore" });
-}
+import { git } from "../../helpers/git";
 
 /**
  * A repository with `main` and a `feature` branch that changed things:

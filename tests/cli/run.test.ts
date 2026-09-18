@@ -3,11 +3,11 @@
  * print what the fixtures froze.
  */
 
+import { describe, expect, it } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 
 import { UsageError, cliOverrides, hasFailingFinding, parseArguments } from "../../src/cli/run";
@@ -240,14 +240,14 @@ describe("the catalogue commands", () => {
     // from the catalogue's own directory, the same base `prompts` has always
     // used. One rule, checkable by reading the file.
     expect(project.settings.skills).toEqual({ path: "skills", mappings: {} });
-    for (const key of Object.keys(catalog.defaults)) expect(PROJECT_SETTING_KEYS).toContain(key);
+    for (const key of Object.keys(catalog.defaults)) expect(key).toBeOneOf(PROJECT_SETTING_KEYS);
   });
 
   it("ships a starter catalogue that parses and points at the policy it installs", () => {
     const catalog = parseCatalog(parseYaml(shippedFile("templates/config.yaml")), "template");
     expect(catalog.defaults.prompts).toEqual(["prompts/system.md"]);
     expect(catalog.project("example").name).toBe("example");
-    for (const key of Object.keys(catalog.defaults)) expect(PROJECT_SETTING_KEYS).toContain(key);
+    for (const key of Object.keys(catalog.defaults)) expect(key).toBeOneOf(PROJECT_SETTING_KEYS);
   });
 
   it("init keeps an existing policy file", () => {

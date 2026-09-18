@@ -14,8 +14,6 @@ import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import { execa } from "execa";
-
 import { splitPatches } from "../../core/diff/patch-set";
 import { type ChangedFileEntry } from "../../core/domain/changed-file";
 import { type GitReader } from "../../core/ports/git-reader";
@@ -49,18 +47,35 @@ export function worktree(localPath = "", cwd: string = process.cwd()): string {
   return root;
 }
 
-/** The default runner: the `git` executable on `PATH`. */
+/**
+ * The default runner: the `git` executable on `PATH`.
+ *
+ * stdout is returned byte for byte -- a patch's final newline is part of the
+ * patch. Both pipes are drained together with the exit, so a large diff
+ * cannot deadlock the child on a full pipe.
+ */
 export const runGit: GitRunner = async (root, arguments_) => {
-  const result = await execa("git", arguments_, {
-    cwd: root,
-    reject: false,
-    stripFinalNewline: false,
-  });
-  if (result.exitCode !== 0) {
-    const detail = result.stderr.trim();
-    throw new GitError(`git ${arguments_.join(" ")} failed: ${detail}`);
+  const command = `git ${arguments_.join(" ")}`;
+  let child: Bun.Subprocess<"ignore", "pipe", "pipe">;
+  try {
+    child = Bun.spawn(["git", ...arguments_], {
+      cwd: root,
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+  } catch (error) {
+    throw new GitError(`${command} could not start: ${errorMessage(error)}`);
   }
-  return result.stdout;
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ]);
+  if (exitCode !== 0) {
+    throw new GitError(`${command} failed: ${stderr.trim()}`);
+  }
+  return stdout;
 };
 
 /** Reads a branch's diff and files from one working tree. */

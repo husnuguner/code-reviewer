@@ -5,7 +5,7 @@
  * contract as where it starts.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { SECRET_PATHS, isBinaryPatch, isSecretPath } from "../../src/core/review/guards";
 

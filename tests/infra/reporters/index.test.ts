@@ -10,7 +10,7 @@
  * the suite looks at the registry at all.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { type SummaryRecord } from "../../../src/core/ports/review-reporter";
 import { type ReportContext } from "../../../src/core/reporting/format-registry";

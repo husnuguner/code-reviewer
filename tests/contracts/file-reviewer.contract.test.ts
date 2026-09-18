@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { addedLines, newSideIndex } from "../../src/core/diff/patch-view";
 import { type Finding } from "../../src/core/domain/finding";
 import { type ChatMessage, type ChatModel } from "../../src/core/ports/chat-model";
 import { FileReviewer, extractJson } from "../../src/core/review/file-reviewer";
 
-import { type FixtureCase, casesUnder, expectContract, loadFixture } from "./fixtures";
+import { type FixtureCase, caseNamed, casesUnder, expectContract, loadFixture } from "./fixtures";
 
 const cases = loadFixture("file_reviewer");
 
@@ -60,14 +60,13 @@ async function review(
   });
 }
 
-function reviewCase(name: string): FixtureCase<ReviewInput, ReviewExpectation> {
-  const found = cases.find((c) => c.name === `review_file/${name}`);
-  if (found === undefined) throw new Error(`no fixture case review_file/${name}`);
-  return found as FixtureCase<ReviewInput, ReviewExpectation>;
+/** One `review_file/` case; `E` names the expectation's shape where it is not the usual one. */
+function reviewCase<E = ReviewExpectation>(name: string): FixtureCase<ReviewInput, E> {
+  return caseNamed<ReviewInput, E>(cases, `review_file/${name}`);
 }
 
 describe("extracting the findings object from model text", () => {
-  it.each(casesUnder<{ text: string }>(cases, "extract_json"))("%s", ({ input, expected }) => {
+  it.each(casesUnder<{ text: string }>(cases, "extract_json"))("$name", ({ input, expected }) => {
     expectContract(() => extractJson(input.text), expected);
   });
 });
@@ -110,7 +109,7 @@ describe("reviewing one file through the model", () => {
   });
 
   it("falls back to the model's line alone when no anchor index is given", async () => {
-    const { input, expected } = reviewCase("no_anchor_index_uses_line_only");
+    const { input, expected } = reviewCase<Finding[]>("no_anchor_index_uses_line_only");
     const findings = await review(new FakeModel(input.responses), input.patch, {
       withIndex: false,
     });

@@ -1,18 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { RETRY_PROMPT, buildUserPrompt, systemPrompt } from "../../src/core/review/prompts";
 import { textBody } from "../../src/core/review/render";
 import { sortedByCodePoint } from "../../src/core/util/text";
 import { shippedFile } from "../../src/infra/shipped-files";
 
-import { casesUnder, loadFixture } from "./fixtures";
+import { caseNamed, casesUnder, loadFixture } from "./fixtures";
 
 const render = loadFixture("render");
 const prompts = loadFixture("prompts");
 
 describe("rendering findings", () => {
   it.each(casesUnder<{ severity: string; body: string }, string>(render, "text_body"))(
-    "text_body %s",
+    "text_body $name",
     ({ input, expected }) => {
       expect(textBody(input.severity, input.body)).toBe(expected);
     },
@@ -76,11 +76,11 @@ describe("prompts", () => {
   });
 
   it("keeps the retry prompt verbatim", () => {
-    expect(RETRY_PROMPT).toBe(prompts.find((c) => c.name === "retry_prompt")?.expected);
+    expect(RETRY_PROMPT).toBe(caseNamed<unknown, string>(prompts, "retry_prompt").expected);
   });
 
   it.each(casesUnder<PromptInput, string>(prompts, "build_user_prompt"))(
-    "build_user_prompt %s",
+    "build_user_prompt $name",
     ({ input, expected }) => {
       expect(
         buildUserPrompt({

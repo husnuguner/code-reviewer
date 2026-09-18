@@ -6,12 +6,10 @@
  * actual repository, actually branch it, and read what git reports.
  */
 
-import { execFileSync } from "node:child_process";
+import { describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-import { describe, expect, it } from "vitest";
 
 import { type Finding, finding } from "../../../src/core/domain/finding";
 import { type BranchReviewRecord } from "../../../src/core/ports/review-reporter";
@@ -33,10 +31,7 @@ import { type Verdict, type VerifyInput } from "../../../src/core/review/verify"
 import { sortedByCodePoint } from "../../../src/core/util/text";
 import { LocalGitReader } from "../../../src/infra/git/local-git";
 import { loadFixture } from "../../contracts/fixtures";
-
-function git(root: string, ...arguments_: string[]): void {
-  execFileSync("git", arguments_, { cwd: root, stdio: "ignore" });
-}
+import { git } from "../../helpers/git";
 
 /**
  * A repository with `main` and a `feature` branch that changed things:

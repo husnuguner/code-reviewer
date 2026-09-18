@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { type Catalog, type ProjectSpec, parseCatalog } from "../../src/core/catalog/catalog";
 import { CatalogError } from "../../src/core/util/errors";
 
-import { type FixtureCase, casesUnder, expectContract, loadFixture } from "./fixtures";
+import { type FixtureCase, caseNamed, casesUnder, expectContract, loadFixture } from "./fixtures";
 
 const cases = loadFixture("catalog");
 const SOURCE = "/x/config.yaml";
@@ -32,7 +32,7 @@ describe("parsing config.yaml", () => {
   // program does; there is no second implementation to be measured against.
   const parseCases = casesUnder<{ payload: unknown }>(cases, "parse");
 
-  it.each(parseCases)("%s", ({ input, expected }) => {
+  it.each(parseCases)("$name", ({ input, expected }) => {
     expectContract(() => catalogDict(parseCatalog(input.payload, SOURCE)), expected, {
       exactMessage: true,
     });
@@ -84,7 +84,7 @@ describe("selecting a project", () => {
     casesUnder<{ name: string | null }>(cases, "project").filter(
       (c) => c.name.startsWith("'") || c.name === "None",
     ),
-  )("project %s", ({ input, expected }) => {
+  )("project $name", ({ input, expected }) => {
     expectContract(() => projectDict(validCatalog().project(input.name)), expected, {
       exactMessage: true,
     });
@@ -93,7 +93,7 @@ describe("selecting a project", () => {
   it("picks the only project when none is named", () => {
     const only = parseCatalog({ projects: { only: { "local-path": "~/src/only" } } }, SOURCE);
     expect(only.project(null).name).toBe(
-      cases.find((c) => c.name === "project/single_without_name")?.expected,
+      caseNamed<unknown, string>(cases, "project/single_without_name").expected,
     );
   });
 

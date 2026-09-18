@@ -4,7 +4,7 @@
  * below are mostly that -- one happy path, and then each failure in turn.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { type Finding, finding } from "../../src/core/domain/finding";
 import { type ChatMessage, type ChatModel } from "../../src/core/ports/chat-model";
@@ -45,7 +45,7 @@ class RaisingModel implements ChatModel {
   }
 }
 
-const FINDINGS: Finding[] = [
+const FINDINGS: [Finding, Finding] = [
   finding({ line: 2, severity: "bug", body: "one", existing_code: "const rows = 1;" }),
   finding({ line: 3, severity: "security", body: "two" }),
 ];

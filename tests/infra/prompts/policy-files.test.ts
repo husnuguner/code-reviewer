@@ -3,11 +3,11 @@
  * resolved beside it, concatenated in order, and never silently missing.
  */
 
+import { describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
 
 import { ConfigError } from "../../../src/core/config/config";
 import { systemPrompt } from "../../../src/core/review/prompts";

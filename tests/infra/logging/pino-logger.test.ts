@@ -2,9 +2,8 @@
  * Log lines go to stderr as `LEVEL name: message`; stdout stays clean.
  */
 
+import { describe, expect, it } from "bun:test";
 import { PassThrough } from "node:stream";
-
-import { describe, expect, it } from "vitest";
 
 import { PinoLogger, formatConsoleLine } from "../../../src/infra/logging/pino-logger";
 

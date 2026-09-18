@@ -43,7 +43,7 @@ jobs:
 
       - name: Review
         id: review
-        uses: ./ # in another repository: husnuguner/code-reviewer@v1
+        uses: ./ # in another repository: husnuguner/code-reviewer@v2
         with:
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           provider: claude
@@ -102,7 +102,7 @@ jobs:
       # found nothing".
       - name: Comment
         if: ${{ steps.findings.outcome == 'success' }}
-        uses: ./comment-action # in another repository: husnuguner/code-reviewer/comment-action@v1
+        uses: ./comment-action # in another repository: husnuguner/code-reviewer/comment-action@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           findings: code-review.ndjson

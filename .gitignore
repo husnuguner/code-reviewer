@@ -1,16 +1,10 @@
 # Secrets / local config -- NEVER commit real credentials (commit .env.example).
 .env
 
-# Node
+# Bun
 node_modules/
-dist/
-*.tsbuildinfo
-npm-debug.log*
 
 # OS / editor
 .DS_Store
 .idea/
 .vscode/
-
-# Tooling caches
-.vitest/

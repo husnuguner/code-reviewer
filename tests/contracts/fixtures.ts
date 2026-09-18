@@ -14,11 +14,10 @@
  * and each expectation was settled on its own terms.
  */
 
+import { expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-
-import { expect } from "vitest";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 
@@ -47,6 +46,20 @@ export function isErrorContract(expected: unknown): expected is ErrorContract {
     typeof (expected as { error?: unknown }).error === "string" &&
     Object.keys(expected).every((k) => k === "error" || k === "message")
   );
+}
+
+/**
+ * The one case named `name`, with the types its consumer expects. A missing
+ * case is a broken fixture and fails loudly, rather than turning into an
+ * `undefined` that some expectation happens to accept.
+ */
+export function caseNamed<I = unknown, E = unknown>(
+  cases: FixtureCase[],
+  name: string,
+): FixtureCase<I, E> {
+  const found = cases.find((c) => c.name === name);
+  if (found === undefined) throw new Error(`fixture has no case named ${name}`);
+  return found as FixtureCase<I, E>;
 }
 
 /** Cases whose names start with `prefix/`, with the prefix removed. */

@@ -3,7 +3,7 @@
  * what it builds speaks the port rather than GitHub.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { PostingError } from "../../../src/core/posting/review-poster";
 import { ValueError } from "../../../src/core/util/errors";

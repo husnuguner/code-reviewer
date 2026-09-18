@@ -6,7 +6,7 @@
  * hosting system then does with it is `infra/github`'s test.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { type SummaryRecord } from "../../../src/core/ports/review-reporter";
 import {

@@ -12,11 +12,11 @@ Every changed file is reviewed through four lenses (bug, security, performance, 
 
 ## Quick start
 
-**Prerequisites:** Node.js ≥ 24 · an LLM endpoint or API key. No GitHub token.
+**Prerequisites:** [Bun](https://bun.sh) ≥ 1.4 · an LLM endpoint or API key. No GitHub token.
 
 ```bash
-# 1. install (a `prepare` step builds it on install)
-npm install -g github:husnuguner/code-reviewer
+# 1. install (nothing to build: Bun runs the TypeScript as it is)
+bun install -g github:husnuguner/code-reviewer
 
 # 2. the model's key -- once, on this machine
 mkdir -p ~/.config/reviewer
@@ -67,7 +67,7 @@ The key stays out of the repository: `~/.config/reviewer/.env` for every project
 
 **Machine-wide catalogue.** For repositories that carry no rules of their own, or for one person's rules that are not the team's, `reviewer init` run _outside_ a checkout writes `~/.config/reviewer/config.yaml` instead, and `reviewer add <name>` (from inside a checkout) defines a project in it. Everything below applies to both homes.
 
-Working on this repository itself? `npm install && npm run build && npm link` gives you the same two executables from `src/`.
+Working on this repository itself? `bun install && bun link` gives you the same two executables from `src/`.
 
 ## Usage
 
@@ -120,7 +120,7 @@ Exit codes: `0` success · `1` usage error, refused `init`, or `projects` withou
 
 Reviewing a pull request means checking it out and reviewing the branch — no API, no token. The shipped action does that, and a **second job** does the talking.
 
-Copy [`.github/workflows/pr-review.yml`](.github/workflows/pr-review.yml) into the repository you want reviewed and change `uses: ./` to `uses: husnuguner/code-reviewer@v1`:
+Copy [`.github/workflows/pr-review.yml`](.github/workflows/pr-review.yml) into the repository you want reviewed and change `uses: ./` to `uses: husnuguner/code-reviewer@v2`:
 
 ```yaml
 name: PR review
@@ -140,7 +140,7 @@ jobs:
         with:
           fetch-depth: 0 # the reviewer diffs locally and needs the merge-base
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: husnuguner/code-reviewer@v1
+      - uses: husnuguner/code-reviewer@v2
         with:
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           language: tr
@@ -161,7 +161,7 @@ jobs:
         id: findings
         with: { name: code-review-findings }
         continue-on-error: true
-      - uses: husnuguner/code-reviewer/comment-action@v1
+      - uses: husnuguner/code-reviewer/comment-action@v2
         if: ${{ steps.findings.outcome == 'success' }} # skipped, not green, when there is nothing to post
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -430,24 +430,26 @@ There is deliberately **no extension allowlist**. What is worth skipping for val
 
 ## Versioning
 
-Releases follow GitHub's action convention: an **immutable** `vX.Y.Z` tag per release, and a **moving** major tag (`v1`) that always points at the latest `v1.*`. A workflow that says `@v1` gets fixes without editing; one that wants no surprises pins the full commit SHA, as it would for `actions/checkout`.
+Releases follow GitHub's action convention: an **immutable** `vX.Y.Z` tag per release, and a **moving** major tag (`v2`) that always points at the latest `v2.*`. A workflow that says `@v2` gets fixes without editing; one that wants no surprises pins the full commit SHA, as it would for `actions/checkout`.
 
 ```yaml
-- uses: husnuguner/code-reviewer@v1 # latest 1.x; recommended
-- uses: husnuguner/code-reviewer@v1.0.0 # this exact release
+- uses: husnuguner/code-reviewer@v2 # latest 2.x; recommended
+- uses: husnuguner/code-reviewer@v2.0.0 # this exact release
 - uses: husnuguner/code-reviewer@<full-sha> # what a hardened workflow pins
 ```
+
+`v2` runs on Bun and replaced the actions' `node-version` input with `bun-version`; nothing else about the inputs or the NDJSON contract changed. A `v1` workflow keeps working on the `v1` tag.
 
 `@main` is the development branch. It works, but it is what a security review will — correctly — flag: a mutable reference in a step that receives a secret.
 
 Cutting a release (maintainers):
 
 ```bash
-npm version 1.2.3 --no-git-tag-version     # package.json
-git commit -am "release: v1.2.3"
-git tag -a v1.2.3 -m "v1.2.3"
-git tag -f v1 v1.2.3                        # move the major tag
-git push origin main v1.2.3 && git push -f origin v1
+bun pm version 2.1.3 --no-git-tag-version  # package.json
+git commit -am "release: v2.1.3"
+git tag -a v2.1.3 -m "v2.1.3"
+git tag -f v2 v2.1.3                        # move the major tag
+git push origin main v2.1.3 && git push -f origin v2
 ```
 
 A breaking change to the action's inputs or the NDJSON contract is a new major (`v2`), never a moved `v1`.
@@ -472,18 +474,19 @@ A free first check that needs no key: `reviewer --preview --base main -v` resolv
 ## Development
 
 ```bash
-npm run check          # typecheck (TypeScript 7) + eslint + prettier --check + vitest
-npm run typecheck:ts6  # the same check on the TypeScript 6 compiler
-npm test               # vitest alone
-npm run build          # tsup -> dist/
+bun run check          # tsc --noEmit + eslint + prettier --check + bun test
+bun test               # the tests alone
+bun run reviewer …     # the CLI from source, as `reviewer` would run
 ```
 
-Toolchain: Node 24 and npm 11 pinned with Volta · TypeScript 7 (native) for `tsc` and TypeScript 6 for editors, `typescript-eslint` and vitest · ESLint 10 with type-aware rules · Prettier · vitest 5.
+Toolchain: Bun (pinned in `.bun-version`; it is the package manager, the test runner and the runtime, and there is no build step) · TypeScript 6 for `tsc`, editors and `typescript-eslint` · ESLint 10 with type-aware rules · Prettier.
+
+Bun reads a working directory's `.env` into the environment by default. This repository turns that off (`bunfig.toml`, `env = false`) and the two executables carry `--no-env-file` in their shebang, because the reviewer reads `.env` files itself in a stated order in which the working directory's is the weakest — and the working directory is the checkout under review.
 
 Layout — three layers with the dependency direction enforced by ESLint (`import-x/no-restricted-paths`):
 
 - `src/core/` — the review engine, free of I/O. `domain/` (Finding, Skill, changed-file records) · `ports/` (ChatModel, GitReader, CodeContext, SkillSource, Logger, reporters) · `review/` (`selection` — which files are in scope, and why the rest are not · `changed-file` — the per-file step · `branch-review` — the flow · `volume` — the per-file cap · `render` · `severity` · `anchor` · `diff` · `verify`) · `skills/` (glob engine, frontmatter parser, registry) · `comment/` (records → one review payload, pure) · `catalog/` (`config.yaml` schema, `init`/`projects`) · `config/` (the settings schema and the resolver) · `llm/` (registry).
-- `src/infra/` — adapters: `llm/` (AI SDK: `local`, `claude`) · `git/` (execa: diff source and pre-context) · `skills/` (directory and worktree sources) · `config/` (files, `.env`, paths) · `logging/` (pino → stderr) · `reporters/` (text, NDJSON, GitHub Actions, and a tee) · `github/` (one endpoint: post a review).
+- `src/infra/` — adapters: `llm/` (AI SDK: `local`, `claude`) · `git/` (`Bun.spawn`: diff source and pre-context) · `skills/` (directory and worktree sources) · `config/` (files, `.env`, paths) · `logging/` (pino → stderr) · `reporters/` (text, NDJSON, GitHub Actions, and a tee) · `github/` (one endpoint: post a review).
 - `src/cli/` — the composition root (`awilix`) and the two `commander` command lines: `reviewer` (calls a model, cannot post) and `review-comment` (holds a token, cannot call a model).
 
 `core/` is also published as `code-reviewer/core` for embedding; it takes its adapters as constructor arguments.

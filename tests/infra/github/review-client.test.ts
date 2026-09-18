@@ -5,7 +5,7 @@
  * error handling are all exercised without a network.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import {
   GithubError,

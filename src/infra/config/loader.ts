@@ -11,8 +11,8 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { parseEnv } from "node:util";
 
-import { parse as parseDotenv } from "dotenv";
 import { parse as parseYaml } from "yaml";
 
 import { type Catalog, parseCatalog } from "../../core/catalog/catalog";
@@ -71,7 +71,7 @@ export function loadCatalog(
 /** One `.env` file's name/value pairs, or nothing when it cannot be read. */
 function readEnvironmentFile(path: string): EnvironmentValues {
   try {
-    return parseDotenv(readFileSync(path, "utf8"));
+    return parseEnv(readFileSync(path, "utf8"));
   } catch {
     return {};
   }

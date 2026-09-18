@@ -7,12 +7,11 @@
  * nobody.
  */
 
+import { describe, expect, it } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
-
-import { describe, expect, it } from "vitest";
 
 import { buildContainer } from "../../../src/cli/container";
 import { type Finding, finding } from "../../../src/core/domain/finding";

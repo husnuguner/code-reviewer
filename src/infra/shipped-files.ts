@@ -7,8 +7,9 @@
  * policy -- core-owned too, because its asymmetry rule and its vetoes are
  * what keep a second pass from deleting real findings.
  * `templates/config.yaml` is the catalogue `reviewer init` writes. All are
- * located from this module's own position so that the source tree and the
- * bundled `dist/` find the same package root.
+ * located from this module's own position, walking up to the `package.json`
+ * that names this package, so a global install and a checkout find the same
+ * files.
  */
 
 import { existsSync, readFileSync } from "node:fs";

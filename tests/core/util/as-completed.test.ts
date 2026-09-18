@@ -17,7 +17,7 @@
  * and iterating it crashed. Nothing caught that, because nothing tested it.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { asCompleted } from "../../../src/core/util/as-completed";
 
@@ -52,7 +52,7 @@ async function collect<T>(promises: readonly Promise<T>[]): Promise<(T | string)
  * Run `body` with an `unhandledRejection` listener installed, and report
  * whatever the process was told about.
  *
- * Vitest does not fail a test for an unhandled rejection that happens inside
+ * The test runner does not fail a test for an unhandled rejection that happens inside
  * it, so the only way to assert the absence of one is to listen for it.
  */
 async function unhandledDuring(body: () => Promise<void>): Promise<string[]> {

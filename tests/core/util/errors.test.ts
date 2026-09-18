@@ -3,7 +3,7 @@
  * error.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { errorMessage } from "../../../src/core/util/errors";
 

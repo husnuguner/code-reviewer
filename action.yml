@@ -105,10 +105,12 @@ inputs:
       them as review comments, or every finding shows twice.
     required: false
     default: "true"
-  node-version:
-    description: "Node.js the reviewer runs on."
+  bun-version:
+    description: >-
+      Bun the reviewer runs on. Empty takes the version this release was
+      tested with (the repository's .bun-version).
     required: false
-    default: "24"
+    default: ""
 
 outputs:
   findings-file:
@@ -156,20 +158,24 @@ runs:
         # from untrusted text is an injection surface for the whole job.
         echo "ref=${BASE_REF}" >> "${GITHUB_OUTPUT}"
 
-    - name: Set up Node.js
-      uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+    # setup-bun takes a non-empty `bun-version` first and the file otherwise.
+    - name: Set up Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       with:
-        node-version: ${{ inputs.node-version }}
+        bun-version: ${{ inputs.bun-version }}
+        bun-version-file: ${{ format('{0}/.bun-version', github.action_path) }}
 
     # The action's own directory is the reviewer's checkout, not the reviewed
-    # repository; it is built there so the two never share a node_modules.
-    - name: Build the reviewer
+    # repository; its dependencies are installed there so the two never share
+    # a node_modules. Bun runs the TypeScript as it is: there is no build.
+    # Runtime dependencies only, from the lockfile, with no lifecycle scripts
+    # -- a job that holds an API key runs no third party's install hook.
+    - name: Install the reviewer
       shell: bash
       working-directory: ${{ github.action_path }}
       run: |
         set -euo pipefail
-        npm ci --no-audit --no-fund
-        npm run build
+        bun install --frozen-lockfile --production --ignore-scripts
 
     - name: Review
       id: review
@@ -232,10 +238,16 @@ runs:
         # Without annotations, stdout would only repeat the file record for
         # record; logs are on stderr and still show. With them, stdout is
         # where the runner reads the ::error/::warning commands from.
+        #
+        # `--no-env-file`: the working directory is the reviewed checkout, and
+        # Bun would otherwise read its `.env` into the environment before the
+        # reviewer runs -- letting the pull request under review set, say,
+        # LLM_BASE_URL. The reviewer reads `.env` files itself, and ranks the
+        # working directory's last.
         if [ "${quiet:-0}" = "1" ]; then
-          node "${ACTION_PATH}/dist/cli/index.js" "${args[@]}" >/dev/null
+          bun --no-env-file "${ACTION_PATH}/src/cli/index.ts" "${args[@]}" >/dev/null
         else
-          node "${ACTION_PATH}/dist/cli/index.js" "${args[@]}"
+          bun --no-env-file "${ACTION_PATH}/src/cli/index.ts" "${args[@]}"
         fi
         status=$?
 

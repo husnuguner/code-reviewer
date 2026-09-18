@@ -3,12 +3,10 @@
  * the pre-context reaches the model in a branch review end to end.
  */
 
+import { describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-import { execaSync } from "execa";
-import { describe, expect, it } from "vitest";
 
 import { type Finding } from "../../../src/core/domain/finding";
 import { reviewBranch } from "../../../src/core/review/branch-review";
@@ -17,10 +15,7 @@ import { type PerFileReviewer } from "../../../src/core/review/review-file";
 import { DEFAULT_FILE_REVIEW_SETTINGS } from "../../../src/core/review/review-file";
 import { GitCodeContext, parseGrep } from "../../../src/infra/git/git-code-context";
 import { type GitRunner, LocalGitReader } from "../../../src/infra/git/local-git";
-
-function git(root: string, ...arguments_: string[]): void {
-  execaSync("git", arguments_, { cwd: root });
-}
+import { git } from "../../helpers/git";
 
 /** A runner that records its invocations and answers from one fake ref. */
 function recorded(options: { listable?: boolean } = {}): {

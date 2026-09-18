@@ -4,7 +4,7 @@
  * own test.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { ChangedFile } from "../../../src/core/domain/changed-file";
 import { type CodeContext, type CodeSearchHit } from "../../../src/core/ports/code-context";

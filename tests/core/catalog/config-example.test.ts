@@ -5,10 +5,10 @@
  * the other way round), this file says so.
  */
 
+import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 
 import { PROJECT_SETTING_KEYS, parseCatalog } from "../../../src/core/catalog/catalog";

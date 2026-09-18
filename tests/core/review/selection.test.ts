@@ -6,7 +6,7 @@
  * so a test that let them drift apart would be testing the wrong thing.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { DEFAULT_FILE_REVIEW_SETTINGS } from "../../../src/core/config/settings";
 import { previewReport } from "../../../src/core/review/render";

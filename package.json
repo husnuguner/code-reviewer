@@ -1,6 +1,6 @@
 {
   "name": "code-reviewer",
-  "version": "1.0.10",
+  "version": "2.0.0",
   "description": "On-demand code-review agent for one repository: reviews a change set with an LLM and reports anchored inline findings.",
   "license": "MIT",
   "repository": {
@@ -14,42 +14,35 @@
   "author": "Hüsnü Güner <husnu.guner@vennyx.com>",
   "type": "module",
   "private": true,
+  "packageManager": "bun@1.4.2",
   "engines": {
-    "node": ">=24"
-  },
-  "volta": {
-    "node": "24.21.0",
-    "npm": "11.19.0"
+    "bun": ">=1.4"
   },
   "bin": {
-    "reviewer": "./dist/cli/index.js",
-    "review-comment": "./dist/cli/comment.js"
+    "reviewer": "./src/cli/index.ts",
+    "review-comment": "./src/cli/comment-main.ts"
   },
   "exports": {
-    "./core": "./dist/core/index.js"
+    "./core": "./src/core/index.ts"
   },
   "files": [
-    "dist",
+    "src",
     "prompts",
     "templates",
     "action.yml",
     "comment-action"
   ],
   "scripts": {
-    "build": "tsup",
-    "prepare": "node -e \"process.exit(require('node:fs').existsSync('node_modules/tsup')?0:1)\" && npm run build || echo 'skipping build: dev dependencies are not installed'",
-    "dev": "tsx src/cli/index.ts",
-    "reviewer": "node dist/cli/index.js",
-    "review-comment": "node dist/cli/comment.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "typecheck": "node node_modules/@typescript/native/bin/tsc --noEmit",
+    "reviewer": "bun --no-env-file src/cli/index.ts",
+    "review-comment": "bun --no-env-file src/cli/comment-main.ts",
+    "test": "bun test --timeout 20000 --parallel",
+    "test:watch": "bun test --timeout 20000 --watch",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
-    "typecheck:ts6": "node node_modules/typescript/bin/tsc --noEmit"
+    "check": "bun run typecheck && bun run lint && bun run format:check && bun run test"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.54",
@@ -58,8 +51,6 @@
     "awilix": "^13.0.5",
     "commander": "^15.0.0",
     "difflib": "^0.2.4",
-    "dotenv": "^17.4.2",
-    "execa": "^10.0.1",
     "p-limit": "^7.3.2",
     "parse-diff": "^0.12.0",
     "pino": "^10.3.1",
@@ -69,10 +60,9 @@
   "devDependencies": {
     "@ai-sdk/provider": "^4.0.15",
     "@eslint/js": "^10.0.1",
+    "@types/bun": "^1.4.2",
     "@types/difflib": "^0.2.7",
     "@types/node": "^24.0.0",
-    "@typescript/native": "npm:typescript@^7.0.2",
-    "@vitest/eslint-plugin": "^1.6.27",
     "eslint": "^10.10.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-import-resolver-typescript": "^4.4.4",
@@ -80,12 +70,8 @@
     "eslint-plugin-n": "^18.3.0",
     "eslint-plugin-unicorn": "^75.0.0",
     "globals": "^17.12.0",
-    "jiti": "^2.6.1",
     "prettier": "^3.9.7",
-    "tsup": "^8.5.1",
-    "tsx": "^4.20.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.70.0",
-    "vitest": "^5.0.1"
+    "typescript-eslint": "^8.70.0"
   }
 }

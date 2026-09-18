@@ -3,11 +3,10 @@
  * configuration: command line > environment (real and `.env`) > project > default.
  */
 
+import { describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-import { describe, expect, it } from "vitest";
 
 import {
   type Config,
@@ -24,7 +23,7 @@ import {
   findGitRoot,
   findRepoConfig,
 } from "../../../src/infra/config/paths";
-import { isErrorContract, loadFixture } from "../../contracts/fixtures";
+import { casesUnder, isErrorContract, loadFixture } from "../../contracts/fixtures";
 
 const CATALOG = {
   version: 3,
@@ -570,27 +569,26 @@ function build(input: SchemaInput): Config {
 
 describe("the settings schema", () => {
   const cases = loadFixture("config");
-  const schemaCases = cases.filter((c) => c.name.startsWith("config/"));
+  const schemaCases = casesUnder<SchemaInput, Record<string, unknown>>(cases, "config");
 
-  it.each(cases.filter((c) => c.name.startsWith("default_concurrency/")))(
-    "$name",
+  it.each(casesUnder<{ cpu: number | null }, number>(cases, "default_concurrency"))(
+    "default_concurrency/$name",
     ({ input, expected }) => {
-      const { cpu } = input as { cpu: number | null };
-      expect(defaultConcurrency(cpu)).toEqual(expected);
+      expect(defaultConcurrency(input.cpu)).toEqual(expected);
     },
   );
 
   it.each(schemaCases.filter((c) => !isErrorContract(c.expected)))(
-    "$name",
+    "config/$name",
     ({ input, expected }) => {
-      expect(snapshot(build(input as SchemaInput))).toEqual(expected);
+      expect(snapshot(build(input))).toEqual(expected);
     },
   );
 
   // pydantic's ValidationError is this implementation's ConfigError; the first
   // line of the message is the contract.
-  it.each(schemaCases.filter((c) => isErrorContract(c.expected)))("$name", ({ input }) => {
-    const attempt = (): Config => build(input as SchemaInput);
+  it.each(schemaCases.filter((c) => isErrorContract(c.expected)))("config/$name", ({ input }) => {
+    const attempt = (): Config => build(input);
     expect(attempt).toThrow(ConfigError);
     expect(attempt).toThrow(/^1 validation error for Config/u);
   });

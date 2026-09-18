@@ -1,9 +1,7 @@
 node_modules/
-dist/
 coverage/
 tests/fixtures/
-package-lock.json
-.vitest/
+bun.lock
 # Skill documents are prompt content, copied verbatim; formatters must not touch them.
 prompts/
 templates/

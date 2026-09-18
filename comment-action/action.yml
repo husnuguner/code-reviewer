@@ -62,28 +62,31 @@ inputs:
     description: "Print the review instead of posting it. Needs no token."
     required: false
     default: "false"
-  node-version:
-    description: "Node.js the poster runs on."
+  bun-version:
+    description: >-
+      Bun the poster runs on. Empty takes the version this release was tested
+      with (the repository's .bun-version).
     required: false
-    default: "24"
+    default: ""
 
 runs:
   using: composite
   steps:
-    - name: Set up Node.js
-      uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+    - name: Set up Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       with:
-        node-version: ${{ inputs.node-version }}
+        bun-version: ${{ inputs.bun-version }}
+        bun-version-file: ${{ format('{0}/../.bun-version', github.action_path) }}
 
     # `${{ github.action_path }}` is this repository's checkout, not the
-    # reviewed one, so the build never touches the caller's node_modules.
-    - name: Build the poster
+    # reviewed one, so the install never touches the caller's node_modules.
+    # Runtime dependencies only, no lifecycle scripts: this job holds a token.
+    - name: Install the poster
       shell: bash
       working-directory: ${{ github.action_path }}/..
       run: |
         set -euo pipefail
-        npm ci --no-audit --no-fund
-        npm run build
+        bun install --frozen-lockfile --production --ignore-scripts
 
     - name: Post the review
       shell: bash
@@ -112,4 +115,6 @@ runs:
         [ "${SUPERSEDE}" = "true" ] && args+=(--supersede)
         [ -n "${BASE_URL}" ] && args+=(--base-url "${BASE_URL}")
         [ "${DRY_RUN}" = "true" ] && args+=(--dry-run)
-        node "${ACTION_PATH}/../dist/cli/comment.js" "${args[@]}"
+        # `--no-env-file`: the token comes from the real environment, and a
+        # `.env` in the working directory must not be able to supply one.
+        bun --no-env-file "${ACTION_PATH}/../src/cli/comment-main.ts" "${args[@]}"

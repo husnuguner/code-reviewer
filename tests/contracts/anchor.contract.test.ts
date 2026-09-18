@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 
 import { addedLines, newSideIndex } from "../../src/core/diff/patch-view";
-import { resolveAnchor } from "../../src/core/review/anchor";
+import { type AnchorOutcome, resolveAnchor } from "../../src/core/review/anchor";
 
 import { loadFixture } from "./fixtures";
 
@@ -15,7 +15,7 @@ interface AnchorInput {
 interface AnchorExpectation {
   line: number | null;
   start_line: number | null;
-  outcome: string;
+  outcome: AnchorOutcome;
 }
 
 describe("anchoring a finding from its line and its quote", () => {

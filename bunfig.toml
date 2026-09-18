@@ -1,0 +1,18 @@
+# Bun reads .env / .env.local from the working directory into process.env
+# before any code runs. The reviewer reads its .env files itself, in a stated
+# order of precedence (src/infra/config/loader.ts) in which the working
+# directory's .env is the *weakest* source; letting Bun promote it to the
+# real environment would invert that order. Off here for everything run from
+# this repository (tests, scripts); the two executables carry the same
+# decision in their shebang, because a checkout they review has no say in it.
+env = false
+
+[run]
+# node_modules/.bin tools (tsc, eslint, prettier) declare `#!/usr/bin/env node`;
+# run them with Bun so that Node is not a second runtime this repository needs.
+bun = true
+
+[test]
+root = "tests"
+# The per-test timeout is documented here but not honoured by 1.4.x
+# (oven-sh/bun#38728); the `test` script passes `--timeout` on the command line.
