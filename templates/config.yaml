@@ -10,7 +10,7 @@
 # Secrets: llm.api-key takes either the NAME of an environment variable (read
 # from the environment and from the .env beside this file) or the value
 # itself. Naming a variable keeps this file shareable.
-version: 3
+version: 1
 
 # What every project starts from. A project overrides a key by restating it.
 defaults:
@@ -20,8 +20,10 @@ defaults:
     api-key: LLM_API_KEY # the variable holding the key, or the key
     # base-url: http://127.0.0.1:1234/v1
   language: en
-  # The review policy is the reviewer's own and is not configurable. What a
-  # project needs on top of it goes in its skills folder below.
+  # The review policy is the reviewer's own and is not configurable. What is
+  # added on top of it goes in two places: prompts/ beside this file (every
+  # *.md in it is read for every reviewed file of every project) and the
+  # skills folder below.
   skills:
     path: ~/.config/reviewer/skills/{{project}} # one folder per project
   exclude: ["**/*.spec.ts", "**/migrations/*.ts"]

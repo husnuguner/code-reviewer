@@ -40,7 +40,7 @@ import { systemPrompt } from "../core/review/prompts";
 import { type PerFileVerifier } from "../core/review/review-file";
 import { FindingVerifier } from "../core/review/verify";
 import { SkillRegistry } from "../core/skills/registry";
-import { readProjectPrompts } from "../providers/assets/project-prompts";
+import { promptsDirectory, readProjectPrompts } from "../providers/assets/project-prompts";
 import { shippedFile } from "../providers/assets/shipped-files";
 import {
   configHome,
@@ -118,6 +118,11 @@ export interface RunCradle {
   readonly branchReporter: BranchReviewReporter;
   readonly configHomePath: string;
   readonly catalogPath: string;
+  /**
+   * Where this run's standing instructions are read from: `prompts/` beside
+   * the catalogue. A convention, not a setting -- see `project-prompts`.
+   */
+  readonly promptsPath: string;
   /**
    * The checkout the run reviews. A project's `local-path` wins; without one,
    * a repository's own catalogue names its repository, so `reviewer` run from
@@ -225,12 +230,13 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
     // Two of the three parts are the reviewer's own and are not replaceable:
     // the policy states the lenses and the hard rules, the contract states
     // the JSON that comes back. Between them go the project's own standing
-    // instructions, if its catalogue names any under `prompts`.
-    systemPrompt: asFunction(({ config, logger }: RunCradle) =>
+    // instructions: every Markdown file in the `prompts/` directory beside
+    // the catalogue, each under its own heading.
+    systemPrompt: asFunction(({ promptsPath, logger }: RunCradle) =>
       systemPrompt(
         shippedFile("prompts/system.md"),
         shippedFile("prompts/output-contract.md"),
-        readProjectPrompts(config.promptFiles, logger),
+        readProjectPrompts(promptsPath, logger),
       ),
     ).singleton(),
     fileReviewer: asFunction(
@@ -271,6 +277,12 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
     // through to the machine-wide catalogue.
     catalogPath: asFunction(({ request: r }: RunCradle) =>
       configPath(r.configFile, process.env, undefined, existsSync),
+    ).singleton(),
+    // Beside the catalogue, wherever that turned out to be: a repository's
+    // own `.review/prompts/`, or the machine's `~/.config/reviewer/prompts/`
+    // for a checkout that carries no rules of its own.
+    promptsPath: asFunction(({ catalogPath }: RunCradle) =>
+      promptsDirectory(catalogPath),
     ).singleton(),
   });
   return container;

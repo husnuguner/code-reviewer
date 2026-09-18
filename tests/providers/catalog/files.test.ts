@@ -80,7 +80,7 @@ describe("the catalogue commands", () => {
     // and skills. The policy is not among them -- it ships with the reviewer
     // and is not replaceable; prompts.md is added to it, and is written
     // EMPTY, so a repository that says nothing adds nothing.
-    expect(readFileSync(join(repo, ".review", "config.yaml"), "utf8")).toContain("version: 3");
+    expect(readFileSync(join(repo, ".review", "config.yaml"), "utf8")).toContain("version: 1");
     expect(readFileSync(join(repo, ".review", "prompts", "prompts.md"), "utf8")).toBe("");
     expect(readFileSync(join(repo, ".review", "skills", "README.md"), "utf8")).toBe(
       "what a skill is",
@@ -103,9 +103,10 @@ describe("the catalogue commands", () => {
     // from the catalogue's own directory. One rule, checkable by reading the
     // file.
     expect(project.settings.skills).toEqual({ path: "skills", mappings: {} });
-    // And it names the empty prompts file init writes beside it, so filling
-    // that file in is all a repository has to do to be heard.
-    expect(project.settings.prompts).toEqual(["prompts/prompts.md"]);
+    // And it says nothing at all about the standing instructions: every *.md
+    // under .review/prompts/ is read because it is there, so filling in the
+    // empty file `init` writes is all a repository has to do to be heard.
+    expect(Object.keys(project.settings)).not.toContain("prompts");
     for (const key of Object.keys(catalog.defaults)) expect(key).toBeOneOf(PROJECT_SETTING_KEYS);
   });
 
@@ -147,7 +148,7 @@ function addScratch(): { files: CatalogFiles; read: () => string } {
   writeFileSync(
     path,
     [
-      "version: 3",
+      "version: 1",
       "# a comment the operator wrote and expects to keep",
       "defaults:",
       "  language: tr",

@@ -7,7 +7,7 @@
 #
 # Secret: llm.api-key names an environment variable. Put the key in
 # ~/.config/reviewer/.env, or in .review/.env (gitignored) -- never here.
-version: 3
+version: 1
 
 defaults:
   llm:
@@ -18,20 +18,20 @@ defaults:
   language: en
   # The review policy -- who the reviewer is, what it looks for, what it leaves
   # alone -- is the reviewer's own and cannot be replaced. What THIS repository
-  # adds to it is below, on the project: prompts/ for what holds on every file,
+  # adds to it: prompts/ beside this file for what holds on every file, and
   # skills/ for what holds on the paths a mapping names.
   exclude: ["**/*.spec.ts", "**/*.test.ts", "**/migrations/*.ts"]
   max-findings-per-file: 3 # the most severe survive; the rest are counted
+
+# Standing instructions are not configured: every *.md under .review/prompts/
+# is read, in path order, and appended to the policy for every reviewed file.
+# `reviewer init` leaves prompts/prompts.md there, empty -- fill it in, or add
+# more files beside it; an empty one adds nothing.
 
 projects:
   # One project: this repository. No local-path -- the reviewer already knows
   # where it is, because this file is inside it.
   this-repo:
-    # Standing instructions, appended to the policy for every reviewed file.
-    # `reviewer init` writes prompts/prompts.md empty: fill it in and the
-    # reviewer reads it; leave it empty and nothing is added. Relative to
-    # this file, so this means .review/prompts/prompts.md.
-    prompts: ["prompts/prompts.md"]
     skills:
       # Every relative path in this catalogue is taken from the catalogue's own
       # directory (.review/), so this means .review/skills.

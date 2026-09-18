@@ -4,8 +4,8 @@
  * Branch review compares a branch against a base from a working tree, so it
  * needs no repo provider and no credentials -- which is why it works against a
  * repository whose hosting system nobody has implemented, and against work
- * that has not been pushed. Reading git is an infrastructure concern; the
- * flow only needs these three operations.
+ * that has not been pushed or even committed. Reading git is an
+ * infrastructure concern; the flow only needs these four operations.
  */
 
 import { type ChangedFileEntry } from "../domain/changed-file";
@@ -27,6 +27,18 @@ export interface GitReader {
    * Removed files and files with no textual hunks are not reported.
    */
   changedFiles(base: string, branch: string): Promise<ChangedFileEntry[]>;
+
+  /**
+   * The uncommitted change set: the working tree against `HEAD`, one
+   * provider-shaped entry per file.
+   *
+   * A separate operation rather than a ref passed to `changedFiles`, because
+   * no ref names the working tree: what is under review here is precisely
+   * what no commit holds -- staged and unstaged edits to tracked files, plus
+   * every untracked file git is not ignoring. Removed files and files with no
+   * textual hunks are dropped, as they are for a branch.
+   */
+  worktreeFiles(): Promise<ChangedFileEntry[]>;
 
   /**
    * A file's current text from the working tree, capped at `limit`

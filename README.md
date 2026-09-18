@@ -49,8 +49,8 @@ The `(skills: …)` line names the guideline skills that were in the prompt for 
 my-repo/
 └── .review/
     ├── config.yaml        which skill applies to which paths, the model, excludes
-    ├── prompts/
-    │   └── prompts.md     standing instructions, added to every file's prompt (written empty)
+    ├── prompts/           every *.md in here is added to every file's prompt
+    │   └── prompts.md     standing instructions (written empty)
     ├── skills/            one Markdown file per convention (README explains the format)
     │   └── README.md
     └── .gitignore         keeps .review/.env (a project-specific key) out of git
@@ -81,6 +81,18 @@ reviewer --base main --format github        # GitHub Actions annotations + job s
 reviewer --base main --out findings.ndjson  # ... and a machine-readable copy, whatever --format prints
 reviewer --preview --base main              # scope only: no model, no cost
 reviewer --base main --fail-on bug,security # exit 3 when one of those survives
+reviewer --uncommitted                      # the work that is not in a commit yet
+```
+
+### Reviewing before you commit
+
+`--uncommitted` reviews the working tree against `HEAD` instead of a branch against a base: staged **and** unstaged changes to tracked files as one patch, plus every untracked file git is not ignoring (`.gitignore` is obeyed, an embedded repository is not descended into). `--base` and `--branch` say nothing about such a run, and the summary reports what was actually compared — `base: "HEAD"`, `branch: "working tree"` — so a record can never claim a diff the run never took.
+
+It is the answer to the commonest surprise a branch review has to offer: **a branch with no commits of its own reviews nothing.** If your work is still uncommitted — or the branch has already been merged into the base, so the merge-base _is_ `HEAD` — the three-dot diff is empty and the run correctly reports `0 changed file(s)`. `git status` shows the work; `reviewer --uncommitted` reviews it.
+
+```bash
+reviewer --uncommitted --preview   # what would be reviewed, no model, no cost
+reviewer --uncommitted --fail-on bug,security
 ```
 
 `--out` is orthogonal to `--format` on purpose: CI wants the findings **on the diff** (annotations) _and_ a machine copy for whatever posts the comments, and a model call is far too expensive to make twice for two renderings of one answer.
@@ -105,6 +117,7 @@ Three commands review nothing. `reviewer init` writes the review setup — insid
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `--branch NAME`                 | Branch or commit to review (default `HEAD`, the current checkout — which is what a CI build has).                     |
 | `--base NAME`                   | Base to compare against (default `main`).                                                                             |
+| `--uncommitted`                 | Review the working tree against `HEAD`: staged, unstaged and untracked work. `--base`/`--branch` are not used.        |
 | `--project NAME`                | The project in `config.yaml`. Optional when the catalogue defines exactly one, or when there is none.                 |
 | `--config PATH`                 | Path to `config.yaml`; overrides `REVIEWER_CONFIG` and the default location.                                          |
 | `--format text\|ndjson\|github` | How findings are reported (default `text`).                                                                           |
@@ -190,7 +203,7 @@ jobs:
         with:
           fetch-depth: 0 # the reviewer diffs locally and needs the merge-base
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: husnuguner/code-reviewer/actions/review@v0.0.3
+      - uses: husnuguner/code-reviewer/actions/review@v0.0.4
         with:
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           language: tr
@@ -210,7 +223,7 @@ jobs:
         id: findings
         with: { name: code-review-findings }
         continue-on-error: true
-      - uses: husnuguner/code-reviewer/actions/comment@v0.0.3 # the same version the review job used
+      - uses: husnuguner/code-reviewer/actions/comment@v0.0.4 # the same version the review job used
         if: ${{ steps.findings.outcome == 'success' }} # skipped, not green, when there is nothing to post
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -305,14 +318,16 @@ prompt-injected diff could talk its way past is not a gate, so that word stays a
 skills changed — give the workflow a `workflow_dispatch` with a `pr` input and run it from the _Actions_ tab. GitHub's
 _Re-request review_ button appears only for reviewers that were requested, which a bot posting on its own cannot be.
 
-## Standing instructions: `prompts`
+## Standing instructions: the `prompts/` directory
 
-The review policy is the reviewer's own and cannot be replaced. What a repository can do is **add** to it: `reviewer init` writes an empty `.review/prompts/prompts.md` and the starter catalogue names it, so filling that file in is the whole of being heard.
+The review policy is the reviewer's own and cannot be replaced. What a repository can do is **add** to it: every `*.md` under the `prompts/` directory **beside the catalogue** is read, at any depth, in path order. There is no key to set — `reviewer init` writes an empty `.review/prompts/prompts.md`, and filling that file in (or dropping another `.md` beside it) is the whole of being heard.
 
-```yaml
-projects:
-  this-repo:
-    prompts: ["prompts/prompts.md"] # relative to the catalogue, as every path is
+```text
+.review/
+├── config.yaml        says nothing about prompts
+└── prompts/
+    ├── prompts.md     read on every file
+    └── security.md    read on every file, under its own heading
 ```
 
 ```markdown
@@ -326,12 +341,13 @@ bug however well it works today.
 What it does and does not do:
 
 - **Where it lands.** Appended to the system prompt, after the policy and its hard rules, before the output contract. The hard rules therefore still stand and the contract still has the last word on the shape of the answer — a project adds, it cannot rearrange.
+- **One heading per file.** Each file reaches the model as its own section, titled with its path (`## prompts/security.md`), so an instruction can be traced back to the file it came from instead of dissolving into one anonymous block.
 - **When it applies.** Every reviewed file, every run. That is the difference from a skill: a skill applies to the paths its mapping names, and costs nothing on the files it does not match.
-- **What it costs.** Every file of every run pays for this text, so it is capped at 20 000 characters, whole. Rules that concern some paths belong in a skill; the cap is not a setting because the answer to "my standing instructions do not fit" is a skill.
-- **An empty file adds nothing.** The composed prompt is then byte-for-byte the prompt of a project that named none, which is what `init` leaves behind.
-- **A path that cannot be read is a warning**, not a failed run: losing the instructions degrades a review; losing the review because a path was mistyped is worse. The run says which file, at WARN.
+- **What it costs.** Every file of every run pays for this text, so the whole directory is capped at 20 000 characters together. Rules that concern some paths belong in a skill; the cap is not a setting because the answer to "my standing instructions do not fit" is a skill.
+- **An empty file, or no directory at all, adds nothing.** The composed prompt is then byte-for-byte the prompt of a repository that said nothing, which is what `init` leaves behind.
+- **A file that cannot be read is a warning**, not a failed run: losing the instructions degrades a review; losing the review because one file was unreadable is worse. The run says which file, at WARN.
 
-More than one file is a list, read in order, and a machine-wide catalogue can name a shared one (`~/.config/reviewer/prompts/house-style.md`) that every project inherits from `defaults`.
+The directory always sits beside the catalogue that is in force, so a repository's rules are `.review/prompts/` and a machine-wide catalogue's are `~/.config/reviewer/prompts/` — one shared house style for every project reviewed without a `.review/` of its own.
 
 ## Review skills
 
@@ -451,7 +467,7 @@ Five layers speak, highest first: **command line → environment → `config.yam
 The complete annotated reference — every key, its meaning and default — is [`templates/config.example.yaml`](templates/config.example.yaml); a test keeps it in step with the parser. It ships with the reviewer, so an installed copy has it on disk beside the starters. `reviewer init` writes a shorter one of those ([`templates/config.yaml`](templates/config.yaml)). The shape, at its smallest useful:
 
 ```yaml
-version: 3
+version: 1
 defaults:
   llm: { provider: claude, model: claude-opus-5, api-key: ANTHROPIC_API_KEY }
   language: tr
@@ -470,11 +486,11 @@ A key set on the project wins over `defaults`, which wins over the built-in defa
 
 **The model's key** — `llm.api-key` — takes either the **name** of an environment variable (spelled like one: `ANTHROPIC_API_KEY`; read from the environment and the `.env` files) or the value itself. Naming keeps the file shareable; a named variable that is not set is an error rather than a confusing 401 later.
 
-**There is no key that replaces the review policy.** Who the reviewer is, what it looks for, what it leaves alone, the hard rules that stop reviewed content from steering it, and the exact JSON that comes back are all the reviewer's own ([`prompts/system.md`](prompts/system.md) and [`prompts/output-contract.md`](prompts/output-contract.md)). Replacing that text would mean dropping a guardrail by accident — the anti-hallucination rules and the injection rule are load-bearing, and the verification pass assumes they are in force. What a project adds _on top_ of it has two shapes: **`prompts`**, standing instructions appended to the policy for every file, and a **skill**, guidelines rendered into the prompt of the files its mapping matches.
+**There is no key that replaces the review policy.** Who the reviewer is, what it looks for, what it leaves alone, the hard rules that stop reviewed content from steering it, and the exact JSON that comes back are all the reviewer's own ([`prompts/system.md`](prompts/system.md) and [`prompts/output-contract.md`](prompts/output-contract.md)). Replacing that text would mean dropping a guardrail by accident — the anti-hallucination rules and the injection rule are load-bearing, and the verification pass assumes they are in force. What a project adds _on top_ of it has two shapes, and **neither is a key**: the `prompts/` directory beside the catalogue, whose files are appended to the policy for every reviewed file, and a **skill**, guidelines rendered into the prompt of the files its mapping matches.
 
-A key the schema does not recognise is **rejected**, not ignored. A key from an earlier spelling (`lang`, `skills_path`, `max_*`, `maxFindingsPerFile`…) is answered with its current name, and a key that this build removed (`repositories`, `repository`, `severities`, `max-prior-comment-chars`, `max-concurrent-prs`, `prompts`) is answered with what replaced it — `prompts` with the skill that replaces it.
+A key the schema does not recognise is **rejected**, not ignored: the error names the key and the accepted set, so a misspelt `exlude` cannot silently do nothing. The schema is at `version: 1` and has no earlier shape to migrate from — the reviewer has not released one.
 
-Setting keys (`defaults` and project): `llm` (`provider`, `model`, `base-url`, `api-key`), `language`, `verify`, `prompts`, `skills` (`path`; `mappings` on a project), `local-path`, `exclude`, `max-findings-per-file`, `max-file-chars`, `max-skill-chars`, `max-skills-total-chars`, `max-context-chars`, `max-concurrent-files`.
+Setting keys (`defaults` and project): `llm` (`provider`, `model`, `base-url`, `api-key`), `language`, `verify`, `skills` (`path`; `mappings` on a project), `local-path`, `exclude`, `max-findings-per-file`, `max-file-chars`, `max-skill-chars`, `max-skills-total-chars`, `max-context-chars`, `max-concurrent-files`.
 
 ### Environment
 
@@ -490,7 +506,6 @@ The environment is the override layer: any variable below beats its `config.yaml
 | `REVIEW_LANG`                   | `en`             | Language of finding bodies (`tr` / `en`).                                                             |
 | `REVIEW_EXCLUDE_PATHS`          | —                | Comma-separated globs skipped entirely.                                                               |
 | `REVIEW_MAX_FINDINGS_PER_FILE`  | `3`              | Max findings reported per file; the most severe survive. `0` = uncapped.                              |
-| `REVIEW_PROMPTS`                | —                | Comma-separated prompt files appended to the policy; overrides the catalogue's `prompts`.             |
 | `REVIEW_SKILLS_PATH`            | —                | Directory of review skills inside the reviewed repo; empty disables skills.                           |
 | `REVIEW_SKILL_MAPPINGS`         | `{}`             | The project's `skills` map as JSON; normally set in `config.yaml`.                                    |
 | `REVIEW_VERIFY`                 | `true`           | Check findings against the diff and drop the refuted ones. `--no-verify` wins.                        |
@@ -518,7 +533,7 @@ There is deliberately **no extension allowlist**. What is worth skipping for val
 Releases follow GitHub's action convention: an **immutable** `vX.Y.Z` tag per release, and a **moving** major tag (`v0`) that always points at the latest `v0.*`. A workflow that says `@v0` gets fixes without editing; one that wants no surprises pins the full version or the commit SHA, as it would for `actions/checkout`.
 
 ```yaml
-- uses: husnuguner/code-reviewer/actions/review@v0.0.3 # this exact release; recommended while 0.x
+- uses: husnuguner/code-reviewer/actions/review@v0.0.4 # this exact release; recommended while 0.x
 - uses: husnuguner/code-reviewer/actions/review@v0 # latest 0.x
 - uses: husnuguner/code-reviewer/actions/review@<full-sha> # what a hardened workflow pins
 ```
@@ -530,29 +545,31 @@ The version line starts at `v0.0.1`, and the leading zero is the whole statement
 Cutting a release (maintainers):
 
 ```bash
-bun pm version 0.0.3 --no-git-tag-version  # package.json
-git commit -am "release: v0.0.3"
-git tag -a v0.0.3 -m "v0.0.3"
-git tag -f v0 v0.0.3                        # move the major tag
-git push origin main v0.0.3 && git push -f origin v0
+bun pm version 0.0.4 --no-git-tag-version  # package.json
+git commit -am "release: v0.0.4"
+git tag -a v0.0.4 -m "v0.0.4"
+git tag -f v0 v0.0.4                        # move the major tag
+git push origin main v0.0.4 && git push -f origin v0
 ```
 
-A tag is not a GitHub Release: nothing here creates one, so a release worth announcing is published separately (`gh release create v0.0.3 --verify-tag --notes-file …`).
+A tag is not a GitHub Release: nothing here creates one, so a release worth announcing is published separately (`gh release create v0.0.4 --verify-tag --notes-file …`).
 
 ## When it does not run
 
-| Symptom                                                   | Cause / fix                                                                  |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| exit 2, `ANTHROPIC_API_KEY ... is not set`                | Put it in `~/.config/reviewer/.env` (or `.review/.env`), or export it        |
-| exit 2, `1 validation error for Config`                   | A setting has the wrong shape; the message names the variable                |
-| exit 2, `... is not a git repository`                     | Run inside a checkout, or set `local-path` / `REVIEW_LOCAL_PATH`             |
-| exit 2, `'repositories' was removed in schema version 3`  | A v2 catalogue: drop `repositories` and `repository`, add `local-path`       |
-| exit 3                                                    | Not an error: a finding matched `--fail-on`                                  |
-| `No merge-base for 'X' and 'Y'`                           | Unrelated refs, or a shallow clone — CI needs `fetch-depth: 0`               |
-| 0 findings and `files_reviewed=0`                         | Everything was skipped; `--preview` says why, per file                       |
-| `Skill ... has no entry in the project's skills.mappings` | A loaded skill nobody scoped; map it, or switch it off with `[]`             |
-| `Skill mapping for '…' matches no loaded skill`           | The mapping names a skill that is not in `skills.path`; almost always a typo |
-| exit 1 with a usage message                               | Bad flag; `--help`                                                           |
+| Symptom                                                   | Cause / fix                                                                   |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| exit 2, `ANTHROPIC_API_KEY ... is not set`                | Put it in `~/.config/reviewer/.env` (or `.review/.env`), or export it         |
+| exit 2, `1 validation error for Config`                   | A setting has the wrong shape; the message names the variable                 |
+| exit 2, `... is not a git repository`                     | Run inside a checkout, or set `local-path` / `REVIEW_LOCAL_PATH`              |
+| exit 2, `... has unrecognised setting(s) [...]`           | A key the schema does not know; the message names the accepted set            |
+| exit 2, `... declares schema version N ... up to 1`       | A catalogue from a newer build; upgrade the reviewer or lower `version`       |
+| exit 3                                                    | Not an error: a finding matched `--fail-on`                                   |
+| `No merge-base for 'X' and 'Y'`                           | Unrelated refs, or a shallow clone — CI needs `fetch-depth: 0`                |
+| `0 changed file(s)` with work in `git status`             | The work is not committed (or the branch is merged): `reviewer --uncommitted` |
+| 0 findings and `files_reviewed=0`                         | Everything was skipped; `--preview` says why, per file                        |
+| `Skill ... has no entry in the project's skills.mappings` | A loaded skill nobody scoped; map it, or switch it off with `[]`              |
+| `Skill mapping for '…' matches no loaded skill`           | The mapping names a skill that is not in `skills.path`; almost always a typo  |
+| exit 1 with a usage message                               | Bad flag; `--help`                                                            |
 
 A free first check that needs no key: `reviewer --preview --base main -v` resolves the config, opens git, computes the merge-base and prints the scope.
 

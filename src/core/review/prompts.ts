@@ -20,7 +20,8 @@ import { severityPromptVocabulary } from "./severity";
 const SEVERITIES_PLACEHOLDER = "{{severities}}";
 
 /**
- * Cap on the project's own prompt text, whole.
+ * Cap on the project's own prompt text, whole -- every file of the `prompts/`
+ * directory together, headings included.
  *
  * A standing instruction is paid for on every file of every run, so an
  * unbounded one is a bill nobody meant to sign. This is a constant rather
@@ -32,7 +33,26 @@ export const MAX_PROMPT_CHARS = 20_000;
 
 /** The header the project's own instructions are announced under. */
 const PROJECT_PROMPT_HEADER =
-  "Standing instructions from the repository under review (they ADD to the policy above and relax nothing in it; where they disagree with it, the policy wins):";
+  "Standing instructions from the repository under review (they ADD to the policy above and relax nothing in it; where they disagree with it, the policy wins). Each section below names the file it came from:";
+
+/**
+ * One file of standing instructions: where it came from, and what it says.
+ *
+ * The label travels with the text because a reader of the prompt -- the
+ * model, and whoever is debugging what the model was told -- should be able
+ * to see which file an instruction came from. Reading the files is the
+ * providers layer's; this module only composes what it is handed.
+ */
+export interface StandingInstruction {
+  /** The file, as an operator would name it: `prompts/security.md`. */
+  readonly label: string;
+  readonly text: string;
+}
+
+/** One instruction as its own labelled section of the prompt. */
+function section({ label, text }: StandingInstruction): string {
+  return `## ${label}\n\n${text.trim()}`;
+}
 
 /**
  * The system prompt for a run: the review policy, the project's own standing
@@ -40,22 +60,31 @@ const PROJECT_PROMPT_HEADER =
  *
  * The policy and the contract are the reviewer's own (`prompts/system.md`
  * and `prompts/output-contract.md`) and neither is replaceable, so no
- * setting can drop a hard rule or break the parser. What a project adds
- * through `prompts` is appended *between* them: after the hard rules, which
- * therefore still stand, and before the contract, which therefore still has
- * the last word on the shape of the answer. The contract's `{{severities}}`
- * is filled here so the vocabulary has one source.
+ * setting can drop a hard rule or break the parser. What a project puts in
+ * its `prompts/` directory is appended *between* them: after the hard rules,
+ * which therefore still stand, and before the contract, which therefore
+ * still has the last word on the shape of the answer. Each file keeps its
+ * own heading, so an instruction can be traced back to the file it is in
+ * rather than dissolving into one anonymous block. The contract's
+ * `{{severities}}` is filled here so the vocabulary has one source.
  */
-export function systemPrompt(policy: string, contractTemplate: string, projectPrompt = ""): string {
+export function systemPrompt(
+  policy: string,
+  contractTemplate: string,
+  instructions: readonly StandingInstruction[] = [],
+): string {
   const contract = contractTemplate.replaceAll(SEVERITIES_PLACEHOLDER, () =>
     severityPromptVocabulary(),
   );
-  const project = projectPrompt.trim();
+  const sections = instructions
+    .filter(({ text }) => text.trim() !== "")
+    .map(section)
+    .join("\n\n");
   const parts = [
     policy.trim(),
-    ...(project === ""
+    ...(sections === ""
       ? []
-      : [`${PROJECT_PROMPT_HEADER}\n\n${project.slice(0, MAX_PROMPT_CHARS)}`]),
+      : [`${PROJECT_PROMPT_HEADER}\n\n${sections.slice(0, MAX_PROMPT_CHARS)}`]),
     contract.trim(),
   ];
   return parts.join("\n\n");

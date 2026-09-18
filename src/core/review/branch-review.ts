@@ -54,6 +54,11 @@ import { capPerFile } from "./volume";
 export interface BranchReviewOptions {
   readonly base: string;
   readonly branch: string;
+  /**
+   * Review the working tree against `HEAD` instead of `branch` against
+   * `base`; `base` and `branch` are then not consulted at all.
+   */
+  readonly uncommitted?: boolean;
   readonly reviewer: PerFileReviewer;
   /** Checks each file's findings against its diff; `null` reports them all. */
   readonly verifier?: PerFileVerifier | null;
@@ -84,7 +89,11 @@ export interface BranchReviewOptions {
 export async function* iterBranchReview(
   options: BranchReviewOptions,
 ): AsyncGenerator<BranchReviewRecord> {
-  const { base, branch, git } = options;
+  const { git } = options;
+  // What the summary will say it compared, decided here rather than by the
+  // caller: a record naming a base the diff never used would be a lie no
+  // consumer of the NDJSON could catch.
+  const { base, branch } = reviewedReferences(options);
   const log = (options.logger ?? NULL_LOGGER).child("review.branch_review");
 
   const files = await changedFilesOf(options, log);
@@ -237,16 +246,50 @@ function withGuarded(
   return merged;
 }
 
+/** What the summary is asked to compare, as a review names the two sides. */
+type ReviewScope = Pick<BranchReviewOptions, "base" | "branch" | "uncommitted">;
+
+/** What the working tree is reviewed against, and what it is called. */
+export const WORKTREE_BASE = "HEAD";
+export const WORKING_TREE = "working tree";
+
 /**
- * The changed files of `branch` against `base`, as the three-dot diff sees
- * them. Shared by the review and the preview, so the two cannot disagree
- * about which base they compared against.
+ * The two sides a run actually compared.
+ *
+ * An uncommitted review has no branch and no base: it compares what is on
+ * disk against `HEAD`, whatever `--base` and `--branch` happen to hold. They
+ * are reported as what they are, so the summary, the text header and the
+ * preview title all describe the diff that was taken.
+ */
+function reviewedReferences(options: ReviewScope): { base: string; branch: string } {
+  return options.uncommitted === true
+    ? { base: WORKTREE_BASE, branch: WORKING_TREE }
+    : { base: options.base, branch: options.branch };
+}
+
+/** How a report names the scope it covered, for a person reading it. */
+function scopeTitle(options: ReviewScope): string {
+  const { base, branch } = reviewedReferences(options);
+  return options.uncommitted === true ? `${branch} vs ${base}` : `branch ${branch} vs ${base}`;
+}
+
+/**
+ * The changed files of the run's scope: the three-dot diff of a branch, or
+ * everything the working tree has not committed. Shared by the review and
+ * the preview, so the two cannot disagree about what they compared.
  */
 async function changedFilesOf(
-  options: Pick<BranchReviewOptions, "base" | "branch" | "git">,
+  options: ReviewScope & Pick<BranchReviewOptions, "git">,
   log: Logger,
 ): Promise<ChangedFileEntry[]> {
   const { base, branch, git } = options;
+  if (options.uncommitted === true) {
+    const dirty = await git.worktreeFiles();
+    log.info(
+      `Working tree vs ${WORKTREE_BASE} in ${git.root}: ${dirty.length} uncommitted file(s).`,
+    );
+    return dirty;
+  }
   const forkPoint = await git.mergeBase(base, branch);
   if (forkPoint === null) {
     log.warn(`No merge-base for '${branch}' and '${base}'; comparing against '${base}' directly.`);
@@ -260,6 +303,8 @@ async function changedFilesOf(
 export interface BranchPreviewOptions {
   readonly base: string;
   readonly branch: string;
+  /** Preview the uncommitted change set instead of a branch's. */
+  readonly uncommitted?: boolean;
   readonly git: GitReader;
   readonly settings: FileReviewSettings;
   readonly logger?: Logger;
@@ -281,11 +326,7 @@ export async function previewBranch(
   const decisions = selectFiles(files, options.settings);
   return {
     decisions,
-    report: previewReport(
-      `branch ${options.branch} vs ${options.base}`,
-      decisions,
-      options.settings.maxFileChars,
-    ),
+    report: previewReport(scopeTitle(options), decisions, options.settings.maxFileChars),
   };
 }
 

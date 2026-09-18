@@ -41,7 +41,6 @@ export const PROJECT_FIELDS: Readonly<
 > = {
   language: "reviewLang",
   verify: "verifyFindings",
-  prompts: "promptPaths",
   "local-path": "localPath",
   exclude: "excludePaths",
   "max-findings-per-file": "maxFindingsPerFile",
@@ -97,7 +96,7 @@ const SKILLS_FIELDS: Readonly<Record<SkillsSectionKey, ConfigField>> = {
 };
 
 /** Fields the file may set as a list but the review layer reads as a CSV string. */
-const LIST_FIELDS: ReadonlySet<ConfigField> = new Set(["excludePaths", "promptPaths"]);
+const LIST_FIELDS: ReadonlySet<ConfigField> = new Set(["excludePaths"]);
 
 /** Name/value pairs from one source; names are matched case-insensitively. */
 export type EnvironmentValues = Readonly<Record<string, string | undefined>>;
@@ -176,8 +175,9 @@ export interface ProjectValuesOptions {
   readonly project: string | null;
   /**
    * The directory the catalogue file is in. Every relative path the
-   * catalogue names is taken from here, so `prompts` and `skills.path` share
-   * one base and a reader can check either against the other.
+   * catalogue names is taken from here, which is the same base the standing
+   * instructions are found under (`<this directory>/prompts`), so a reader
+   * can check either against the other.
    */
   readonly catalogDirectory: string;
   /** The merged environment the settings loader also reads. */
@@ -283,21 +283,13 @@ function withProjectPlaceholders(values: Values, projectName: string): Values {
 /**
  * The paths a catalogue names are beside the catalogue: each is anchored
  * here, once, and the flow that reads one never has to ask which base it
- * meant. `skills.path` is one directory; `prompts` is a CSV of files, so
- * every entry gets the same rule.
+ * meant. Only `skills.path` is such a path now -- the standing instructions
+ * are not named at all, they are found under that same base.
  */
 function withAnchoredPaths(values: Values, catalogDirectory: string): Values {
   const anchored: Values = { ...values };
   if (typeof anchored.skillsPath === "string") {
     anchored.skillsPath = besideCatalog(anchored.skillsPath, catalogDirectory);
-  }
-  if (typeof anchored.promptPaths === "string") {
-    anchored.promptPaths = anchored.promptPaths
-      .split(",")
-      .map((path) => path.trim())
-      .filter((path) => path !== "")
-      .map((path) => besideCatalog(path, catalogDirectory))
-      .join(",");
   }
   return anchored;
 }

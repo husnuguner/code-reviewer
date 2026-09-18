@@ -16,6 +16,8 @@ import { type BranchReviewRecord } from "../../../src/core/ports/review-reporter
 import { type SkillMatcher } from "../../../src/core/ports/skill-matcher";
 import {
   type BranchReviewOptions,
+  WORKING_TREE,
+  WORKTREE_BASE,
   branchReviewText,
   iterBranchReview,
   previewBranch,
@@ -261,6 +263,72 @@ describe("verification", () => {
     const result = await reviewBranch(options(repo()));
     expect(result.findings).toHaveLength(2);
     expect(result.refuted).toBe(0);
+  });
+});
+
+// -- uncommitted work ------------------------------------------------------
+
+/**
+ * The same repository after the author kept working: `a.py` changed again on
+ * disk (staged), `loose.py` written and never added, and `new.py` left as the
+ * branch committed it.
+ */
+function stillWorking(): string {
+  const root = repo();
+  writeFileSync(join(root, "a.py"), "one = 1\ntwo = 2\nthree = 3\nfour = 4\n");
+  git(root, "add", "a.py");
+  writeFileSync(join(root, "loose.py"), "draft = True\n");
+  return root;
+}
+
+describe("reviewing what is not committed", () => {
+  it("reviews the working tree instead of the branch", async () => {
+    const o = options(stillWorking(), { uncommitted: true });
+    const result = await reviewBranch(o);
+    // `new.py` is committed work: this run is about what HEAD does not have.
+    expect(sortedByCodePoint(o.reviewer.seen)).toEqual(["a.py", "loose.py"]);
+    expect(result.files_reviewed).toBe(2);
+  });
+
+  it("anchors a finding to the uncommitted line", async () => {
+    const result = await reviewBranch(options(stillWorking(), { uncommitted: true }));
+    const byPath = new Map(result.findings.map((f) => [f.path, f]));
+    expect(byPath.get("a.py")?.line).toBe(4);
+    expect(byPath.get("a.py")?.anchor).toBe("exact");
+  });
+
+  it("says what it compared, whatever --base and --branch hold", async () => {
+    // A summary naming `main` here would describe a diff this run never took.
+    const stream = iterBranchReview(
+      options(stillWorking(), { uncommitted: true, base: "main", branch: "feature" }),
+    );
+    const records: BranchReviewRecord[] = await Array.fromAsync(stream);
+    expect(records.at(-1)).toMatchObject({
+      type: "summary",
+      base: WORKTREE_BASE,
+      branch: WORKING_TREE,
+      files_changed: 2,
+    });
+  });
+
+  it("finds nothing to review in a clean checkout", async () => {
+    const o = options(repo(), { uncommitted: true });
+    const result = await reviewBranch(o);
+    expect(o.reviewer.seen).toEqual([]);
+    expect(result.files_changed).toBe(0);
+  });
+
+  it("previews the uncommitted change set under its own title", async () => {
+    const { decisions, report } = await previewBranch({
+      base: "main",
+      branch: "feature",
+      uncommitted: true,
+      git: new LocalGitReader(stillWorking()),
+      settings: DEFAULT_FILE_REVIEW_SETTINGS,
+    });
+    expect(report).toContain("=== [PREVIEW] working tree vs HEAD ===");
+    expect(sortedByCodePoint(decisions.map((d) => d.path))).toEqual(["a.py", "loose.py"]);
+    expect(report).toContain("No model was called.");
   });
 });
 

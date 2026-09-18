@@ -1,19 +1,30 @@
 /**
- * Reading a repository's standing instructions off the disk: order, the
- * empty file `init` leaves behind, and the path that is not there.
+ * Finding a repository's standing instructions: the directory beside the
+ * catalogue, what it reads out of it, and the file it cannot read.
  */
 
 import { describe, expect, it } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
-import { readProjectPrompts } from "../../../src/providers/assets/project-prompts";
+import {
+  PROMPTS_DIR_NAME,
+  promptsDirectory,
+  readProjectPrompts,
+} from "../../../src/providers/assets/project-prompts";
 
-function scratch(files: Readonly<Record<string, string>>): (name: string) => string {
+/** A throwaway `prompts/` directory holding the named files. */
+function scratch(files: Readonly<Record<string, string>>): string {
   const root = mkdtempSync(join(tmpdir(), "reviewer-prompts-"));
-  for (const [name, text] of Object.entries(files)) writeFileSync(join(root, name), text, "utf8");
-  return (name: string) => join(root, name);
+  const directory = join(root, PROMPTS_DIR_NAME);
+  mkdirSync(directory, { recursive: true });
+  for (const [name, text] of Object.entries(files)) {
+    const file = join(directory, name);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, text, "utf8");
+  }
+  return directory;
 }
 
 function recordingLogger(lines: string[]): Parameters<typeof readProjectPrompts>[1] {
@@ -32,31 +43,64 @@ function recordingLogger(lines: string[]): Parameters<typeof readProjectPrompts>
   return logger;
 }
 
+describe("where the standing instructions are", () => {
+  it("is `prompts/` beside the catalogue, whichever catalogue is in force", () => {
+    // Not a setting: the directory follows the catalogue, so a repository's
+    // rules are in its own .review/ and a machine-wide catalogue's are in
+    // the config home. Nothing has to name either.
+    expect(promptsDirectory("/repo/.review/config.yaml")).toBe("/repo/.review/prompts");
+    expect(promptsDirectory("/home/me/.config/reviewer/config.yaml")).toBe(
+      "/home/me/.config/reviewer/prompts",
+    );
+  });
+});
+
 describe("the project's prompt files", () => {
-  it("joins them in the order the catalogue named them", () => {
-    const path = scratch({ "a.md": "First.", "b.md": "Second." });
-    expect(readProjectPrompts([path("b.md"), path("a.md")])).toBe("Second.\n\nFirst.");
+  it("reads every *.md under the directory, nested ones included, in path order", () => {
+    const directory = scratch({
+      "b.md": "Second.",
+      "a.md": "First.",
+      "api/errors.md": "Nested.",
+      "notes.txt": "Not Markdown.",
+    });
+    expect(readProjectPrompts(directory)).toEqual([
+      { label: "prompts/a.md", text: "First." },
+      { label: "prompts/api/errors.md", text: "Nested." },
+      { label: "prompts/b.md", text: "Second." },
+    ]);
+  });
+
+  it("labels each file by its path, so the model is told where a rule came from", () => {
+    const directory = scratch({ "security.md": "Never log a token." });
+    expect(readProjectPrompts(directory)[0]?.label).toBe("prompts/security.md");
   });
 
   it("adds nothing for the empty file init writes", () => {
-    const path = scratch({ "prompts.md": "" });
-    expect(readProjectPrompts([path("prompts.md")])).toBe("");
+    const directory = scratch({ "prompts.md": "" });
+    expect(readProjectPrompts(directory)).toEqual([]);
   });
 
-  it("names nothing at all as nothing, so a project without prompts composes the old prompt", () => {
-    expect(readProjectPrompts([])).toBe("");
+  it("treats a missing directory as nothing to add, not as a failure", () => {
+    // The ordinary case for a repository that carries no rules of its own.
+    const absent = join(tmpdir(), "reviewer-prompts-absent-dir");
+    expect(readProjectPrompts(absent)).toEqual([]);
+    expect(readProjectPrompts("")).toEqual([]);
   });
 
-  it("warns about a path it cannot read and keeps the rest", () => {
-    const path = scratch({ "a.md": "Kept." });
-    const lines: string[] = [];
-    const text = readProjectPrompts([path("missing.md"), path("a.md")], recordingLogger(lines));
-    // Losing a project's instructions degrades the review; losing the review
-    // because one path was mistyped is worse -- so it is a warning, not an
-    // error, and the surviving file still reaches the model.
-    expect(text).toBe("Kept.");
-    expect(lines.some((line) => line.startsWith("warn:") && line.includes("missing.md"))).toBe(
-      true,
-    );
-  });
+  // Permissions do not stop root, so the one case that needs an unreadable
+  // file states that condition rather than failing in a container.
+  it.skipIf(process.getuid?.() === 0)(
+    "warns about a file it cannot read and keeps the rest",
+    () => {
+      const directory = scratch({ "a.md": "Kept.", "b.md": "Unreadable." });
+      chmodSync(join(directory, "b.md"), 0o000);
+      const lines: string[] = [];
+      const instructions = readProjectPrompts(directory, recordingLogger(lines));
+      // Losing a repository's instructions degrades the review; losing the
+      // review because one file is unreadable is worse -- so it is a warning,
+      // and the surviving file still reaches the model.
+      expect(instructions).toEqual([{ label: "prompts/a.md", text: "Kept." }]);
+      expect(lines.some((line) => line.startsWith("warn:") && line.includes("b.md"))).toBe(true);
+    },
+  );
 });

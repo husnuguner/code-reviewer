@@ -45,7 +45,6 @@ export const CONFIG_ALIASES = {
   baseUrl: "LLM_BASE_URL",
   localPath: "REVIEW_LOCAL_PATH",
   maxFileChars: "REVIEW_MAX_FILE_CHARS",
-  promptPaths: "REVIEW_PROMPTS",
   skillsPath: "REVIEW_SKILLS_PATH",
   skillMappings: "REVIEW_SKILL_MAPPINGS",
   maxSkillChars: "REVIEW_MAX_SKILL_CHARS",
@@ -152,7 +151,6 @@ function rawSchema(providers: RegisteredProviders) {
     LLM_BASE_URL: optionalText.default(null),
     REVIEW_LOCAL_PATH: text.default(""),
     REVIEW_MAX_FILE_CHARS: integer.default(8000),
-    REVIEW_PROMPTS: text.default(""),
     REVIEW_SKILLS_PATH: text.default(""),
     REVIEW_SKILL_MAPPINGS: skillMappings.default({}),
     REVIEW_MAX_SKILL_CHARS: integer.default(10_000),
@@ -212,11 +210,6 @@ export type ConfigValues = {
 export interface Config extends ConfigValues {
   /** Globs whose files are skipped entirely. */
   readonly excludeGlobs: readonly string[];
-  /**
-   * The project's own prompt files, in the order the catalogue named them.
-   * Their text is appended to the reviewer's policy, which is never replaced.
-   */
-  readonly promptFiles: readonly string[];
   /** The model knobs; the vendor's name is `provider`, passed beside them. */
   llmSettings(): LlmSettings;
   /** What one file review reads; `extraExclude` adds the command line's globs. */
@@ -260,7 +253,6 @@ function withViews(values: ConfigValues): Config {
   return Object.freeze({
     ...values,
     excludeGlobs,
-    promptFiles: csv(values.promptPaths),
     llmSettings: () => ({
       apiKey: values.apiKey,
       baseUrl: values.baseUrl,

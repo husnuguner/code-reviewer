@@ -22,7 +22,9 @@ export interface StarterFiles {
  * No review policy is written: the policy is the reviewer's own and is not
  * replaceable. What an operator owns from day one is the catalogue, an
  * empty `prompts/prompts.md` for standing instructions, and the skills
- * folder for the rules that belong to particular paths.
+ * folder for the rules that belong to particular paths. The two folders are
+ * conventions rather than settings, so what `init` writes is what the run
+ * reads -- no key says so twice.
  */
 export function initCatalog(
   files: CatalogFiles,
@@ -45,10 +47,11 @@ export function initCatalog(
  *
  * The skills directory is created now, with a README, so the folder exists
  * to be found and the first person who opens it learns what goes there. So
- * is `prompts/prompts.md`, and it is written *empty*: the catalogue already
- * names it, so whoever has something to say to the reviewer about this
- * repository types it into a file that is already wired, and a file nobody
- * fills in adds nothing to any prompt. The `.gitignore` is not optional:
+ * is `prompts/prompts.md`, and it is written *empty*: every `*.md` in that
+ * folder is read on every reviewed file, so whoever has something to say to
+ * the reviewer about this repository types it into a file that is already
+ * read -- and one nobody fills in adds nothing to any prompt. The
+ * `.gitignore` is not optional:
  * `.review/.env` is where a project-specific key may live, and a committed
  * key is the one mistake `init` must make impossible by default.
  */
@@ -78,7 +81,7 @@ function finishRepoInit(files: CatalogFiles, out: ConsoleOutput, starter: Starte
     `  1. Put the model's key in ~/.config/reviewer/.env (or ${files.directory}/.env, gitignored).`,
   );
   out.line(
-    `  2. Say what holds for every file of this repository: ${files.directory}/prompts/prompts.md.`,
+    `  2. Say what holds for every file of this repository: ${files.directory}/prompts/prompts.md (every *.md in that folder is read).`,
   );
   out.line(
     `  3. Add this project's review skills to ${files.directory}/skills/ -- see the README there.`,

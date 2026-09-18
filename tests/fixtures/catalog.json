@@ -1,12 +1,12 @@
 {
   "module": "catalog",
-  "schema": "Catalogue schema v3: local git only. No repositories/providers, no per-project repository, no posting settings. Expectations for parse/* and project/* are regenerated from the parser; the removed-key cases below are hand-written.",
+  "schema": "Catalogue schema v1: local git only, kebab-case keys, `defaults` + `projects`. Expectations for parse/* and project/* are regenerated from the parser.",
   "cases": [
     {
       "name": "parse/valid",
       "input": {
         "payload": {
-          "version": 2,
+          "version": 1,
           "_readme": [
             "ignored at the root"
           ],
@@ -111,7 +111,7 @@
       },
       "expected": {
         "error": "CatalogError",
-        "message": "/x/config.yaml declares schema version 99, but this build understands up to 3. Upgrade the reviewer."
+        "message": "/x/config.yaml declares schema version 99, but this build understands up to 1. Upgrade the reviewer."
       }
     },
     {
@@ -123,7 +123,7 @@
       },
       "expected": {
         "error": "CatalogError",
-        "message": "/x/config.yaml declares schema version '1', but this build understands up to 3. Upgrade the reviewer."
+        "message": "/x/config.yaml declares schema version '1', but this build understands up to 1. Upgrade the reviewer."
       }
     },
     {
@@ -159,7 +159,7 @@
       },
       "expected": {
         "error": "CatalogError",
-        "message": "/x/config.yaml declares schema version null, but this build understands up to 3. Upgrade the reviewer."
+        "message": "/x/config.yaml declares schema version null, but this build understands up to 1. Upgrade the reviewer."
       }
     },
     {
@@ -227,7 +227,7 @@
       },
       "expected": {
         "error": "CatalogError",
-        "message": "Project 'x' has unrecognised setting(s) ['exlude']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'prompts', 'skills', 'verify']"
+        "message": "Project 'x' has unrecognised setting(s) ['exlude']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'skills', 'verify']"
       }
     },
     {
@@ -385,22 +385,7 @@
       },
       "expected": {
         "error": "CatalogError",
-        "message": "Project 'x' has unrecognised setting(s) ['exlude']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'prompts', 'skills', 'verify']"
-      }
-    },
-    {
-      "name": "project_values/renamed_key_hint",
-      "input": {
-        "payload": {
-          "version": 1,
-          "projects": {
-            "x": {}
-          }
-        }
-      },
-      "expected": {
-        "error": "CatalogError",
-        "message": "Project 'x': 'inline_severities' was renamed to 'severities' in schema version 2."
+        "message": "Project 'x' has unrecognised setting(s) ['exlude']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'skills', 'verify']"
       }
     },
     {
@@ -423,23 +408,7 @@
       }
     },
     {
-      "name": "parse/skills_path_renamed_hint",
-      "input": {
-        "payload": {
-          "projects": {
-            "x": {
-              "skills_path": ".s"
-            }
-          }
-        }
-      },
-      "expected": {
-        "error": "CatalogError",
-        "message": "Project 'x': 'skills_path' was renamed to 'skills.path' in schema version 3."
-      }
-    },
-    {
-      "name": "parse/lang_renamed_hint",
+      "name": "parse/legacy_spelling_unknown",
       "input": {
         "payload": {
           "projects": {
@@ -451,23 +420,7 @@
       },
       "expected": {
         "error": "CatalogError",
-        "message": "Project 'x': 'lang' was renamed to 'language' in schema version 3."
-      }
-    },
-    {
-      "name": "parse/snake_setting_renamed_hint",
-      "input": {
-        "payload": {
-          "projects": {
-            "x": {
-              "max_findings_per_file": 2
-            }
-          }
-        }
-      },
-      "expected": {
-        "error": "CatalogError",
-        "message": "Project 'x': 'max_findings_per_file' was renamed to 'max-findings-per-file' in schema version 3."
+        "message": "Project 'x' has unrecognised setting(s) ['lang']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'skills', 'verify']"
       }
     },
     {
@@ -482,7 +435,7 @@
       },
       "expected": {
         "error": "CatalogError",
-        "message": "defaults has unrecognised setting(s) ['languge']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'prompts', 'skills', 'verify']"
+        "message": "defaults has unrecognised setting(s) ['languge']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'skills', 'verify']"
       }
     },
     {
@@ -521,22 +474,6 @@
       }
     },
     {
-      "name": "parse/camel_setting_renamed_hint",
-      "input": {
-        "payload": {
-          "projects": {
-            "x": {
-              "maxFindingsPerFile": 2
-            }
-          }
-        }
-      },
-      "expected": {
-        "error": "CatalogError",
-        "message": "Project 'x': 'maxFindingsPerFile' was renamed to 'max-findings-per-file' in schema version 3."
-      }
-    },
-    {
       "name": "parse/llm_unknown_key",
       "input": {
         "payload": {
@@ -551,7 +488,7 @@
       },
       "expected": {
         "error": "CatalogError",
-        "message": "defaults llm: 'apiKey' was renamed to 'api-key' in schema version 3."
+        "message": "defaults llm has unrecognised key(s) ['apiKey']; known: ['api-key', 'base-url', 'model', 'provider']"
       }
     },
     {

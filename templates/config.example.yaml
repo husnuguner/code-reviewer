@@ -1,122 +1,46 @@
-# The complete, annotated catalogue -- every key the reviewer accepts, with its
-# meaning, type and default. Nothing writes this file: it is the reference
-# that ships beside the starters in this directory. `reviewer init` writes one
-# of those instead (config.yaml for the machine-wide catalogue,
-# repo-config.yaml inside a checkout); copy what you need from here into
-# ~/.config/reviewer/config.yaml and leave the rest out -- a key you omit takes
-# the default shown here.
+# Every key the reviewer accepts, with its default. Nothing writes this file:
+# `reviewer init` writes a starter beside it (config.yaml, or repo-config.yaml
+# inside a checkout). Copy what you need; an omitted key takes its default.
+# Kept in step with the parser by tests/core/catalog/config-example.test.ts.
 #
-# Validated by tests/core/catalog/config-example.test.ts, so it can never
-# drift from what the parser accepts.
+# Beside this file: .env (the named secret), prompts/ (every *.md is appended
+# to the policy for every reviewed file) and skills/. The review policy itself
+# ships with the reviewer and is not configurable.
 #
-# What goes where under ~/.config/reviewer/:
-#   config.yaml   -> the defaults every project starts from, and the
-#                    projects. The model's key may be NAMED here (an
-#                    environment variable) or written here; naming keeps it
-#                    shareable.
-#   .env          -> the named secret: LLM_API_KEY.
-#   skills/       -> the review skills, one folder per project; see skills.
-#                    The review policy itself is not here: it ships with the
-#                    reviewer and is not configurable.
-#
-# Precedence, highest first: command line > exported environment >
-# ~/.config/reviewer/.env > ./.env > the project > defaults > built-in.
-# A value in .env therefore overrides the catalogue -- keep settings here.
+# Precedence, highest first: command line > environment > .env > the project >
+# defaults > built-in.
 
-# Schema version this file is written for. Optional; a newer number than the
-# reviewer understands is refused with an "upgrade" message.
-version: 3
+# Schema version. Optional; a newer number than this build knows is refused.
+version: 1
 
-# The settings every project starts from. Any key a project sets overrides
-# the same key here; anything neither sets takes the built-in default noted
-# on each key. Every key below is also allowed on a project (skills.mappings
-# only there).
+# What every project starts from; a project overrides a key by restating it.
 defaults:
-  # ---- the model ---------------------------------------------------------
   llm:
-    # claude (Anthropic) or local (any OpenAI-compatible server: LM Studio,
-    # Ollama, vLLM...). Default local.
-    provider: claude
-    # The model name the provider expects. Default: the provider's own.
-    model: claude-opus-5
-    # Either the NAME of the environment variable holding the key or the key
-    # itself. Required.
-    api-key: LLM_API_KEY
-    # Optional. For local: the server's OpenAI-compatible root; for claude:
-    # a proxy. Default: the provider's public endpoint.
+    provider: claude # or: local (any OpenAI-compatible server). Default local
+    model: claude-opus-5 # default: the provider's own
+    api-key: LLM_API_KEY # env var name, or the key itself. Required
+    # local: the server's root; claude: a proxy. Default: the public endpoint
     # base-url: http://127.0.0.1:1234/v1
 
-  # ---- language --------------------------------------------------------
-  # Human language of the findings' text. ISO code or name. Default en.
-  language: tr
+  language: tr # findings' language, ISO code or name. Default en
+  verify: true # a second pass drops findings their diff disproves. Default true
 
-  # ---- review policy ---------------------------------------------------
-  # There is no key that REPLACES it. The policy -- who the reviewer is, what
-  # it looks for, what it leaves alone, and the hard rules that stop reviewed
-  # content from steering it -- is the reviewer's own, as is the JSON contract
-  # it answers with: replacing that text would drop a guardrail by accident.
-  #
-  # What a project ADDS to it goes here: files of standing instructions,
-  # appended to the policy for every reviewed file, after the hard rules and
-  # before the contract. Relative paths are taken from beside this file, so
-  # in a repository's .review/config.yaml `prompts/prompts.md` means
-  # .review/prompts/prompts.md -- the empty file `reviewer init` writes. A
-  # list, or one path. Whole cap: 20000 characters. Default [].
-  #
-  # Rules that concern only some paths belong in a skill (below) instead:
-  # every file of every run pays for what is here.
-  prompts:
-    - ~/.config/reviewer/prompts/house-style.md
-
-  # Whether each file's findings are checked against its own diff by a second
-  # model call before anything is reported, so that a finding the diff proves
-  # wrong is dropped. It costs one extra call per file that found something,
-  # and it only ever removes: the policy behind it is the reviewer's, not
-  # yours, and it keeps a finding whenever the evidence falls short. Default
-  # true; `--no-verify` turns it off for one run.
-  verify: true
-
-  # ---- skills ----------------------------------------------------------
-  # The review skills. Here in defaults only the directory; which files each
-  # skill reviews depends on a project's layout, so `mappings` live on the
-  # project. Omit for no skills (the four built-in lenses review alone).
   skills:
-    # Where the skill documents (*.md with a `name:` frontmatter) are.
-    #   absolute or ~ path -> that directory, as written; the machine-wide
-    #                         home is ~/.config/reviewer/skills/<project>.
-    #   relative path      -> beside THIS FILE. In a
-    #                         repository's .review/config.yaml that means
-    #                         `skills` for .review/skills. One base for every
-    #                         path the catalogue names.
-    # (REVIEW_SKILLS_PATH / --skills-path come from no file and are taken
-    # from the reviewed checkout instead.)
-    # {{project}} stands for the project's name, so one shared path gives
-    # every project its own folder. Default "": no skills.
+    # Where the skill documents are; relative paths are taken from beside this
+    # file, {{project}} stands for the project's name. Default "": no skills.
+    # Mappings are per project, so `defaults.skills` names the directory only.
     path: ~/.config/reviewer/skills/{{project}}
-  # Per-skill body cap, in characters, before it is put in the prompt.
-  # Default 10000.
-  max-skill-chars: 10000
-  # Cap for the whole skills block of one file. The first matching skill
-  # always fits; later ones that would overflow are skipped and named in the
-  # log. Default 18000.
-  max-skills-total-chars: 18000
+  max-skill-chars: 10000 # per-skill body cap. Default 10000
+  max-skills-total-chars: 18000 # cap for one file's skills block. Default 18000
 
-  # ---- pre-context -----------------------------------------------------
-  # Before judging a file the reviewer fetches, from the repository at the
-  # head: the exported signatures of the local modules the change imports,
-  # the other files that mention exported symbols the change touches, and
-  # the diffs of related changed files (same directory or same stem). This
-  # caps that block, in characters; 0 switches it off. Default 6000.
+  # Cap on the pre-context (imported signatures, related diffs) read from the
+  # checkout for each file; 0 switches it off. Default 6000.
   max-context-chars: 6000
 
-  # ---- what is reviewed -----------------------------------------------
-  # The checkout the review reads. Machine-specific, so usually on the
-  # project; {{project}} works here too. Default: the current directory,
-  # which is what a CI job wants.
+  # The checkout to review. Default: the current directory.
   local-path: ~/Documents/workspace/{{project}}
-  # Files skipped entirely (never sent to the model). Globs: ** spans
-  # directories, * one segment, ? one character, [...] a class. A list or one
-  # comma-separated string. `--exclude` adds more for a run. Default [].
+  # Files never sent to the model. Globs, as a list or one comma-separated
+  # string; `--exclude` adds more for a run. Default [].
   exclude:
     - "**/*.md"
     - "**/*.tsx"
@@ -127,34 +51,20 @@ defaults:
     - "**/migrations/*.ts"
     - "**/.snapshot*.json"
     - "src/scripts/**"
-  # Per-file cap on the diff (plus file content) shown to the model.
-  # Default 8000.
-  max-file-chars: 8000
+  max-file-chars: 8000 # per-file cap on diff + content. Default 8000
 
-  # ---- how much is reported --------------------------------------------
-  # Max findings reported per file; the most severe survive and the rest are
-  # counted into the run's `capped` tally. Default 3; 0 = no cap.
-  max-findings-per-file: 3
-
-  # ---- concurrency -----------------------------------------------------
-  # File reviews (content read + model call) in flight at once.
-  # Default 0: derived from CPU count.
-  max-concurrent-files: 4
+  max-findings-per-file: 3 # the most severe survive; 0 = no cap. Default 3
+  max-concurrent-files: 4 # file reviews in flight. Default 0: from CPU count
 
 # Reviewable targets. With exactly one project, --project may be omitted.
 projects:
   shop:
-    # Any key from defaults may be overridden here (a section such as llm
-    # merges key by key).
+    # Any key from defaults may be restated here (a section such as llm merges
+    # key by key).
     llm:
       model: claude-sonnet-5
     language: tr
     verify: true
-    # Standing instructions for this project alone; they replace the
-    # defaults' list rather than adding to it, like every other key.
-    prompts: ["prompts/shop.md"]
-    # The checkout this project reviews. Omit to review the current
-    # directory, which is what a CI job does after actions/checkout.
     local-path: ~/work/shop
     exclude: ["**/*.md"]
     max-findings-per-file: 2
@@ -164,22 +74,16 @@ projects:
     max-context-chars: 6000
     max-concurrent-files: 4
 
-    # The project's own: skill name -> glob or list of globs it reviews. This
-    # is the only place a skill's scope is stated; a skill mapped nowhere
-    # never applies (and is warned about); [] switches a skill off without
-    # touching the file. A mapping naming a skill that does not exist is a
-    # warning too.
-    # Default {}.
-    #
-    # Three shapes: a list of globs, one bare glob, and [] to switch a skill
-    # off without deleting its file.
     skills:
+      # skill name -> the globs it reviews: a list, one bare glob, or [] to
+      # switch a skill off without deleting its file. A skill mapped nowhere
+      # never applies, and a mapping naming no skill is warned about.
+      # Default {}.
       mappings:
         api-rules: ["src/api/**/route.ts", "src/api/**/middlewares.ts"]
         data-model: "src/modules/**/models/**/*.ts"
         background-jobs: []
 
-  # A second project: the minimum that parses. It runs on the defaults (and,
-  # having no skills.mappings, on the four lenses alone), against the current
-  # directory.
+  # The minimum that parses: the defaults, the four built-in lenses, and the
+  # current directory.
   another: {}

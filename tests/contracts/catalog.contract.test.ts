@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 
 import { type Catalog, type ProjectSpec } from "../../src/core/catalog/catalog";
 import { parseCatalog } from "../../src/core/catalog/parse";
-import { CatalogError } from "../../src/core/util/errors";
 
 import { type FixtureCase, caseNamed, casesUnder, expectContract, loadFixture } from "./fixtures";
 
@@ -41,54 +40,30 @@ describe("parsing config.yaml", () => {
 });
 
 /**
- * The posting era's keys, answered by name.
- *
- * Hand-written rather than generated: these assert the one thing an operator
- * upgrading a v2 file actually experiences, and "unknown setting" would read
- * like a typo when the truth is that the feature left the tool.
+ * A key nobody declared is refused by name, whatever shape it came in: a
+ * typo, a spelling from someone's other tool, or a setting this build does
+ * not have. There is no migration table behind the message -- the schema is
+ * at v1 and has had no earlier shape -- so the accepted set IS the answer.
  */
-describe("keys this build removed", () => {
+describe("keys the schema does not declare", () => {
   it.each([
-    ["repositories", { repositories: { providers: { github: { kind: "github" } } } }],
-    ["repo_providers", { repo_providers: {} }],
-  ])("refuses the root section %s and says why", (key, payload) => {
-    expect(() => parseCatalog(payload, SOURCE)).toThrow(CatalogError);
-    expect(() => parseCatalog(payload, SOURCE)).toThrow(
-      new RegExp(`'${key}' was removed in schema version 3`, "u"),
-    );
+    ["a typo", { exlude: ["**/*.md"] }],
+    ["a snake_case spelling", { max_findings_per_file: 2 }],
+    ["a camelCase spelling", { maxFindingsPerFile: 2 }],
+    ["a setting this build has not", { severities: ["bug"] }],
+  ])("refuses %s on a project and names the accepted set", (_what, settings) => {
+    const call = (): Catalog => parseCatalog({ projects: { app: settings } }, SOURCE);
+    expect(call).toThrow(/Project 'app' has unrecognised setting\(s\)/u);
+    expect(call).toThrow(/known: \['exclude', 'language', 'llm', 'local-path'/u);
   });
 
-  it.each([
-    ["repository", { repository: { provider: "github", name: "acme/app" } }],
-    ["severities", { severities: ["bug"] }],
-    ["max-prior-comment-chars", { "max-prior-comment-chars": 3000 }],
-    ["max-concurrent-prs", { "max-concurrent-prs": 2 }],
-  ])("refuses the project setting %s and says what to do instead", (key, settings) => {
-    const payload = { projects: { app: settings } };
-    expect(() => parseCatalog(payload, SOURCE)).toThrow(
-      new RegExp(`'${key}' was removed in schema version 3`, "u"),
+  it("refuses an unknown key in defaults and in an llm section", () => {
+    expect(() => parseCatalog({ defaults: { languge: "tr" } }, SOURCE)).toThrow(
+      /defaults has unrecognised setting\(s\) \['languge'\]/u,
     );
-  });
-
-  it("names the replacement rather than only the removal", () => {
-    expect(() => parseCatalog({ projects: { app: { repository: {} } } }, SOURCE)).toThrow(
-      /local-path/u,
+    expect(() => parseCatalog({ defaults: { llm: { apiKey: "K" } } }, SOURCE)).toThrow(
+      /defaults llm has unrecognised key\(s\) \['apiKey'\]; known: \['api-key'/u,
     );
-    expect(() => parseCatalog({ projects: { app: { severities: [] } } }, SOURCE)).toThrow(
-      /--fail-on/u,
-    );
-  });
-
-  // `prompts` names files that are ADDED to the policy, which is why it is a
-  // setting again: what v3 refuses is replacing the policy, and nothing here
-  // can. A file that carried the old meaning still parses -- its text is
-  // appended rather than substituted.
-  it("accepts prompts, the project's own standing instructions", () => {
-    const catalog = parseCatalog(
-      { projects: { app: { prompts: ["prompts/prompts.md"] } } },
-      SOURCE,
-    );
-    expect(catalog.project("app").settings.prompts).toEqual(["prompts/prompts.md"]);
   });
 });
 

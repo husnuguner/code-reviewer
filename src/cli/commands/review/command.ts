@@ -37,6 +37,8 @@ export interface ReviewArguments extends CatalogArguments {
   readonly project: string | null;
   readonly branch: string;
   readonly base: string;
+  /** Review what is not committed yet; `--branch` and `--base` then say nothing. */
+  readonly uncommitted: boolean;
   readonly format: ReportFormat;
   /** Where a machine-readable copy of the records also goes, or `null`. */
   readonly out: string | null;
@@ -65,6 +67,14 @@ function reviewOptions(command: Command): Command {
         DEFAULT_BRANCH,
       )
       .option("--base <name>", "Base branch to compare against.", "main")
+      // The pre-commit check, next to the pre-pull-request one: the work a
+      // branch diff cannot see is the work still on disk, and that is exactly
+      // what a reviewer is most useful on -- before it is history.
+      .option(
+        "--uncommitted",
+        "Review the working tree against HEAD instead of a branch: staged and unstaged changes to tracked files, plus untracked files git is not ignoring. --base and --branch are not used.",
+        false,
+      )
       // Both the accepted values and the help text come from the registry, so a
       // newly registered format is selectable and documented without an edit
       // here (see providers/reporting/builtin.ts).

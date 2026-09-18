@@ -9,6 +9,7 @@
 import { type ConfigField } from "../../../core/config/config";
 import {
   type BranchReviewResult,
+  WORKTREE_BASE,
   previewBranch,
   streamBranchReview,
 } from "../../../core/review/branch-review";
@@ -58,6 +59,19 @@ export function hasFailingFinding(
   return result.findings.some((finding) => isGated(finding.severity));
 }
 
+/**
+ * The ref the pre-context is read at.
+ *
+ * `HEAD` for an uncommitted review, because `--branch` describes a comparison
+ * that run did not make. The changed files themselves are read from disk
+ * either way (`git.readFile`), so what this ref decides is only how the
+ * *other* files are quoted -- and for a working-tree review those are the
+ * files nobody touched, which is precisely where `HEAD` and the disk agree.
+ */
+function contextReference(arguments_: ReviewArguments): string {
+  return arguments_.uncommitted ? WORKTREE_BASE : arguments_.branch;
+}
+
 /** What the container needs to know, straight from the parsed arguments. */
 function requestFrom(arguments_: ReviewArguments): RunRequest {
   return {
@@ -84,6 +98,7 @@ async function runBranchReview(arguments_: ReviewArguments, cradle: RunCradle): 
   const options = {
     base: arguments_.base,
     branch: arguments_.branch,
+    uncommitted: arguments_.uncommitted,
     reviewer: cradle.fileReviewer,
     verifier: cradle.verifier,
     git: gitReader,
@@ -93,7 +108,7 @@ async function runBranchReview(arguments_: ReviewArguments, cradle: RunCradle): 
     maxFindingsPerFile: config.reportPolicy().maxFindingsPerFile,
     // The one collaborator built here rather than in the container: it is
     // bound to the branch under review, which only the arguments know.
-    codeContext: new GitCodeContext(checkoutRoot, arguments_.branch, undefined, logger),
+    codeContext: new GitCodeContext(checkoutRoot, contextReference(arguments_), undefined, logger),
     logger,
   };
 
@@ -127,6 +142,7 @@ async function runPreview(arguments_: ReviewArguments, cradle: RunCradle): Promi
   const { report } = await previewBranch({
     base: arguments_.base,
     branch: arguments_.branch,
+    uncommitted: arguments_.uncommitted,
     git: gitReader,
     settings: config.fileReviewSettings(arguments_.exclude),
     logger,

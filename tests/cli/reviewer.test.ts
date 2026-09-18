@@ -95,6 +95,8 @@ describe("the review flags", () => {
       // common case must not need a branch name.
       branch: "HEAD",
       base: "main",
+      // A branch review until a run asks for the working tree instead.
+      uncommitted: false,
       format: "text",
       out: null,
       preview: false,
@@ -108,6 +110,7 @@ describe("the review flags", () => {
 
   it("turn on", () => {
     expect(review(["--preview"]).preview).toBe(true);
+    expect(review(["--uncommitted"]).uncommitted).toBe(true);
     // The only flag that is on until refused: there is no `--verify`.
     expect(review(["--no-verify"]).verify).toBe(false);
   });

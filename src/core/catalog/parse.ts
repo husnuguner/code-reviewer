@@ -3,8 +3,7 @@
  *
  * A key the schema does not recognise is **rejected**, not ignored: a misspelt
  * `exlude` that silently does nothing would leave a run looking configured
- * when it is not. A key from an earlier schema is answered with its new name,
- * and a key from the posting era is answered with what replaced it. The root
+ * when it is not. The error names the key and the accepted set. The root
  * object stays open so that notes can live beside the data.
  *
  * The value types stay `unknown` on purpose: the file is read the way an
@@ -28,11 +27,6 @@ import {
   LLM_SECTION_KEYS,
   PROJECT_SETTING_KEYS,
   type ProjectSettingKey,
-  REMOVED_PROJECT_KEYS,
-  REMOVED_ROOT_KEYS,
-  REMOVED_SETTING_KEYS,
-  RENAMED_LLM_KEYS,
-  RENAMED_SETTING_KEYS,
   SCHEMA_VERSION,
   SKILLS_SECTION_KEYS,
 } from "./schema";
@@ -58,28 +52,17 @@ interface CatalogSection {
   readonly noun: "setting" | "key";
   /** The keys named as "known" in that message; defaults to the schema's own. */
   readonly known?: readonly string[];
-  /** Keys an earlier schema version used, mapped to their current name. */
-  readonly renamed?: Readonly<Record<string, string>>;
-  /** Keys this build removed, mapped to what to do instead. */
-  readonly removed?: Readonly<Record<string, string>>;
 }
 
-const DEFAULTS_SECTION: CatalogSection = {
-  schema: DefaultsSchema,
-  noun: "setting",
-  renamed: RENAMED_SETTING_KEYS,
-  removed: REMOVED_SETTING_KEYS,
-};
+const DEFAULTS_SECTION: CatalogSection = { schema: DefaultsSchema, noun: "setting" };
 const PROJECT_SECTION: CatalogSection = {
   schema: ProjectSchema,
   noun: "setting",
   known: PROJECT_SETTING_KEYS,
-  renamed: RENAMED_SETTING_KEYS,
-  removed: REMOVED_PROJECT_KEYS,
 };
 const SKILLS_SECTION: CatalogSection = { schema: SkillsSchema, noun: "key" };
 const DEFAULTS_SKILLS_SECTION: CatalogSection = { schema: DefaultsSkillsSchema, noun: "key" };
-const LLM_SECTION: CatalogSection = { schema: LlmSchema, noun: "key", renamed: RENAMED_LLM_KEYS };
+const LLM_SECTION: CatalogSection = { schema: LlmSchema, noun: "key" };
 
 // -- reading ------------------------------------------------------------------
 
@@ -110,17 +93,6 @@ export function parseCatalog(payload: unknown, source: string): Catalog {
     throw new CatalogError(
       `${source} declares schema version ${show(version)}, but this build understands up to ${SCHEMA_VERSION}. Upgrade the reviewer.`,
     );
-  }
-
-  // The root stays open for notes, so a section this build no longer has
-  // would otherwise be ignored in silence -- and a file that still describes
-  // a hosting system describes a run this build will not make.
-  for (const [gone, instead] of Object.entries(REMOVED_ROOT_KEYS)) {
-    if (Object.hasOwn(root, gone)) {
-      throw new CatalogError(
-        `${source}: ${show(gone)} was removed in schema version ${SCHEMA_VERSION}: ${instead}.`,
-      );
-    }
   }
 
   const defaults = requireSection(root["defaults"], "defaults");
@@ -187,23 +159,6 @@ function rejectUnknownKeys(
     issue.code === "unrecognized_keys" ? issue.keys : [],
   );
   if (unknown.length === 0) return;
-  // A key from an older schema gets its new name rather than a puzzle.
-  const renamed = unknown.find((key) => Object.hasOwn(section.renamed ?? {}, key));
-  if (renamed !== undefined) {
-    throw new CatalogError(
-      `${what}: ${show(renamed)} was renamed to ${show(section.renamed?.[renamed])} in schema version ${SCHEMA_VERSION}.`,
-    );
-  }
-  // A key the posting era owned is answered with what replaced it. Asked
-  // before the generic "unrecognised" message because that one reads like a
-  // typo, and this is not one: the operator wrote a key that used to work.
-  const removed = unknown.find((key) => Object.hasOwn(section.removed ?? {}, key));
-  if (removed !== undefined) {
-    const instead = section.removed?.[removed] ?? "remove it";
-    throw new CatalogError(
-      `${what}: ${show(removed)} was removed in schema version ${SCHEMA_VERSION}: ${instead}.`,
-    );
-  }
   const known = sortedByCodePoint(section.known ?? Object.keys(section.schema.shape));
   throw new CatalogError(
     `${what} has unrecognised ${section.noun}(s) ${show(sortedByCodePoint(unknown))}; known: ${show(known)}`,
