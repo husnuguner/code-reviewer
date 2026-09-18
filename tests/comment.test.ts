@@ -106,6 +106,17 @@ function listed(id: number, state: string, login = "github-actions[bot]"): unkno
   return { id, state, user: { login } };
 }
 
+/**
+ * Which page a listing call asked for.
+ *
+ * Read off the query rather than matched as a substring: `per_page=100`
+ * contains `page=1`, so a naive `includes` answers "page one" for every
+ * page and a pagination test silently stops testing pagination.
+ */
+function pageOf(call: RecordedCall): string | null {
+  return new URL(call.url).searchParams.get("page");
+}
+
 const ok = (): Response => new Response("{}", { status: 200 });
 
 describe("reading a record stream", () => {
@@ -358,7 +369,7 @@ describe("posting the review", () => {
     expect(
       calls.map((call) => `${call.method} ${call.url.replace("https://api.github.com", "")}`),
     ).toEqual([
-      "GET /repos/acme/app/pulls/7/reviews?per_page=100",
+      "GET /repos/acme/app/pulls/7/reviews?per_page=100&page=1",
       "PUT /repos/acme/app/pulls/7/reviews/1/dismissals",
       "PUT /repos/acme/app/pulls/7/reviews/3/dismissals",
       "POST /repos/acme/app/pulls/7/reviews",
@@ -418,6 +429,81 @@ describe("posting the review", () => {
     expect(result.superseded).toBe(0);
     expect(calls.map((call) => call.method)).toEqual(["GET", "PUT", "POST"]);
     expect(lines.join("\n")).toContain("WARNING Could not dismiss review 1");
+  });
+
+  it("walks past the first page, where its own newest reviews are", async () => {
+    // GitHub documents that this list "returns in chronological order", so
+    // page one holds the OLDEST reviews and ours are the newest. An unpaged
+    // read would find nothing to dismiss on a busy pull request and report
+    // that as success -- a clean run silently failing to lift an earlier
+    // block. This client is what fills such a pull request up, one review
+    // per push, so it is its own worst case.
+    const calls: RecordedCall[] = [];
+    const full = Array.from({ length: 100 }, (_, index) => listed(index + 1, "COMMENTED"));
+    const responder = (call: RecordedCall): Response => {
+      if (call.method !== "GET") return ok();
+      // Page 1 is full and holds nothing of ours; page 2 is short and holds
+      // the review that actually stands in the way.
+      return pageOf(call) === "1"
+        ? Response.json(full, { status: 200 })
+        : Response.json([listed(101, "CHANGES_REQUESTED")], { status: 200 });
+    };
+    const result = await clientWith(responder, calls).submit({
+      repository: repo,
+      pullNumber: 7,
+      body: "b",
+      comments: [],
+      supersede: true,
+    });
+    expect(result.superseded).toBe(1);
+    expect(
+      calls.map((call) => `${call.method} ${call.url.replace("https://api.github.com", "")}`),
+    ).toEqual([
+      "GET /repos/acme/app/pulls/7/reviews?per_page=100&page=1",
+      "GET /repos/acme/app/pulls/7/reviews?per_page=100&page=2",
+      "PUT /repos/acme/app/pulls/7/reviews/101/dismissals",
+      "POST /repos/acme/app/pulls/7/reviews",
+    ]);
+  });
+
+  it("stops at the first short page rather than asking for one more", async () => {
+    const calls: RecordedCall[] = [];
+    const responder = (call: RecordedCall): Response =>
+      call.method === "GET" ? Response.json([listed(1, "CHANGES_REQUESTED")]) : ok();
+    await clientWith(responder, calls).submit({
+      repository: repo,
+      pullNumber: 7,
+      body: "b",
+      comments: [],
+      supersede: true,
+    });
+    expect(calls.filter((call) => call.method === "GET")).toHaveLength(1);
+  });
+
+  it("still dismisses what it found when a later page is refused", async () => {
+    // Housekeeping must not cost the review, and a half-read list is still
+    // worth acting on: the alternative is leaving a block standing because
+    // page three timed out.
+    const calls: RecordedCall[] = [];
+    const full = [
+      listed(1, "CHANGES_REQUESTED"),
+      ...Array.from({ length: 99 }, (_, index) => listed(index + 2, "COMMENTED")),
+    ];
+    const responder = (call: RecordedCall): Response => {
+      if (call.method !== "GET") return ok();
+      return pageOf(call) === "1"
+        ? Response.json(full, { status: 200 })
+        : new Response("boom", { status: 500 });
+    };
+    const result = await clientWith(responder, calls).submit({
+      repository: repo,
+      pullNumber: 7,
+      body: "b",
+      comments: [],
+      supersede: true,
+    });
+    expect(result.superseded).toBe(1);
+    expect(calls.at(-1)?.method).toBe("POST");
   });
 
   it("supersedes nothing when there is nothing pending, and still posts", async () => {

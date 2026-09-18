@@ -131,6 +131,20 @@ interface ReviewRecord {
 
 const DEFAULT_BASE_URL = "https://api.github.com";
 
+/** The largest page GitHub will serve; asking for fewer only costs requests. */
+const REVIEWS_PER_PAGE = 100;
+
+/**
+ * How many pages of reviews `supersede` will walk before giving up.
+ *
+ * A bound rather than a true loop, because this runs against a remote that
+ * decides how much there is: 2000 reviews on one pull request is already far
+ * past anything real, and a client that would page forever on a misbehaving
+ * endpoint is worse than one that stops and says so. Hitting it is logged --
+ * the whole point of this pass is that superseding must not fail in silence.
+ */
+const MAX_REVIEW_PAGES = 20;
+
 /** Posts one `COMMENT` review per call. */
 export class GithubReviewClient implements ReviewPoster {
   private readonly token: string;
@@ -194,26 +208,7 @@ export class GithubReviewClient implements ReviewPoster {
    * them. Returns how many were dismissed.
    */
   private async dismissPending(reviews: string): Promise<number> {
-    // Superseding is housekeeping around the review, not the review itself:
-    // a listing or a dismissal GitHub refuses (a dismissal restriction on the
-    // branch, say) is said out loud and the new review is still posted.
-    // Failing here would lose every finding to keep the PR tidy.
-    let listed: unknown;
-    try {
-      listed = await this.request("GET", `${reviews}?per_page=100`);
-    } catch (error) {
-      if (!(error instanceof GithubError)) throw error;
-      this.log.warn(
-        `Could not list earlier reviews to supersede (${error.message}); posting anyway.`,
-      );
-      return 0;
-    }
-    if (!Array.isArray(listed)) return 0;
-    const pending = (listed as ReviewRecord[]).filter(
-      (review) =>
-        review.user?.login === this.identity &&
-        (review.state === "CHANGES_REQUESTED" || review.state === "APPROVED"),
-    );
+    const pending = await this.ourPendingReviews(reviews);
     let dismissed = 0;
     for (const review of pending) {
       try {
@@ -232,6 +227,58 @@ export class GithubReviewClient implements ReviewPoster {
       this.log.info(`Dismissed ${String(dismissed)} earlier review(s) by ${this.identity}.`);
     }
     return dismissed;
+  }
+
+  /**
+   * Every review of ours that still stands in the way, across every page.
+   *
+   * Paged rather than read off the first response, and that is not a
+   * robustness nicety -- an unpaged read fails in the one direction that
+   * matters. GitHub documents that this list "returns in chronological
+   * order", so the first page holds the *oldest* reviews and ours are the
+   * newest. Once a pull request passes one page, the reviews `supersede`
+   * exists to dismiss are exactly the ones an unpaged read cannot see, and
+   * it would report nothing to dismiss rather than an error: a clean run
+   * would quietly stop lifting the block an earlier run raised. This client
+   * is itself what fills such a pull request up, one review per push.
+   *
+   * Superseding is housekeeping around the review, not the review itself, so
+   * a page GitHub refuses is said out loud and whatever was already found is
+   * still acted on. Failing here would lose every finding to keep the pull
+   * request tidy.
+   */
+  private async ourPendingReviews(reviews: string): Promise<ReviewRecord[]> {
+    const pending: ReviewRecord[] = [];
+    for (let page = 1; page <= MAX_REVIEW_PAGES; page++) {
+      const query = `per_page=${String(REVIEWS_PER_PAGE)}&page=${String(page)}`;
+      let listed: unknown;
+      try {
+        listed = await this.request("GET", `${reviews}?${query}`);
+      } catch (error) {
+        if (!(error instanceof GithubError)) throw error;
+        this.log.warn(
+          `Could not list earlier reviews to supersede (${error.message}); posting anyway.`,
+        );
+        return pending;
+      }
+      if (!Array.isArray(listed)) return pending;
+      const records = listed as ReviewRecord[];
+      pending.push(...records.filter((review) => this.isOursAndPending(review)));
+      // A short page is the last page: GitHub fills a page it can fill.
+      if (records.length < REVIEWS_PER_PAGE) return pending;
+    }
+    this.log.warn(
+      `Stopped after ${String(MAX_REVIEW_PAGES)} pages of reviews; an earlier review by ${this.identity} may still stand.`,
+    );
+    return pending;
+  }
+
+  /** Ours, and of a kind GitHub will let us dismiss. */
+  private isOursAndPending(review: ReviewRecord): boolean {
+    return (
+      review.user?.login === this.identity &&
+      (review.state === "CHANGES_REQUESTED" || review.state === "APPROVED")
+    );
   }
 
   /**
