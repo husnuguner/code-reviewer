@@ -169,7 +169,7 @@ Colour is decided against **stderr**, not stdout: piping the report into another
 
 Reviewing a pull request means checking it out and reviewing the branch — no API, no token. The shipped action does that, and a **second job** does the talking.
 
-Copy [`.github/workflows/pr-review.yml`](.github/workflows/pr-review.yml) into the repository you want reviewed and change `uses: ./` to `uses: husnuguner/code-reviewer@v0.0.1`:
+Put this in the repository you want reviewed, as `.github/workflows/pr-review.yml`:
 
 ```yaml
 name: PR review
