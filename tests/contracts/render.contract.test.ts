@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { RETRY_PROMPT, buildUserPrompt, systemPrompt } from "../../src/core/review/prompts";
 import { textBody } from "../../src/core/review/render";
 import { sortedByCodePoint } from "../../src/core/util/text";
-import { shippedFile } from "../../src/infra/shipped-files";
+import { shippedFile } from "../../src/providers/assets/shipped-files";
 
 import { caseNamed, casesUnder, loadFixture } from "./fixtures";
 

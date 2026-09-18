@@ -11,17 +11,15 @@
  * precedence rule be tested without touching a disk or the real environment.
  */
 
+import { type Catalog, type ProjectSettings } from "../catalog/catalog";
 import {
-  type Catalog,
   LLM_SECTION_KEYS,
   type LlmSectionKey,
   PROJECT_SETTING_KEYS,
   type ProjectSettingKey,
-  type ProjectSettings,
   SKILLS_SECTION_KEYS,
   type SkillsSectionKey,
-  resolveSecret,
-} from "../catalog/catalog";
+} from "../catalog/schema";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { CatalogError } from "../util/errors";
 import { isPlainObject } from "../util/json";
@@ -35,6 +33,7 @@ import {
   aliasOf,
   buildConfig,
 } from "./config";
+import { resolveSecret } from "./secret";
 
 /** Catalogue setting keys -> `Config` fields (the two sections are mapped below). */
 export const PROJECT_FIELDS: Readonly<
@@ -56,7 +55,7 @@ export const PROJECT_FIELDS: Readonly<
 /** The `llm` section onto the model fields; `api-key` is a secret (see below). */
 const LLM_FIELDS: Readonly<Record<LlmSectionKey, ConfigField>> = {
   provider: "provider",
-  model: "modelName",
+  model: "model",
   "base-url": "baseUrl",
   "api-key": "apiKey",
 };
@@ -372,7 +371,7 @@ export function resolveConfig(options: ResolveOptions): Config {
     values[CONFIG_ALIASES[field as ConfigField]] = value;
   }
   return buildConfig(values, {
-    providerNames: options.providerNames,
+    providers: options.providers,
     cpuCount: options.cpuCount,
     ...(options.requiresModel !== undefined && { requiresModel: options.requiresModel }),
   });

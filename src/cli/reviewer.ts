@@ -19,17 +19,22 @@
 
 import { type Command } from "commander";
 
+import { LOG_FORMATS, LOG_LEVELS } from "../providers/logging/log-settings";
+
 import {
   type CliCommand,
   type Invocation,
   bind,
+  choice,
   commandLine,
   parseCommandLine,
   runCommand,
 } from "./command-line";
-import { ADD, INIT, PROJECTS } from "./commands/catalog";
-import { COMMENT } from "./commands/comment";
-import { REVIEW } from "./commands/review";
+import { ADD } from "./commands/add/command";
+import { COMMENT } from "./commands/comment/command";
+import { INIT } from "./commands/init/command";
+import { PROJECTS } from "./commands/projects/command";
+import { REVIEW } from "./commands/review/command";
 
 export { type Invocation, UsageError, isInvocationOf } from "./command-line";
 
@@ -64,21 +69,56 @@ function register(
  * The command line as a `Command`; exposed so `--help` output can be tested.
  *
  * `onParsed` is called once, by whichever subcommand the arguments named.
- * `-v` lives here on the root, so every command takes it in the same place
- * and reads it through its globals.
+ * The logging flags live here on the root, so every command takes them in
+ * the same place and reads them through its globals: how loud a run is has
+ * nothing to do with which command it runs.
  */
 export function buildProgram(onParsed: (invocation: Invocation) => void): Command {
-  const program = commandLine(
-    "reviewer",
-    "Review a change set with a language model and report anchored findings, or post a " +
-      `run's findings to a pull request. \`${DEFAULT_COMMAND.name}\` is the default command.`,
-  ).option(
-    "-v, --verbose",
-    "Debug logging: DEBUG-level detail for reviewer.* (per-file decisions, skill matches).",
-    false,
+  const program = loggingOptions(
+    commandLine(
+      "reviewer",
+      "Review a change set with a language model and report anchored findings, or post a " +
+        `run's findings to a pull request. \`${DEFAULT_COMMAND.name}\` is the default command.`,
+    ),
   );
   for (const command of COMMANDS) register(program, command, onParsed);
   return program;
+}
+
+/**
+ * The flags that decide what reaches stderr.
+ *
+ * Spelled the way the rest of a user's toolbox spells them, so none of it
+ * has to be learned: `-v`/`-q` for the two directions, `--log-level` when
+ * neither shorthand is exact enough, `--no-color` alongside the `NO_COLOR`
+ * every other tool already honours. Logs never touch stdout, so none of
+ * these can affect what a pipe downstream reads -- `--format` is that
+ * decision, and it is deliberately a different knob.
+ */
+function loggingOptions(program: Command): Command {
+  return program
+    .option(
+      "-v, --verbose",
+      "Debug logging: DEBUG-level detail for reviewer.* (per-file decisions, skill matches), with timestamps and component names.",
+      false,
+    )
+    .option(
+      "-q, --quiet",
+      "Warnings and errors only. The report itself is unaffected: it goes to stdout.",
+      false,
+    )
+    .option(
+      "--log-level <level>",
+      `How much reaches stderr: ${LOG_LEVELS.join(", ")}. Outranks -v and -q; falls back to REVIEWER_LOG_LEVEL.`,
+      choice(LOG_LEVELS, { label: "levels", caseInsensitive: true }),
+    )
+    .option(
+      "--log-format <format>",
+      `Shape of a log line: ${LOG_FORMATS.join(", ")}. 'auto' prints workflow commands on a GitHub runner and plain text elsewhere.`,
+      choice(LOG_FORMATS, { label: "log formats", caseInsensitive: true }),
+      "auto",
+    )
+    .option("--no-color", "Never colour log lines. NO_COLOR in the environment does the same.");
 }
 
 /** Parse `argv` (without the executable and script) into a command bound to its arguments. */

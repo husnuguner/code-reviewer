@@ -22,7 +22,8 @@
     "reviewer": "./src/cli/main.ts"
   },
   "exports": {
-    "./core": "./src/core/index.ts"
+    "./core": "./src/core/index.ts",
+    "./providers": "./src/providers/index.ts"
   },
   "files": [
     "src",
@@ -51,6 +52,7 @@
     "difflib": "^0.2.4",
     "p-limit": "^7.3.2",
     "parse-diff": "^0.12.0",
+    "picocolors": "^1.1.1",
     "pino": "^10.3.1",
     "yaml": "^2.9.1",
     "zod": "^4.6.5"

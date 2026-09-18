@@ -3,7 +3,7 @@
  *
  * The shape of a review is decided here, with no token, no network and no
  * model -- which is what makes the posting half reviewable at all. What a
- * hosting system then does with it is `infra/github`'s test.
+ * hosting system then does with it is `providers/repository/github`'s test.
  */
 
 import { describe, expect, it } from "bun:test";
@@ -37,12 +37,15 @@ const SUMMARY: SummaryRecord = {
   branch: "HEAD",
   files_changed: 4,
   files_reviewed: 2,
+  failed: 0,
+  truncated: 0,
   findings: 1,
   files_with_findings: 1,
   anchors: { exact: 1 },
   unanchored: 0,
   refuted: 0,
   capped: 0,
+  mislabelled: 0,
   skipped: {},
 };
 

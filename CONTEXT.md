@@ -22,8 +22,15 @@ Project at all: it has already checked the code out.
 
 **What a run produces, and the end of its responsibility.** A Report is the
 findings plus the tallies that make them accountable: how each was anchored,
-how many verification refuted, how many the volume policy withheld, and what
-happened to every file that was not reviewed.
+how many verification refuted, how many the volume policy withheld, how many
+arrived under a severity that had to be overruled, how many files were shown
+only part of their diff, how many never came back at all, and what happened to
+every file that was not reviewed.
+
+The tallies are answerable, not decorative: what a run reviewed, what failed
+and what it skipped add up to what changed, and every per-finding tally counts
+the findings that were reported rather than a wider set nobody sees. A number
+that mixes two populations is a number a reader cannot check.
 
 A Report is not a comment, and the reviewer does not become one. Turning a
 finding into a comment on a change request is a downstream reader's job (a CI
@@ -79,6 +86,12 @@ evidence that locates it. A Finding is produced per file, is anchored to a line
 before it can be posted, and survives review even when no line could be
 established — an unanchored Finding is reported, not discarded.
 
+Its severity is the reviewer's vocabulary, not the model's invention. A value
+the vocabulary has not got costs the Finding nothing — it is kept — but it is
+overruled to the mildest severity, and the claim it made travels with it so
+the overruling can be counted rather than quietly rewriting how a reader ranks
+it.
+
 A Finding is not a comment. It may become one downstream, and the volume
 policy may decide it is not even reported.
 
@@ -126,3 +139,8 @@ The **decision of which line a Finding is posted on**, and the record of how
 that decision was reached. Derived from two independent signals — the line the
 model reported and the code it quoted — so that one being wrong does not cost
 the Finding.
+
+Both signals are read against the diff the model was actually shown. A diff too
+large to show in full is cut at a hunk boundary, and the lines a Finding may
+anchor to are the lines that survived that cut: a reviewer that allowed more
+would be inviting a Finding about code it never sent.

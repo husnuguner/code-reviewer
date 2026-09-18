@@ -45,13 +45,24 @@ export default defineConfig(
           zones: [
             {
               target: "./src/core",
-              from: ["./src/infra", "./src/cli"],
-              message: "core/ must not depend on infra/ or cli/ (dependency inversion).",
+              from: ["./src/providers", "./src/cli"],
+              message: "core/ must not depend on providers/ or cli/ (dependency inversion).",
             },
             {
-              target: "./src/infra",
+              target: "./src/providers",
               from: ["./src/cli"],
-              message: "infra/ must not depend on cli/.",
+              message: "providers/ must not depend on cli/.",
+            },
+            // `lib/` is the bottom of the stack: general-purpose code that
+            // could be published on its own. Everything may use it; it may
+            // use nothing of ours. A `lib/` that reached back into the
+            // application would be an application module in a folder that
+            // promises it is not one.
+            {
+              target: "./src/lib",
+              from: ["./src/core", "./src/providers", "./src/cli"],
+              message:
+                "lib/ is standalone: it must not depend on core/, providers/ or cli/ (it is the layer they all may use).",
             },
           ],
         },
@@ -116,6 +127,9 @@ export default defineConfig(
 
       // -- unicorn: keep the signal, drop the style noise that fights the port --
       "unicorn/prevent-abbreviations": "off",
+      // "Repository" is a domain term (CONTEXT.md); a `RepoProvider` would be
+      // the one place the code spells it differently from the glossary.
+      "unicorn/name-replacements": ["error", { replacements: { repository: false } }],
       "unicorn/no-null": "off", // JSON payloads from providers carry null
       "unicorn/no-array-reduce": "off",
       "unicorn/filename-case": ["error", { case: "kebabCase" }],
@@ -135,8 +149,10 @@ export default defineConfig(
   },
 
   // Tests: boundary-type noise off, and no test left focused or switched off.
+  // Two homes, one rule set: `tests/` mirrors `src/`, and `src/lib/*/tests/`
+  // travels with the library it covers.
   {
-    files: ["tests/**/*.ts"],
+    files: ["tests/**/*.ts", "src/lib/**/tests/**/*.ts"],
     rules: {
       // `bun test` runs a `.only` silently -- the rest of the file vanishes from
       // the run with no report -- and a `.skip` is a test that no longer counts.

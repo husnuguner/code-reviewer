@@ -92,7 +92,9 @@ reviewer --base main --fail-on bug,security # exit 3 when one of those survives
 | `ndjson`   | stdout               | a program: one record per line, flushed as each file finishes                                                            |
 | `github`   | stdout + job summary | a GitHub runner: `::error`/`::warning` annotations on the changed lines, plus a Markdown table in `$GITHUB_STEP_SUMMARY` |
 
-The NDJSON stream is the machine contract. One `{"type":"finding", …}` record per finding — `path`, `line`, `start_line`, `anchor`, `severity`, `body`, `example`, and the `skills` that shaped it — then one `{"type":"summary", …}` with `base`, `branch`, `files_changed`, `files_reviewed`, `findings`, `files_with_findings`, `anchors`, `unanchored`, `refuted`, `capped` and `skipped`. `line` is `null` for a finding that could not be anchored. Logs go to stderr, so stdout parses line by line.
+The NDJSON stream is the machine contract. One `{"type":"finding", …}` record per finding — `path`, `line`, `start_line`, `anchor`, `severity`, `body`, `example`, and the `skills` that shaped it — then one `{"type":"summary", …}` with `base`, `branch`, `files_changed`, `files_reviewed`, `failed`, `truncated`, `findings`, `files_with_findings`, `anchors`, `unanchored`, `refuted`, `capped`, `mislabelled` and `skipped`. `line` is `null` for a finding that could not be anchored. Logs go to stderr, so stdout parses line by line.
+
+The summary's counters are meant to be checked against each other. `files_changed = files_reviewed + failed + sum(skipped)` closes the arithmetic: a file is reviewed, or its review did not come back (`failed`), or it carries a skip reason. `anchors`, `unanchored` and `mislabelled` are all counted over the findings that were **reported**, so they describe the same population as `findings` — what never got that far is `refuted` (verification) and `capped` (the volume policy).
 
 ### Flags
 
@@ -112,9 +114,56 @@ Three commands review nothing. `reviewer init` writes the review setup — insid
 | `--exclude GLOB`                | Skip files matching the glob; repeatable, adds to the project's `exclude`.                                            |
 | `--skills-path PATH`            | Directory of review skills inside the reviewed repo (overrides `skills.path`); empty disables skills.                 |
 | `--no-verify`                   | Report every finding the model produced, skipping the pass that drops the ones the diff refutes.                      |
-| `-v`, `--verbose`               | DEBUG logging for `reviewer.*`: per-file decisions and which skills matched each file.                                |
 
 Exit codes: `0` success · `1` usage error, refused `init`, or `projects` without projects · `2` a configuration or working-tree problem the operator can fix (one `error:` line) · `3` findings matched `--fail-on`.
+
+### Logging
+
+Logs describe _how the run went_; the report is _what it found_. They never share a stream: every log line goes to stderr, so `--format ndjson` on stdout parses line by line no matter how loud the run is. These flags live on the root command, so every subcommand takes them in the same place — before or after the command name.
+
+| Flag                  | Effect                                                                                                           |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `-v`, `--verbose`     | DEBUG detail for `reviewer.*` (per-file decisions, skill matches), with ISO-8601 timestamps and component names. |
+| `-q`, `--quiet`       | Warnings and errors only. The report is unaffected.                                                              |
+| `--log-level LEVEL`   | `debug`, `info` (default), `warn`, `error`, `silent`. Outranks `-v` and `-q`.                                    |
+| `--log-format FORMAT` | `auto` (default), `text`, `json`, `github`.                                                                      |
+| `--no-color`          | Never colour log lines.                                                                                          |
+
+By default a line is the sentence and its level, because stderr is not a log file ([clig.dev](https://clig.dev/#output)); `-v` is the request for the record around it:
+
+```console
+$ reviewer --base main
+info: Loaded 3 skill(s): api-rules, tests, security
+warn: No merge-base for 'HEAD' and 'main'; comparing against 'main' directly.
+
+$ reviewer --base main -v
+2026-09-18T11:12:59.341Z debug reviewer.catalog: Catalogue .review/config.yaml: 1 project(s).
+2026-09-18T11:12:59.342Z info  reviewer.skills: Loaded 3 skill(s): api-rules, tests, security
+```
+
+`--log-format` chooses the shape of that line. `auto` resolves to `github` on a runner and `text` everywhere else:
+
+| Format   | A line looks like                                                      | For                                  |
+| -------- | ---------------------------------------------------------------------- | ------------------------------------ |
+| `text`   | `warn: No merge-base for 'HEAD' and 'main'`                            | a person                             |
+| `json`   | `{"level":"warn","name":"reviewer.review","msg":"…","time":"2026-…Z"}` | a log collector; one record per line |
+| `github` | `::debug::Catalogue .review/config.yaml: 1 project(s).`                | a GitHub runner                      |
+
+The environment is read where the conventions already exist, so this tool behaves like the rest of the pipeline:
+
+| Variable                             | Effect                                                                                               |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `REVIEWER_LOG_LEVEL`                 | The default level; `-v`, `-q` and `--log-level` outrank it.                                          |
+| `REVIEWER_LOG_FORMAT`                | The default format, as `--log-format`.                                                               |
+| `NO_COLOR`                           | Set to anything non-empty: no colour. Outranks `FORCE_COLOR` ([no-color.org](https://no-color.org)). |
+| `FORCE_COLOR`, `CLICOLOR_FORCE`      | Colour even when stderr is not a terminal.                                                           |
+| `TERM=dumb`, `CLICOLOR=0`            | No colour.                                                                                           |
+| `RUNNER_DEBUG`, `ACTIONS_STEP_DEBUG` | Set by a GitHub job re-run with debug logging: the run switches to DEBUG by itself.                  |
+| `GITHUB_ACTIONS`                     | Makes `--log-format auto` resolve to `github`.                                                       |
+
+Colour is decided against **stderr**, not stdout: piping the report into another program says nothing about whether the person watching can see colour.
+
+**Secrets never reach a log line.** Every value in the environment held by a variable whose name says it is a credential (`*_API_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`, …) is masked as `***` at the sink, in every format — so a message that interpolated a key cannot leak it into a CI log that is world-readable and cannot be recalled.
 
 ## GitHub Action
 
@@ -178,23 +227,23 @@ What the `review` job produces, without posting anything:
 
 ### Action inputs
 
-| Input                   | Default              | Meaning                                                                                                                               |
-| ----------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `api-key`               | _required_           | The LLM key. Pass a secret.                                                                                                           |
-| `base-ref`              | the PR's base branch | What to compare against. The action fetches it before reviewing.                                                                      |
-| `head-ref`              | `HEAD`               | What to review.                                                                                                                       |
-| `provider`              | `claude`             | `claude`, or `local` for an OpenAI-compatible server.                                                                                 |
-| `model` / `base-url`    | provider default     | Model name; endpoint for `local` (or a Claude proxy).                                                                                 |
-| `language`              | `en`                 | Language of the findings' text.                                                                                                       |
-| `skills-path`           | —                    | Where this repository's review skills live, relative to the checkout.                                                                 |
-| `config` / `project`    | —                    | A catalogue inside the checkout, when rules are versioned with the code.                                                              |
-| `exclude`               | —                    | Newline- or comma-separated globs to skip.                                                                                            |
-| `max-findings-per-file` | `3`                  | Per-file cap; the most severe survive, the rest are counted.                                                                          |
-| `fail-on`               | `none`               | Severities that fail the job. `none` means the review informs, humans decide.                                                         |
-| `verify`                | `true`               | Drop findings the diff refutes.                                                                                                       |
-| `preview`               | `false`              | Print the scope and stop — calls no model, so it costs nothing to test the wiring.                                                    |
-| `out`                   | `code-review.ndjson` | Where the record stream is written.                                                                                                   |
-| `annotations`           | `true`               | Findings as annotations on the diff, plus a job summary. **Set `false` when a comment job posts them**, or every finding shows twice. |
+| Input                   | Default                             | Meaning                                                                                                                               |
+| ----------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `api-key`               | _required_                          | The LLM key. Pass a secret.                                                                                                           |
+| `base-ref`              | the PR's base branch                | What to compare against. The action fetches it before reviewing.                                                                      |
+| `head-ref`              | `HEAD`                              | What to review.                                                                                                                       |
+| `provider`              | the checkout's config, else `local` | `claude`, or `local` for an OpenAI-compatible server.                                                                                 |
+| `model` / `base-url`    | provider default                    | Model name; endpoint for `local` (or a Claude proxy).                                                                                 |
+| `language`              | `en`                                | Language of the findings' text.                                                                                                       |
+| `skills-path`           | —                                   | Where this repository's review skills live, relative to the checkout.                                                                 |
+| `config` / `project`    | —                                   | A catalogue inside the checkout, when rules are versioned with the code.                                                              |
+| `exclude`               | —                                   | Newline- or comma-separated globs to skip.                                                                                            |
+| `max-findings-per-file` | `3`                                 | Per-file cap; the most severe survive, the rest are counted.                                                                          |
+| `fail-on`               | `none`                              | Severities that fail the job. `none` means the review informs, humans decide.                                                         |
+| `verify`                | `true`                              | Drop findings the diff refutes.                                                                                                       |
+| `preview`               | `false`                             | Print the scope and stop — calls no model, so it costs nothing to test the wiring.                                                    |
+| `out`                   | `code-review.ndjson`                | Where the record stream is written.                                                                                                   |
+| `annotations`           | `true`                              | Findings as annotations on the diff, plus a job summary. **Set `false` when a comment job posts them**, or every finding shows twice. |
 
 Outputs: `findings-file` and `findings` (a count).
 
@@ -318,6 +367,8 @@ A finding is only useful where it lands. The model is asked for two independent 
 
 A quote spanning several added lines becomes a multi-line anchor (`start_line`..`line`); one that caught context lines is narrowed to the added lines inside it.
 
+Both signals are read against **the diff the model was shown**, never against the whole patch. The allowed line numbers, the quote matcher's haystack and the annotated diff come out of one decision (`patchView`), so a file whose diff was cut cannot be told it may comment on a line it was never sent, and a quote cannot be placed in text nobody prompted with.
+
 Why the line wins a `conflict`: it is copied from a marker printed beside the code, not computed, so a commentable value is usually right — whereas a quote can match a repeated idiom in one _other_ place by luck. Every run reports the tallies, so how often the question arises is measurable rather than assumed.
 
 ## Verification
@@ -332,7 +383,7 @@ It costs one extra model call per file that found something; a clean file costs 
 
 Which files a run reviews is one pure decision (`src/core/review/selection.ts`), taken before anything is prompted, and every file that is not reviewed carries a reason: `no_patch`, `secret`, `binary`, `status` (`removed`/`renamed`), `excluded`, `no_added_lines`. The summary record carries the distribution as `skipped`, so "why did it not mention my Dockerfile" is a question with an answer.
 
-A diff over `max-file-chars` is **cut, not dropped** — the model still reviews what it was given.
+A diff over `max-file-chars` is **cut, not dropped** — the model still reviews what it was given. The cut falls on a **hunk boundary**, never mid-line: whole hunks are kept from the first one a finding could be anchored in, so the text stays a diff whose `[L<n>]` markers mean what they say, and however small the cap is, what is shown always contains at least one commentable line. How many files were shown in part is the summary's `truncated` — a review that said nothing about the second half of a file should be able to say that it never saw it.
 
 `--preview` prints that decision and stops:
 
@@ -356,6 +407,8 @@ It is the **same** function the real run acts on, not a second estimate, so what
 `max-findings-per-file` (default 3; `0` = no cap) caps how many findings one file reports. When it bites, the **most severe survive**, and what it withheld is counted into the run's `capped` tally rather than dropped in silence — a cap nobody can measure is a cap nobody should trust.
 
 Severity does not filter anything: every severity is reported. What severity decides is the annotation colour in CI, and — only if you ask for it — the exit code, via `--fail-on`.
+
+A finding whose severity the model spells outside the vocabulary is **kept, under the mildest one** — the text is the model's and the problem it describes may be real — and the substitution is counted as `mislabelled`. Re-rating a finding changes where a reader looks first and where `--fail-on` draws its line, so it is not something to do quietly.
 
 ## Configuration
 
@@ -484,22 +537,23 @@ Toolchain: Bun (pinned in `.bun-version`; it is the package manager, the test ru
 
 Bun reads a working directory's `.env` into the environment by default. This repository turns that off (`bunfig.toml`, `env = false`) and the executable carries `--no-env-file` in its shebang, because the reviewer reads `.env` files itself in a stated order in which the working directory's is the weakest — and the working directory is the checkout under review.
 
-Layout — three layers with the dependency direction enforced by ESLint (`import-x/no-restricted-paths`):
+Layout — three layers, one direction. The core does the work and asks for abstract objects; the providers layer supplies them; the CLI chooses which. ESLint enforces the arrows (`import-x/no-restricted-paths`): `core/` imports neither `providers/` nor `cli/`, and `providers/` never imports `cli/`.
 
-- `src/core/` — the review engine, free of I/O. `domain/` (Finding, Skill, changed-file records) · `ports/` (ChatModel, GitReader, CodeContext, SkillSource, Logger, reporters) · `review/` (`selection` — which files are in scope, and why the rest are not · `changed-file` — the per-file step · `branch-review` — the flow · `volume` — the per-file cap · `render` · `severity` · `anchor` · `diff` · `verify`) · `skills/` (glob engine, frontmatter parser, registry) · `comment/` (records → one review payload, pure) · `catalog/` (`config.yaml` schema, `init`/`projects`) · `config/` (the settings schema and the resolver) · `llm/` (registry).
-- `src/infra/` — adapters: `llm/` (AI SDK: `local`, `claude`) · `git/` (`Bun.spawn`: diff source and pre-context) · `skills/` (directory and worktree sources) · `config/` (files, `.env`, paths) · `logging/` (pino → stderr) · `reporters/` (text, NDJSON, GitHub Actions, and a tee) · `github/` (one endpoint: post a review).
-- `src/cli/` — `main.ts` (the executable) · `reviewer.ts` (the root command: a registry of subcommands, no dispatch of its own) · `commands/` (`review`, the default, calls a model and cannot post · `init`/`projects`/`add`, the catalogue · `comment`, holds a token and cannot call a model · `shared`, what more than one of them needs) · `command-line.ts` (how a command is defined and how its errors become exit codes) · `container.ts` (the composition root, `awilix`).
+- `src/core/` — **the work.** `ports/` is the whole of what it asks for from outside: `ChatModel`, `ReviewPoster`, `BranchReviewReporter`, `GitReader`, `CodeContext`, `SkillSource`, `CatalogFiles`, `Logger`, `ConsoleOutput`. Nothing in here knows which vendor, host or rendering answers — the word "provider" does not occur in this tree except as the string value of `LLM_PROVIDER`. `domain/` (Finding, Skill, changed-file records) · `review/` (`selection` — which files are in scope, and why the rest are not · `review-file` — the per-file step · `branch-review` — the flow · `volume` · `render` · `severity` · `anchor` · `verify`) · `diff/` · `skills/` (glob engine, frontmatter parser, registry) · `posting/` (records → one review payload, pure) · `catalog/` (`schema` — the file's vocabulary · `catalog` — the model, with a project's settings over the defaults · `parse` — shape validation into a `Catalog` · `init`, `add-project`, `list-projects` — the use-cases, each one file) · `config/` (the settings schema, the resolver, `secret` — a value that names a variable — and the typed setting groups the flows read, `LlmSettings` among them) · `util/` (the primitives the platform lacks: contract error names, code-point text, JSON as a type, completion-ordered promises).
+- `src/providers/` — **what can change.** Every implementation of a port, grouped by the feature it serves and never by vendor. Where a port has several implementations selectable by name, the folder has one shape: a _kind_ (an abstract `Provider` subclass that owns what that kind needs — a default model, a token variable), one folder per implementation, and `builtin.ts` listing the instances. `provider.ts` / `registry.ts` are the mechanism (`Provider<In, Out>`, `ProviderRegistry`). `llm/` (`model-provider` · the AI SDK adapter and its retry decorator · `claude/`, `local/`) · `repository/` (`repository-provider` · `github/{provider,client}`) · `reporting/` (`format-provider` · `text/`, `ndjson/`, `github/` · `collecting`, `tee`, `closable`, `line-writer`) · and the single-implementation adapters: `git/` (`Bun.spawn`: diff source and pre-context) · `skills/` (directory and worktree sources) · `catalog/` (`paths` — where `config.yaml` lives · `reader` — find, read, YAML, hand to the core · `files` — the `CatalogFiles` port on disk) · `config/` (`environment-files` — the `.env` layers · `loader` — one run's `Config` from all of them) · `logging/` (pino → stderr) · `console/` · `prompts/` · `assets/` (the files this package ships) · `http/` (a `URL`-only `fetch` and its retry, shared by `llm/` and `repository/`).
+- `src/cli/` — **the composition.** `main.ts` (the executable) · `reviewer.ts` (the root command: a registry of subcommands, no dispatch of its own) · `command-line.ts` (how a command is defined and how its errors become exit codes) · `container.ts` (the composition root, `awilix`) · `options/` (the flag groups more than one command takes — `logging`, `catalog` (`--config`), `format`, `severity`, `repository` — each a file) · `commands/<name>/` (one folder per command, two files each: `command.ts` says what it takes, `run.ts` what it does — `review` the default, calls a model and cannot post · `comment`, holds a token and cannot call a model · `init` / `projects` / `add`, the catalogue).
 
-`core/` is also published as `code-reviewer/core` for embedding; it takes its adapters as constructor arguments.
+`core/` is published as `code-reviewer/core` for embedding — it takes its adapters as constructor arguments — and `providers/` as `code-reviewer/providers`, so an embedder adds a vendor, a host or a rendering by extending a kind and handing an instance to the registry, never by editing the core. `src/lib/` is the bottom of the stack: standalone code (`resilience/`, `github-actions/`) that imports nothing of ours.
 
 ### Design
 
 - **One function decides scope.** `selectFiles` is pure and both the run and `--preview` consume its output, so the free pre-flight cannot promise work the paid run would skip. It is also what the model's change set is built from: pre-context may quote other files' diffs, so an excluded — or a credential — file must not be reachable as somebody else's "related change".
 - **`Config` is the single source of truth.** Every field is derived from the `CONFIG_ALIASES` table (field → env alias) and the zod schema. The flow never reads the flat config: `fileReviewSettings()`, `reportPolicy()` and `concurrency()` hand it typed setting groups.
-- **Nothing is dropped in silence.** A finding verification refutes is counted (`refuted`), one the cap withholds is counted (`capped`), one that could not be anchored is _reported_ without a line, and every file that was not reviewed carries a reason.
+- **Nothing is dropped in silence.** A finding verification refutes is counted (`refuted`), one the cap withholds is counted (`capped`), one re-rated because the model invented a severity is counted (`mislabelled`), one that could not be anchored is _reported_ without a line, a file whose review never came back is counted (`failed`), a diff shown in part says so (`truncated`), and every file that was not reviewed carries a reason.
+- **What the model may comment on is what the model was shown.** The annotated diff, the allowed lines and the anchor haystack are one value (`patchView`), cut together at a hunk boundary. Computed separately, the cheap two described a diff the expensive one had not sent.
 - **Reporting is the end of the line.** The reviewer writes to a stream; what becomes a comment is decided downstream, by something that cannot call a model.
 - **One template for skill readers.** `DirectorySkillSource` and `WorktreeSkillSource` share `MarkdownSkillSource` and answer one question each: where do the Markdown documents come from.
-- **One way to say each thing.** `errorMessage()` renders any thrown value; the `py*` helpers in `core/util/py.ts` carry the Python semantics parity depends on; `catalog.ts` names each strict section once instead of repeating its key list in the error path.
+- **One way to say each thing.** `errorMessage()` renders any thrown value; `show()` spells every value a message names; `catalog.ts` names each strict section once instead of repeating its key list in the error path.
 
 Tests: `tests/contracts/` pin every pure module to the fixtures in `tests/fixtures/`; `tests/*.test.ts` cover the adapters and the flow against real git and a mock language model.
 
@@ -515,9 +569,9 @@ The choices with a real trade-off behind them, and what was given up:
 - **Every relative path in a catalogue is taken from the catalogue's own directory.** `prompts` and `skills.path` share one base, so a reader can check either against the other.
 - **The review policy is a file the operator owns; the output contract is not.** A policy can say anything about what to review and nothing about how to answer, so it can never break the parser.
 - **Pre-context is deterministic.** The reviewer decides what surrounding code to fetch; the model asks for nothing. The review stays one call and the output contract stays fixed.
-- **Nothing is dropped in silence.** Refuted, capped, unanchored, skipped — each is counted or listed, never merely omitted.
+- **Nothing is dropped in silence.** Refuted, capped, mislabelled, unanchored, failed, truncated, skipped — each is counted or listed, never merely omitted. A run that reviewed nothing says which kind of silence that was, rather than "No issues found.".
 - **The bot may request changes; it may not approve.** A `REQUEST_CHANGES` review is a machine saying "look here"; an `APPROVE` would be a machine saying "this is safe", on the word of a model that read untrusted text. The first is useful and reversible; the second is a merge gate with a hole in it. Given up: a fully automated green tick.
-- **Three things vary, and each varies the same way.** The model (`LLM_PROVIDER`), the rendering (`--format`), the hosting system (`--provider`) are each a registry of strategies: adding one is a file and a line, and no `switch` anywhere has to learn the new name.
+- **Three things vary, and each varies the same way.** The model (`LLM_PROVIDER`), the rendering (`--format`), the hosting system (`--provider`) are each a kind of `Provider` — an abstract class with a name, a line of help, and `create(input)` — kept in one `ProviderRegistry`. The core declares only the port each one implements; `providers/` declares the kind beside its implementations (`llm/model-provider`, `repository/repository-provider`, `reporting/format-provider`) and settles there what the kind owns — a model provider takes the configuration's model and falls back to its own default, a repository provider names its token variable — with each implementation a class in its own folder and an instance listed in `builtin.ts`. Adding one is a file and a line: configuration, `--help`, the refusal a typo meets and the composition root all learn the name from the registry, and no `switch` anywhere has to.
 
 ## License
 

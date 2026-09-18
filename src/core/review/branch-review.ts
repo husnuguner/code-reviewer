@@ -116,6 +116,16 @@ export async function* iterBranchReview(
   let unanchored = 0;
   let refuted = 0;
   let capped = 0;
+  let mislabelled = 0;
+  // A file selected for review that produced neither findings nor a refusal:
+  // its review threw. Counted rather than merely logged, so the summary's
+  // arithmetic still adds up (see `SummaryRecord.failed`).
+  let failed = 0;
+  // A credential the per-file step refused although the selection had passed
+  // it (only reachable for a hand-built decision). It is the same refusal
+  // `selection.ts` makes, so it is counted with those rather than invented as
+  // a reason of its own.
+  let guarded = 0;
   const anchors = new Map<string, number>();
   const filesWithFindings = new Set<string>();
 
@@ -126,21 +136,28 @@ export async function* iterBranchReview(
   for await (const outcome of outcomes) {
     if (!outcome.ok) {
       const detail = errorMessage(outcome.error);
+      failed++;
       log.warn(`Reviewing a file on '${branch}' failed: ${detail}`);
       continue;
     }
     const result = outcome.value;
-    if (result === null) continue;
+    if (result === null) {
+      guarded++;
+      continue;
+    }
     filesReviewed++;
     refuted += result.refuted;
-    // The volume policy applies to what survived verification, and only to
-    // what is reported: the anchors tally counts every finding the file
-    // produced, so a capped run still says how the anchoring behaved.
-    for (const [name, n] of countAnchors(result.findings)) {
-      anchors.set(name, (anchors.get(name) ?? 0) + n);
-    }
     const volume = capPerFile(result.findings, options.maxFindingsPerFile ?? 0);
     capped += volume.capped;
+    // Every per-finding tally is taken over the findings that are actually
+    // reported, so `anchors`, `unanchored`, `mislabelled` and `findings`
+    // describe one population and can be checked against each other. What
+    // the cap withheld is not silent for it: `capped` says how many, and a
+    // number that mixed two populations would make both unreadable.
+    for (const [name, n] of countAnchors(volume.kept)) {
+      anchors.set(name, (anchors.get(name) ?? 0) + n);
+    }
+    mislabelled += volume.kept.filter((finding) => finding.severity_claimed !== "").length;
     if (volume.capped > 0) {
       log.info(
         `${result.path}: ${volume.capped} finding(s) withheld by max-findings-per-file=${options.maxFindingsPerFile ?? 0}.`,
@@ -170,6 +187,10 @@ export async function* iterBranchReview(
     branch,
     files_changed: files.length,
     files_reviewed: filesReviewed,
+    // A file whose review threw, and how many diffs were shown in part only.
+    // Both are knowledge the run has and the findings cannot carry.
+    failed,
+    truncated: selected.filter((decision) => decision.truncated).length,
     findings: totalFindings,
     files_with_findings: filesWithFindings.size,
     // How each finding's line was decided, and how many got none at all.
@@ -185,13 +206,35 @@ export async function* iterBranchReview(
     // `refuted`: a finding that vanishes without a number behind it is a
     // finding nobody can ask about.
     capped,
+    // How many reported findings arrived under a severity the vocabulary has
+    // not got, and were reported under the mildest one instead.
+    mislabelled,
     // What happened to the files that were not reviewed, by reason. Without
     // it `files_changed` minus `files_reviewed` is a number nobody can act
     // on; with it, a rule that quietly ate half the change set is visible.
     skipped: Object.fromEntries(
-      [...skipCounts(decisions)].toSorted(([a], [b]) => compareCodePoints(a, b)),
+      [...withGuarded(skipCounts(decisions), guarded)].toSorted(([a], [b]) =>
+        compareCodePoints(a, b),
+      ),
     ),
   };
+}
+
+/**
+ * The skip counts with the per-file step's own credential refusals folded in.
+ *
+ * Two guards answer the same question (`guards.ts` is asked by the selection
+ * and again where the prompt is built), so they report as one reason: a
+ * withheld credential is a withheld credential whichever of them caught it.
+ */
+function withGuarded(
+  counts: ReadonlyMap<string, number>,
+  guarded: number,
+): ReadonlyMap<string, number> {
+  if (guarded === 0) return counts;
+  const merged = new Map(counts);
+  merged.set("secret", (merged.get("secret") ?? 0) + guarded);
+  return merged;
 }
 
 /**
@@ -251,11 +294,17 @@ export interface BranchReviewResult {
   readonly findings: readonly Omit<FindingRecord, "type">[];
   readonly files_changed: number;
   readonly files_reviewed: number;
+  /** Files selected for review whose review did not finish. */
+  readonly failed: number;
+  /** Files whose diff was shown in part only (`max-file-chars`). */
+  readonly truncated: number;
   readonly anchors: Readonly<Record<string, number>>;
   readonly unanchored: number;
   readonly refuted: number;
   /** Findings `max-findings-per-file` withheld. */
   readonly capped: number;
+  /** Reported findings whose severity the model spelled outside the vocabulary. */
+  readonly mislabelled: number;
   /** How many files each skip reason accounted for. */
   readonly skipped: Readonly<Record<string, number>>;
 }
@@ -284,10 +333,13 @@ function collect(
     findings,
     files_changed: summary?.files_changed ?? 0,
     files_reviewed: summary?.files_reviewed ?? 0,
+    failed: summary?.failed ?? 0,
+    truncated: summary?.truncated ?? 0,
     anchors: summary?.anchors ?? {},
     unanchored: summary?.unanchored ?? 0,
     refuted: summary?.refuted ?? 0,
     capped: summary?.capped ?? 0,
+    mislabelled: summary?.mislabelled ?? 0,
     skipped: summary?.skipped ?? {},
   };
 }
@@ -319,10 +371,37 @@ export async function streamBranchReview(
   return collect(findings, summary);
 }
 
-/** A finding as the text report needs it; `anchors` may be absent. */
+/** A finding as the text report needs it; every tally may be absent. */
 export interface TextReportInput {
   readonly findings: readonly Omit<FindingRecord, "type">[];
   readonly anchors?: Readonly<Record<string, number>>;
+  /** Files selected for review whose review did not finish. */
+  readonly failed?: number;
+  /** Files whose diff was shown in part only (`max-file-chars`). */
+  readonly truncated?: number;
+}
+
+/**
+ * What a reader must know before believing the findings above.
+ *
+ * Printed in both branches, and that is the point of it being its own
+ * function: "No issues found." is a claim about the code, and on a run where
+ * two files never came back it is the wrong one. A silence has to say which
+ * kind of silence it is.
+ */
+function caveats(result: TextReportInput): string[] {
+  const notes: string[] = [];
+  const failed = result.failed ?? 0;
+  const truncated = result.truncated ?? 0;
+  if (failed > 0) {
+    notes.push(`${failed} file(s) could not be reviewed; the log says why.`);
+  }
+  if (truncated > 0) {
+    notes.push(
+      `${truncated} file(s) had a diff too large to show in full; only what was shown was reviewed.`,
+    );
+  }
+  return notes;
 }
 
 /** The human-readable report, as lines to print (interactive use). */
@@ -330,7 +409,7 @@ export function branchReviewText(base: string, branch: string, result: TextRepor
   const lines = [`\n=== Branch review: ${branch} vs ${base} ===`];
   const { findings } = result;
   if (findings.length === 0) {
-    lines.push("No issues found.");
+    lines.push("No issues found.", ...caveats(result));
     return lines;
   }
   const files = new Set(findings.map((f) => f.path)).size;
@@ -342,7 +421,7 @@ export function branchReviewText(base: string, branch: string, result: TextRepor
   if (notable.length > 0) {
     lines.push(`anchors: ${notable.map(([name, n]) => `${n} ${name}`).join(", ")}`);
   }
-  lines.push("");
+  lines.push(...caveats(result), "");
   // An unanchored finding sorts first: it has no line, and -1 keeps the key
   // comparable.
   const ordered = findings.toSorted(

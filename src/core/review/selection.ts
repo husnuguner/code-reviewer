@@ -28,11 +28,11 @@
  */
 
 import { type FileReviewSettings } from "../config/settings";
-import { addedLines, annotatePatch } from "../diff/patch-view";
+import { type NewSideEntry, addedLines, patchView } from "../diff/patch-view";
 import { ChangedFile, type ChangedFileRecord, SKIP_STATUSES } from "../domain/changed-file";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { isGlobMatch } from "../skills/glob";
-import { countCodePoints, cutToLength, asText } from "../util/text";
+import { asText } from "../util/text";
 
 import { isBinaryPatch, isSecretPath } from "./guards";
 
@@ -70,17 +70,21 @@ export type SkipReason = Exclude<SelectionReason, "none">;
 /**
  * What every decision carries, whatever it decided.
  *
- * `annotatedPatch` and `addedLines` are carried rather than recomputed
- * because they *are* the decision: the lines a finding may anchor to and the
- * exact diff text the model is shown.
+ * `annotatedPatch`, `addedLines` and `newSide` are carried rather than
+ * recomputed because they *are* the decision: the exact diff text the model
+ * is shown, the lines a finding may anchor to, and the text a finding's quote
+ * is matched against. All three come from one `patchView`, so a diff cut at
+ * the cap cannot advertise a line it does not contain.
  */
 interface DecisionFields {
   readonly path: string;
   readonly status: string;
   /** The line-numbered diff the model is shown, already cut to the cap. */
   readonly annotatedPatch: string;
-  /** New-file line numbers a finding may anchor to. */
+  /** New-file line numbers a finding may anchor to, as shown. */
   readonly addedLines: ReadonlySet<number>;
+  /** The shown diff's new side: the haystack a finding's quote is placed in. */
+  readonly newSide: readonly NewSideEntry[];
   /** Length of the annotated diff before the cap was applied. */
   readonly diffChars: number;
   /** Whether `annotatedPatch` is a cut-down view of `diffChars`. */
@@ -125,6 +129,7 @@ function skipped(path: string, status: string, reason: SkipReason): SkippedFile 
     file: null,
     annotatedPatch: "",
     addedLines: new Set(),
+    newSide: [],
     diffChars: 0,
     truncated: false,
   };
@@ -166,26 +171,26 @@ const GATES: readonly SelectionGate[] = [
 /**
  * The decision to review this file, with the diff the model will be shown.
  *
- * Takes `lines` rather than computing them because the caller has already
- * asked the question the answer came from -- "does this patch add anything?"
- * -- and a second walk of the same patch could only disagree with the first.
+ * The allowed lines come from the *shown* diff rather than from the whole
+ * patch, and that is the point of routing both through one `patchView`. A
+ * patch over `max-file-chars` is cut, so the two answers used to be taken
+ * from different texts: the model was handed a third of a diff together with
+ * every line number the whole of it added, and the quote matcher searched
+ * lines nobody had sent it. Now a line is allowed exactly when the model can
+ * see it.
  */
-function reviewed(
-  file: ChangedFile,
-  lines: ReadonlySet<number>,
-  settings: FileReviewSettings,
-): SelectedFile {
-  const annotated = annotatePatch(file.patch);
-  const diffChars = countCodePoints(annotated);
+function reviewed(file: ChangedFile, settings: FileReviewSettings): SelectedFile {
+  const view = patchView(file.patch, settings.maxFileChars);
   return {
     path: file.path,
     status: file.status,
     reason: "none",
     file,
-    annotatedPatch: cutToLength(annotated, settings.maxFileChars),
-    addedLines: lines,
-    diffChars,
-    truncated: diffChars > settings.maxFileChars,
+    annotatedPatch: view.annotated,
+    addedLines: view.addedLines,
+    newSide: view.newSide,
+    diffChars: view.chars,
+    truncated: view.clipped,
   };
 }
 
@@ -210,10 +215,11 @@ export function decideFile(entry: ChangedFileRecord, settings: FileReviewSetting
   const gate = GATES.find((candidate) => candidate.rejects(file, settings));
   if (gate !== undefined) return skipped(file.path, file.status, gate.reason);
 
-  const lines = addedLines(file.patch);
-  return lines.size === 0
+  // Asked of the whole patch: whether there is anything to review is a
+  // property of the change, not of how much of it fits in a prompt.
+  return addedLines(file.patch).size === 0
     ? skipped(file.path, file.status, "no_added_lines")
-    : reviewed(file, lines, settings);
+    : reviewed(file, settings);
 }
 
 /** Decide a whole change set, in the order it was reported. */

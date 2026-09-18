@@ -14,13 +14,13 @@
 
 import { z } from "zod";
 
-import { type ProviderSettings } from "../llm/provider-registry";
-import { asText, show } from "../util/text";
+import { asText, show, sortedByCodePoint } from "../util/text";
 
 import { languageName } from "./language";
 import {
   type ConcurrencyLimits,
   type FileReviewSettings,
+  type LlmSettings,
   type PromptFiles,
   type ReportPolicy,
   type SkillMappings,
@@ -41,7 +41,7 @@ export function defaultConcurrency(cpuCount: number | null): number {
 /** Field -> the environment alias it is populated from. */
 export const CONFIG_ALIASES = {
   provider: "LLM_PROVIDER",
-  modelName: "LLM_MODEL",
+  model: "LLM_MODEL",
   apiKey: "LLM_API_KEY",
   baseUrl: "LLM_BASE_URL",
   localPath: "REVIEW_LOCAL_PATH",
@@ -163,14 +163,15 @@ const integer = z.preprocess((value) => {
     : value;
 }, z.number().int());
 
-function rawSchema(providerNames: readonly string[]) {
+function rawSchema(providers: RegisteredProviders) {
+  const accepted = sortedByCodePoint(providers.names);
   return z.object({
     LLM_PROVIDER: text
-      .default("local")
+      .default(providers.default)
       .transform((value) => value.trim().toLowerCase())
-      .refine((value) => providerNames.includes(value), {
+      .refine((value) => providers.names.includes(value), {
         error: (issue) =>
-          `LLM_PROVIDER must be one of ${show([...providerNames])}, got: ${show(issue.input)}`,
+          `LLM_PROVIDER must be one of ${show(accepted)}, got: ${show(issue.input)}`,
       }),
     LLM_MODEL: optionalText.default(null),
     LLM_API_KEY: text,
@@ -195,9 +196,25 @@ type RawConfig = z.output<ReturnType<typeof rawSchema>>;
 
 // -- the settings object ------------------------------------------------------
 
+/**
+ * The vendors a run may name, as whoever composed the run registered them.
+ *
+ * Both facts come from outside. This module knows that `LLM_PROVIDER` must
+ * be one of some names and that leaving it unset means one of them in
+ * particular -- it does not know which names, nor which one, because that is
+ * the providers layer's decision and stating it here too would be a second
+ * place for it to be wrong.
+ */
+export interface RegisteredProviders {
+  /** Every accepted name; a refusal lists them sorted. */
+  readonly names: readonly string[];
+  /** What `LLM_PROVIDER` means when unset. */
+  readonly default: string;
+}
+
 export interface ConfigOptions {
-  /** Registered LLM provider names, which `LLM_PROVIDER` must be one of. */
-  readonly providerNames: readonly string[];
+  /** The LLM providers registered for this run; `LLM_PROVIDER` must name one. */
+  readonly providers: RegisteredProviders;
   /** The machine's parallelism, for the concurrency defaults (`null` -> 4). */
   readonly cpuCount: number | null;
   /**
@@ -221,8 +238,8 @@ export type ConfigValues = {
 export interface Config extends ConfigValues {
   /** Globs whose files are skipped entirely. */
   readonly excludeGlobs: readonly string[];
-  /** The LLM knobs, in the registry's own terms. */
-  providerSettings(): ProviderSettings;
+  /** The model knobs; the vendor's name is `provider`, passed beside them. */
+  llmSettings(): LlmSettings;
   /** What one file review reads; `extraExclude` adds the command line's globs. */
   fileReviewSettings(extraExclude?: readonly string[]): FileReviewSettings;
   /** How many findings one file may report. */
@@ -251,7 +268,7 @@ export function buildConfig(
   if (options.requiresModel === false && upper[keyAlias] === undefined) {
     upper[keyAlias] = "";
   }
-  const parsed = rawSchema(options.providerNames).safeParse(upper);
+  const parsed = rawSchema(options.providers).safeParse(upper);
   if (!parsed.success) {
     throw new ConfigError(formatIssues(parsed.error.issues));
   }
@@ -264,11 +281,10 @@ function withViews(values: ConfigValues): Config {
   return Object.freeze({
     ...values,
     excludeGlobs,
-    providerSettings: () => ({
-      provider: values.provider,
+    llmSettings: () => ({
       apiKey: values.apiKey,
       baseUrl: values.baseUrl,
-      modelName: values.modelName,
+      model: values.model,
     }),
     fileReviewSettings: (extraExclude: readonly string[] = []) => ({
       exclude: [...excludeGlobs, ...extraExclude],

@@ -36,7 +36,7 @@ bağımlılıklarıyla 53 paket / 39 ms kurulum. Testler 899/899, `--parallel` i
 ### 3.1 Bun çalışma dizinindeki `.env`'i otomatik yükler
 
 Ölçüldü: `.env` bulunan bir dizinde `bun script.ts` o değerleri
-`process.env`'de görür; `bun test` de öyle. Bu, `src/infra/config/loader.ts`'in
+`process.env`'de görür; `bun test` de öyle. Bu, `src/providers/config/environment-files.ts`'in
 belgelediği ve test ettiği öncelik sırasıyla çakışır: çalışma dizininin
 `.env`'i **en zayıf** kaynaktır, `~/.config/reviewer/.env` onu geçer,
 `.review/.env` onu da geçer, gerçek ortam hepsini geçer. Bun'un yüklemesiyle
@@ -96,9 +96,9 @@ Karşılığı üç yerde, her biri doğrulanmış:
 - `bunfig.toml`, `.bun-version`, `bun.lock` — yeni. `package-lock.json`,
   `tsup.config.ts`, `vitest.config.ts`, `.vitest/`, `dist/` — silindi.
 - `src/cli/main.ts` — shebang (çalıştırılabilir).
-- `src/infra/git/local-git.ts` — `runGit` `Bun.spawn` ile; iki pipe ve çıkış
+- `src/providers/git/local-git.ts` — `runGit` `Bun.spawn` ile; iki pipe ve çıkış
   birlikte beklenir, başlatılamayan git `GitError`.
-- `src/infra/config/loader.ts` — `parseEnv`.
+- `src/providers/config/environment-files.ts` — `parseEnv`.
 - `tests/**` — `bun:test` importları, tipleme, `tests/helpers/git.ts`.
 - `tsconfig.json` — `types: ["node", "bun"]`.
 - `eslint.config.ts` — §2 ve §3.3'teki kurallar; `bun`, `bun:test` core

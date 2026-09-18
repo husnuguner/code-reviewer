@@ -19,12 +19,11 @@
  *    what make "only three findings" mean something.
  */
 
+import { type ReviewEvent } from "../ports/review-poster";
 import { type FindingRecord, type SummaryRecord } from "../ports/review-reporter";
 import { severityGate, severityLabel, severityRankOf } from "../review/severity";
 import { type JsonObject, type JsonValue, isJsonArray, isJsonObject } from "../util/json";
 import { compareCodePoints } from "../util/text";
-
-import { type ReviewEvent } from "./review-poster";
 
 /** One finding as the record stream carries it (no `type` discriminator). */
 export type Finding = Omit<FindingRecord, "type">;
@@ -181,12 +180,15 @@ function toSummary(record: JsonObject): SummaryRecord {
     branch: text_(record["branch"]),
     files_changed: count(record["files_changed"]),
     files_reviewed: count(record["files_reviewed"]),
+    failed: count(record["failed"]),
+    truncated: count(record["truncated"]),
     findings: count(record["findings"]),
     files_with_findings: count(record["files_with_findings"]),
     anchors: {},
     unanchored: count(record["unanchored"]),
     refuted: count(record["refuted"]),
     capped: count(record["capped"]),
+    mislabelled: count(record["mislabelled"]),
     skipped: {},
   };
 }

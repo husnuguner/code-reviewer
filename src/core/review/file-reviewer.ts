@@ -21,7 +21,15 @@ import { asText, collapseWhitespace, cutToLength, show } from "../util/text";
 
 import { type Anchor, CONFLICT, EXACT, FAILED, REPAIRED, resolveAnchor } from "./anchor";
 import { RETRY_PROMPT, buildUserPrompt } from "./prompts";
-import { parseSeverity } from "./severity";
+import { isKnownSeverity, parseSeverity, severityPromptVocabulary } from "./severity";
+
+/**
+ * The severity a finding keeps when the model named one the vocabulary has
+ * not got: the mildest, so that a substitution cannot inflate a finding's
+ * standing. What was claimed is recorded on the finding (`severity_claimed`)
+ * and counted by the run.
+ */
+const FALLBACK_SEVERITY = "readability";
 
 /** Model text that does not contain a findings object. */
 export class JsonDecodeError extends Error {
@@ -166,8 +174,21 @@ export class FileReviewer {
     if (body === "") return [];
     // An unrecognised severity keeps the finding under the mildest one rather
     // than losing it: the text is the model's, the problem it describes may
-    // still be real.
-    const severity = parseSeverity(item["severity"], "readability");
+    // still be real. What it claimed is kept and said out loud, because
+    // re-rating a finding in silence is still re-rating it.
+    const named = item["severity"];
+    const severity = parseSeverity(named, FALLBACK_SEVERITY);
+    // A claim the vocabulary has not got was *overruled*, and that travels
+    // with the finding so a run can count it. A claim never made was not
+    // overruled -- there was nothing to overrule -- so it is said out loud
+    // and left out of the tally.
+    const claimedSeverity =
+      hasContent(named) && !isKnownSeverity(named) ? collapseWhitespace(asText(named)) : "";
+    if (!isKnownSeverity(named)) {
+      this.log.info(
+        `${input.path}: severity ${show(hasContent(named) ? asText(named) : "(none)")} is not one of ${severityPromptVocabulary()}; keeping the finding as ${severity}.`,
+      );
+    }
     const quote = hasContent(item["existing_code"]) ? asText(item["existing_code"]) : "";
     const claimed = item["line"];
     const spot = resolveAnchor({
@@ -186,6 +207,7 @@ export class FileReviewer {
         start_line: spot.startLine,
         anchor: spot.outcome,
         existing_code: quote,
+        severity_claimed: claimedSeverity,
       },
     ];
   }

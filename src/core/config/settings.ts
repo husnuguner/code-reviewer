@@ -6,6 +6,22 @@
  * exactly which settings it depends on and a test can build one in a line.
  */
 
+/**
+ * The model knobs, as the configuration settles them.
+ *
+ * Which vendor is meant is `Config.provider`, the selection key, and it is
+ * deliberately not in here: the core never reads it, and whoever builds the
+ * model from these knobs takes the name beside them rather than inside them.
+ */
+export interface LlmSettings {
+  /** `LLM_API_KEY` / `llm.api-key`; required, non-empty even for a local server. */
+  readonly apiKey: string;
+  /** `LLM_BASE_URL` / `llm.base-url`; `null` takes the vendor's own endpoint. */
+  readonly baseUrl: string | null;
+  /** `LLM_MODEL` / `llm.model`; `null` when the configuration named none. */
+  readonly model: string | null;
+}
+
 /** The slice of configuration one file review actually reads. */
 export interface FileReviewSettings {
   /** Globs whose files are skipped entirely. */

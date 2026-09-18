@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
-import { type Catalog, type ProjectSpec, parseCatalog } from "../../src/core/catalog/catalog";
+import { type Catalog, type ProjectSpec } from "../../src/core/catalog/catalog";
+import { parseCatalog } from "../../src/core/catalog/parse";
 import { CatalogError } from "../../src/core/util/errors";
 
 import { type FixtureCase, caseNamed, casesUnder, expectContract, loadFixture } from "./fixtures";

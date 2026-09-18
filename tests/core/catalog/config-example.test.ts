@@ -11,7 +11,8 @@ import { join } from "node:path";
 
 import { parse as parseYaml } from "yaml";
 
-import { PROJECT_SETTING_KEYS, parseCatalog } from "../../../src/core/catalog/catalog";
+import { parseCatalog } from "../../../src/core/catalog/parse";
+import { PROJECT_SETTING_KEYS } from "../../../src/core/catalog/schema";
 import { resolveConfig } from "../../../src/core/config/resolver";
 import { sortedByCodePoint } from "../../../src/core/util/text";
 
@@ -41,7 +42,7 @@ describe("docs/config.example.yaml", () => {
       project: "shop",
       sources: { processEnv: { LLM_API_KEY: "k" }, envFiles: [] },
       configHome: "/tmp/none",
-      providerNames: ["local", "claude"],
+      providers: { names: ["local", "claude"], default: "local" },
       cpuCount: 4,
     });
     expect(config.reviewLang).toBe("Turkish");

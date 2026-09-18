@@ -44,6 +44,18 @@ function normalised(value: unknown): string {
   return (hasContent(value) ? String(value) : "").trim().toLowerCase();
 }
 
+/**
+ * Whether a raw value names a severity the vocabulary has.
+ *
+ * Asked where a value is *accepted* under a fallback, so that accepting it
+ * can still be reported: `parseSeverity(value, fallback)` deliberately never
+ * fails, and a caller that wants to say "the model named something else"
+ * needs the question answered separately from the answer it acts on.
+ */
+export function isKnownSeverity(value: unknown): boolean {
+  return isSeverity(normalised(value));
+}
+
 /** The human label a comment opens with. */
 export function severityLabelOf(severity: Severity): string {
   return LABELS[severity];

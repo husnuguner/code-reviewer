@@ -25,6 +25,9 @@ import { recordingLogger } from "../../helpers/logging";
 
 const PATCH = "@@ -1 +1,2 @@\n old\n+added line\n";
 const BINARY = "diff --git a/x.png b/x.png\nBinary files a/x.png and b/x.png differ\n";
+/** Two hunks, each adding a line: what a cap has to choose between. */
+const TWO_HUNKS =
+  "@@ -1,2 +1,3 @@\n alpha\n+beta\n gamma\n@@ -20,2 +21,3 @@\n delta\n+epsilon\n zeta\n";
 
 function reasonFor(
   filename: string,
@@ -80,15 +83,49 @@ describe("deciding which files are reviewed", () => {
     expect(reasonFor(".env", "removed", PATCH)).toBe("secret");
   });
 
-  it("cuts an oversized diff instead of skipping the file", () => {
+  it("cuts an oversized diff at a hunk boundary instead of skipping the file", () => {
+    const firstHunk = "@@ -1,2 +1,3 @@\n alpha\n[L2] +beta\n gamma";
     const decision = decideFile(
-      { filename: "a.ts", status: "modified", patch: PATCH },
-      { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: 10 },
+      { filename: "a.ts", status: "modified", patch: TWO_HUNKS },
+      { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: firstHunk.length },
     );
     expect(decision.reason).toBe("none");
-    expect(decision.annotatedPatch).toBe("@@ -1,1 +1");
+    expect(decision.annotatedPatch).toBe(firstHunk);
     expect(decision.truncated).toBe(true);
-    expect(decision.diffChars).toBe(37);
+    expect(decision.diffChars).toBe(86);
+  });
+
+  it("allows only the lines the diff it shows contains", () => {
+    // The invariant the cut exists to protect: every line a finding may
+    // anchor to is a line the model was shown, and the quote matcher's
+    // haystack is that same text. Taken from the whole patch instead, both
+    // would describe a diff nobody sent.
+    const decision = decideFile(
+      { filename: "a.ts", status: "modified", patch: TWO_HUNKS },
+      { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: 40 },
+    );
+    if (!isSelected(decision)) throw new Error(`expected a.ts to be selected`);
+    const shown = new Set(
+      decision.annotatedPatch
+        .split("\n")
+        .map((line) => /^\[L(\d+)\]/u.exec(line)?.[1])
+        .filter((line): line is string => line !== undefined)
+        .map(Number),
+    );
+    expect([...decision.addedLines].toSorted((a, b) => a - b)).toEqual([...shown]);
+    expect(decision.newSide.every(([line]) => line <= 3)).toBe(true);
+  });
+
+  it("shows one commentable line however small the cap", () => {
+    const decision = decideFile(
+      { filename: "a.ts", status: "modified", patch: TWO_HUNKS },
+      { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: 0 },
+    );
+    if (!isSelected(decision)) throw new Error(`expected a.ts to be selected`);
+    // A cap of zero is still "cut, not dropped": the file is reviewed, and
+    // what it is reviewed on has something to comment on.
+    expect([...decision.addedLines]).toEqual([2]);
+    expect(decision.truncated).toBe(true);
   });
 
   it("keeps the reported order and counts the skips by reason", () => {
@@ -180,11 +217,11 @@ describe("the preview report", () => {
   });
 
   it("says that a cut diff was cut, and by how much", () => {
-    const cut = selectFiles([{ filename: "a.ts", status: "modified", patch: PATCH }], {
+    const cut = selectFiles([{ filename: "a.ts", status: "modified", patch: TWO_HUNKS }], {
       ...DEFAULT_FILE_REVIEW_SETTINGS,
-      maxFileChars: 10,
+      maxFileChars: 40,
     });
-    expect(previewReport("branch x vs main", cut, 10)).toContain("+1 (diff cut at 10 of 37 chars)");
+    expect(previewReport("branch x vs main", cut, 40)).toContain("+1 (diff cut at 40 of 86 chars)");
   });
 
   it("reports an empty change set without pretending a review happened", () => {

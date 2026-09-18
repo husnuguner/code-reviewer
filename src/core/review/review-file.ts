@@ -18,7 +18,6 @@
 import { type LimitFunction } from "p-limit";
 
 import { type FileReviewSettings } from "../config/settings";
-import { newSideIndex } from "../diff/patch-view";
 import { type ChangedFile } from "../domain/changed-file";
 import { type Finding } from "../domain/finding";
 import { type CodeContext } from "../ports/code-context";
@@ -139,7 +138,10 @@ export async function reviewChangedFile(
       language: settings.language,
       skillsText,
       contextText,
-      anchorIndex: newSideIndex(file.patch),
+      // The shown diff's new side, carried by the decision rather than
+      // recomputed from the whole patch: a quote may only be placed in text
+      // the model was actually given (see `selection.ts`).
+      anchorIndex: selected.newSide,
     });
     return verifier === null
       ? keepAll(findings)

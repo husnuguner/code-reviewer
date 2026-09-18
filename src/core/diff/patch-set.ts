@@ -4,7 +4,7 @@
  * Output deliberately mirrors what a repo provider's `changedFiles` returns
  * (`filename` / `status` / `patch`), so the per-file review loop cannot tell
  * the two sources apart. Reading the diff out of git is an infrastructure
- * concern (`infra/git`); the splitting is pure and lives here.
+ * concern (`providers/git`); the splitting is pure and lives here.
  */
 
 import { type ChangedFileEntry } from "../domain/changed-file";

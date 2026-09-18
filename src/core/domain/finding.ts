@@ -25,6 +25,18 @@ export interface Finding {
   readonly anchor: AnchorOutcome;
   /** The model's verbatim quote that helped place the finding. */
   readonly existing_code: string;
+  /**
+   * The severity the model named when the vocabulary does not have it; `""`
+   * when it named one it does.
+   *
+   * A finding under an unrecognised severity is kept rather than lost -- the
+   * text is the model's and the problem it describes may be real -- but it is
+   * kept under the mildest severity, which quietly rewrites how a reader
+   * ranks it. So what was claimed travels with the finding, and a run can
+   * count how often that happened instead of the substitution being
+   * invisible.
+   */
+  readonly severity_claimed: string;
 }
 
 /** Build a finding with the defaults an unanchored/plain finding takes. */
@@ -36,6 +48,7 @@ export function finding(
     start_line: null,
     anchor: "exact",
     existing_code: "",
+    severity_claimed: "",
     ...fields,
   };
 }

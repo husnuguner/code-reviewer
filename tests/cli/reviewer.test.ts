@@ -5,9 +5,11 @@
 
 import { describe, expect, it } from "bun:test";
 
-import { ADD, INIT, PROJECTS } from "../../src/cli/commands/catalog";
-import { COMMENT } from "../../src/cli/commands/comment";
-import { REVIEW } from "../../src/cli/commands/review";
+import { ADD } from "../../src/cli/commands/add/command";
+import { COMMENT } from "../../src/cli/commands/comment/command";
+import { INIT } from "../../src/cli/commands/init/command";
+import { PROJECTS } from "../../src/cli/commands/projects/command";
+import { REVIEW } from "../../src/cli/commands/review/command";
 import { UsageError, parseArguments } from "../../src/cli/reviewer";
 import { argumentsOf, parsedBy } from "../helpers/command-line";
 
@@ -44,10 +46,35 @@ describe("naming the command", () => {
     expect(review([]).verbose).toBe(false);
     expect(argumentsOf(INIT, ["-v", "init"]).verbose).toBe(true);
     expect(argumentsOf(INIT, ["init", "-v"]).verbose).toBe(true);
+    // `comment` settles its logging at the parse, having no container to
+    // build one from; what it carries is the decision, not the flag.
     expect(
       argumentsOf(COMMENT, ["comment", "--findings", "f", "--repo", "a/b", "--pr", "1", "-v"])
-        .verbose,
-    ).toBe(true);
+        .logging.level,
+    ).toBe("debug");
+  });
+});
+
+describe("the logging flags", () => {
+  it("live on the root, so every command takes them in the same place", () => {
+    expect(review(["-q"]).quiet).toBe(true);
+    expect(argumentsOf(INIT, ["init", "-q"]).quiet).toBe(true);
+    expect(argumentsOf(INIT, ["--log-level", "error", "init"]).logLevel).toBe("error");
+  });
+
+  it("read --log-level whatever its case, and 'warning' as 'warn'", () => {
+    expect(review(["--log-level", "DEBUG"]).logLevel).toBe("debug");
+    expect(review(["--log-level", "warn"]).logLevel).toBe("warn");
+  });
+
+  it("refuse a level and a format neither the logger knows", () => {
+    expect(() => parseArguments(["--log-level", "chatty"])).toThrow(/Allowed levels are/u);
+    expect(() => parseArguments(["--log-format", "xml"])).toThrow(/Allowed log formats are/u);
+  });
+
+  it("spell --no-color as color: false, and leave the terminal to decide otherwise", () => {
+    expect(review(["--no-color"]).color).toBe(false);
+    expect(review([]).color).toBe(true);
   });
 });
 
@@ -56,6 +83,13 @@ describe("the review flags", () => {
     expect(review([])).toEqual({
       config: null,
       verbose: false,
+      quiet: false,
+      logLevel: null,
+      // Not `text`: the shape is decided from the environment at the point
+      // a logger is built, so the parsed flag stays undecided.
+      logFormat: "auto",
+      // Commander's shape for `--no-color`: on until the flag is given.
+      color: true,
       project: null,
       // The current checkout: a CI build sits on a detached commit, so the
       // common case must not need a branch name.

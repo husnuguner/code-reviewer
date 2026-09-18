@@ -29,7 +29,7 @@ import {
 } from "../../../src/core/review/review-file";
 import { type Verdict, type VerifyInput } from "../../../src/core/review/verify";
 import { sortedByCodePoint } from "../../../src/core/util/text";
-import { LocalGitReader } from "../../../src/infra/git/local-git";
+import { LocalGitReader } from "../../../src/providers/git/local-git";
 import { loadFixture } from "../../contracts/fixtures";
 import { git } from "../../helpers/git";
 
@@ -322,6 +322,48 @@ describe("streaming", () => {
     expect(result.unanchored).toBe(0);
   });
 
+  it("tallies anchors over the findings it reported, not the ones it withheld", async () => {
+    // Two findings per file, one of them unanchored, and a cap of one. The
+    // tallies have to describe the same population as `findings`, or a reader
+    // cannot check one against the other: what the cap took is `capped`.
+    const reviewer: PerFileReviewer = {
+      reviewFile: (input) =>
+        Promise.resolve([
+          finding({
+            line: Math.min(...input.allowedLines),
+            severity: "bug",
+            body: "kept",
+            anchor: "exact",
+          }),
+          finding({ line: null, severity: "readability", body: "withheld", anchor: "failed" }),
+        ]),
+    };
+    const result = await reviewBranch(options(repo(), { reviewer, maxFindingsPerFile: 1 }));
+    expect(result.findings).toHaveLength(2);
+    expect(result.anchors).toEqual({ exact: 2 });
+    expect(result.unanchored).toBe(0);
+    expect(result.capped).toBe(2);
+  });
+
+  it("counts a finding whose severity the model invented", async () => {
+    const reviewer: PerFileReviewer = {
+      reviewFile: (input) =>
+        Promise.resolve([
+          finding({
+            line: Math.min(...input.allowedLines),
+            severity: "readability",
+            body: "x",
+            severity_claimed: "catastrophic",
+          }),
+        ]),
+    };
+    const result = await reviewBranch(options(repo(), { reviewer }));
+    // Reported under the mildest severity, and the substitution is a number
+    // rather than a silent re-rating.
+    expect(result.mislabelled).toBe(2);
+    expect(result.findings.every((f) => f.severity === "readability")).toBe(true);
+  });
+
   it("accounts for the files it did not review, by reason", async () => {
     const result = await reviewBranch(
       options(repo(), {
@@ -356,6 +398,31 @@ describe("streaming", () => {
     const result = await reviewBranch(options(repo(), { reviewer }));
     expect(result.files_reviewed).toBe(1);
     expect(result.findings.map((f) => f.path)).toEqual(["new.py"]);
+  });
+
+  it("counts the file whose review threw, so the run's arithmetic adds up", async () => {
+    // Without this the file leaves the run as nothing but a smaller
+    // `files_reviewed`: not skipped, not reviewed, and not mentioned.
+    const reviewer: PerFileReviewer = {
+      reviewFile: (input) =>
+        input.path === "a.py"
+          ? Promise.reject(new Error("model exploded"))
+          : Promise.resolve([finding({ line: 1, severity: "bug", body: "ok" })]),
+    };
+    const result = await reviewBranch(options(repo(), { reviewer }));
+    expect(result.failed).toBe(1);
+    const accounted =
+      result.files_reviewed +
+      result.failed +
+      Object.values(result.skipped).reduce((sum, n) => sum + n, 0);
+    expect(accounted).toBe(result.files_changed);
+  });
+
+  it("says nothing was found without claiming the run was clean", () => {
+    const lines = branchReviewText("main", "feature", { findings: [], failed: 2, truncated: 1 });
+    expect(lines).toContain("No issues found.");
+    expect(lines).toContain("2 file(s) could not be reviewed; the log says why.");
+    expect(lines.some((line) => line.includes("too large to show in full"))).toBe(true);
   });
 });
 

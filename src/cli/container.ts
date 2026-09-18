@@ -25,44 +25,48 @@ import {
 } from "awilix";
 
 import { type Config, type ConfigField } from "../core/config/config";
-import { type LLMProviderRegistry } from "../core/llm/provider-registry";
 import { type ChatModel } from "../core/ports/chat-model";
 import { type ConsoleOutput } from "../core/ports/console";
 import { type GitReader } from "../core/ports/git-reader";
 import { type Logger } from "../core/ports/logger";
-import { type BranchReviewReporter, type PreviewReporter } from "../core/ports/review-reporter";
+import {
+  type BranchReviewReporter,
+  type PreviewReporter,
+  type SummaryWriter,
+} from "../core/ports/review-reporter";
 import { type SkillMatcher } from "../core/ports/skill-matcher";
-import { type ReportFormatRegistry, type SummaryWriter } from "../core/reporting/format-registry";
 import { FileReviewer } from "../core/review/file-reviewer";
 import { systemPrompt } from "../core/review/prompts";
 import { type PerFileVerifier } from "../core/review/review-file";
 import { FindingVerifier } from "../core/review/verify";
 import { SkillRegistry } from "../core/skills/registry";
-import { loadRunConfig } from "../infra/config/loader";
+import { shippedFile } from "../providers/assets/shipped-files";
 import {
   configHome,
   configPath,
   expandUser,
   isRepoConfig,
   repoRootOf,
-} from "../infra/config/paths";
-import { LocalGitReader, worktree } from "../infra/git/local-git";
-import { builtinLLMProviderRegistry } from "../infra/llm/index";
-import { PinoLogger } from "../infra/logging/pino-logger";
-import { catalogDirectory, readReviewPolicy } from "../infra/prompts/policy-files";
-import { builtinReportFormatRegistry } from "../infra/reporters/index";
-import {
-  NdjsonFileReporter,
-  StreamConsole,
-  TeeReporter,
-  lineWriter,
-} from "../infra/reporters/stdout";
-import { shippedFile } from "../infra/shipped-files";
+} from "../providers/catalog/paths";
+import { loadRunConfig } from "../providers/config/loader";
+import { StreamConsole } from "../providers/console/stream-console";
+import { LocalGitReader, worktree } from "../providers/git/local-git";
+import { builtinModelProviders } from "../providers/llm/builtin";
+import { type ModelProviderRegistry } from "../providers/llm/model-provider";
+import { RetryingChatModel } from "../providers/llm/retrying-chat-model";
+import { type LogSettings } from "../providers/logging/log-settings";
+import { PinoLogger } from "../providers/logging/pino-logger";
+import { catalogDirectory, readReviewPolicy } from "../providers/prompts/policy-files";
+import { builtinFormatProviders } from "../providers/reporting/builtin";
+import { type FormatProviderRegistry } from "../providers/reporting/format-provider";
+import { lineWriter } from "../providers/reporting/line-writer";
+import { NdjsonFileReporter } from "../providers/reporting/ndjson/file-reporter";
+import { TeeReporter } from "../providers/reporting/tee";
 import {
   DirectorySkillSource,
   WorktreeSkillSource,
   isLocalSkillsPath,
-} from "../infra/skills/sources";
+} from "../providers/skills/sources";
 
 /**
  * Where a run's findings go, as the command line spells it.
@@ -76,7 +80,13 @@ export type ReportFormat = string;
 export interface RunRequest {
   readonly project: string | null;
   readonly configFile: string | null;
-  readonly verbose: boolean;
+  /**
+   * How much the run says, in what shape, in colour or not -- already
+   * settled by the command line (see `commands/shared`). The container takes
+   * a decision rather than the flags behind it, so building a logger reads
+   * no environment variable and asks no question of the terminal.
+   */
+  readonly logging: LogSettings;
   /** Command-line settings that outrank every other layer. */
   readonly overrides: Readonly<Partial<Record<ConfigField, unknown>>>;
   /** Whether the flow builds a language model and therefore needs its key. */
@@ -90,9 +100,10 @@ export interface RunRequest {
 export interface RunCradle {
   readonly request: RunRequest;
   readonly logger: Logger;
-  readonly llmProviders: LLMProviderRegistry;
+  /** The vendors `LLM_PROVIDER` may name. */
+  readonly modelProviders: ModelProviderRegistry;
   /** The renderings `--format` may name. */
-  readonly reportFormats: ReportFormatRegistry;
+  readonly formatProviders: FormatProviderRegistry;
   readonly config: Config;
   readonly chatModel: ChatModel;
   /** The composed system prompt: the policy in force over the output contract. */
@@ -146,11 +157,11 @@ function skillSource(root: string, path: string, logger: Logger): DirectorySkill
  */
 function buildBranchReporter(
   request: RunRequest,
-  formats: ReportFormatRegistry,
+  formats: FormatProviderRegistry,
 ): BranchReviewReporter {
   // The format is *looked up*, never branched on: adding a rendering is
   // registering a strategy, not editing this function.
-  const primary = formats.build(request.format, {
+  const primary = formats.create(request.format, {
     write: lineWriter(process.stdout),
     summary: summarySink(),
   });
@@ -184,23 +195,32 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
   container.register({
     request: asValue(request),
     logger: asFunction(({ request: r }: RunCradle) =>
-      PinoLogger.console({ verbose: r.verbose }),
+      PinoLogger.console({ settings: r.logging }),
     ).singleton(),
-    llmProviders: asFunction(() => builtinLLMProviderRegistry()).singleton(),
-    reportFormats: asFunction(() => builtinReportFormatRegistry()).singleton(),
-    config: asFunction(({ request: r, llmProviders, logger }: RunCradle) =>
+    modelProviders: asFunction(() => builtinModelProviders()).singleton(),
+    formatProviders: asFunction(() => builtinFormatProviders()).singleton(),
+    config: asFunction(({ request: r, modelProviders, logger }: RunCradle) =>
       loadRunConfig({
         project: r.project,
         configFile: r.configFile,
         overrides: r.overrides,
         requiresModel: r.requiresModel,
-        providerNames: llmProviders.sortedNames(),
+        // Which vendors exist and which is meant when none is named are the
+        // registry's facts; the configuration is told them, it does not hold them.
+        providers: { names: modelProviders.names(), default: modelProviders.defaultName() },
         cpuCount: availableParallelism(),
         logger,
       }),
     ).singleton(),
-    chatModel: asFunction(({ config, llmProviders }: RunCradle) =>
-      llmProviders.build(config.providerSettings()),
+    // The registry builds the vendor's adapter; the decorator decides what a
+    // failed call means. Wrapping here rather than inside each provider is
+    // what keeps "try again, and say so" one policy instead of one per vendor
+    // -- and what lets a test build the bare model.
+    chatModel: asFunction(
+      ({ config, modelProviders, logger }: RunCradle) =>
+        new RetryingChatModel(modelProviders.create(config.provider, config.llmSettings()), {
+          logger,
+        }),
     ).singleton(),
     // The operator's review policy (or the shipped one) over the fixed contract.
     systemPrompt: asFunction(({ config, catalogPath }: RunCradle) =>
@@ -227,8 +247,8 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
     console: asFunction(() => new StreamConsole(process.stdout)).singleton(),
     // A preview's selection is ordinary console output.
     previewReporter: aliasTo("console"),
-    branchReporter: asFunction(({ request: r, reportFormats }: RunCradle) =>
-      buildBranchReporter(r, reportFormats),
+    branchReporter: asFunction(({ request: r, formatProviders }: RunCradle) =>
+      buildBranchReporter(r, formatProviders),
     ).singleton(),
     checkoutRoot: asFunction(({ config, catalogPath }: RunCradle) => {
       const fallback = isRepoConfig(catalogPath) ? repoRootOf(catalogPath) : "";

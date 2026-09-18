@@ -18,7 +18,21 @@ export interface ChatResponse {
   readonly text: string;
 }
 
+/** What a caller may say about one call, beyond the conversation itself. */
+export interface ChatCallOptions {
+  /**
+   * Abandon the call when this aborts.
+   *
+   * The port carries it because a deadline that cannot cancel the work is not
+   * a deadline: without a signal reaching the vendor's client, a model that
+   * never answers would hold its concurrency slot for the length of the run.
+   * The review layer supplies none -- it is the adapter side that imposes
+   * limits -- which is why it is optional.
+   */
+  readonly signal?: AbortSignal;
+}
+
 export interface ChatModel {
   /** One non-streaming completion. Rejects on transport or provider failure. */
-  generate(messages: readonly ChatMessage[]): Promise<ChatResponse>;
+  generate(messages: readonly ChatMessage[], options?: ChatCallOptions): Promise<ChatResponse>;
 }

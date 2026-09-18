@@ -19,6 +19,9 @@ import { caseNamed, loadFixture } from "./fixtures";
 const helpers = loadFixture("changed_file_helpers");
 
 const PATCH = "@@ -1 +1,2 @@\n old\n+added line\n";
+/** Two hunks, each adding a line: what a cap has to choose between. */
+const TWO_HUNKS =
+  "@@ -1,2 +1,3 @@\n alpha\n+beta\n gamma\n@@ -20,2 +21,3 @@\n delta\n+epsilon\n zeta\n";
 
 /** Reports one finding per file, on that file's first added line; records inputs. */
 class FakeReviewer implements PerFileReviewer {
@@ -170,10 +173,31 @@ describe("the shared per-file step", () => {
     expect(reviewer.seen[0]?.skillsText).toBe("skills-text");
   });
 
-  it("truncates the annotated diff to the per-file cap", async () => {
-    const { reviewer } = await review(new ChangedFile("a.ts", "modified", PATCH), {
-      settings: { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: 10 },
+  it("cuts an oversized diff at a hunk boundary, and allows only what it shows", async () => {
+    const firstHunk = "@@ -1,2 +1,3 @@\n alpha\n[L2] +beta\n gamma";
+    const { reviewer } = await review(new ChangedFile("a.ts", "modified", TWO_HUNKS), {
+      // Room for the first hunk and not a character more.
+      settings: { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: firstHunk.length },
     });
-    expect(reviewer.seen[0]?.annotatedPatch).toBe("@@ -1,1 +1");
+    const input = reviewer.seen[0];
+    // A whole hunk, not a mid-line cut: the text stays a diff whose `[L<n>]`
+    // markers mean what they say.
+    expect(input?.annotatedPatch).toBe(firstHunk);
+    // And the two derived answers describe that text and nothing else -- the
+    // model is never told it may comment on a line it was not shown, and the
+    // quote matcher never searches text nobody sent.
+    expect([...(input?.allowedLines ?? [])]).toEqual([2]);
+    expect(input?.anchorIndex?.map(([line]) => line)).toEqual([1, 2, 3]);
+  });
+
+  it("shows one commentable line however small the cap", async () => {
+    // The cap cannot leave a file with a prompt it could not answer: a diff
+    // with nothing commentable in it would ask the model to invent a line.
+    const { reviewer } = await review(new ChangedFile("a.ts", "modified", TWO_HUNKS), {
+      settings: { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: 1 },
+    });
+    const input = reviewer.seen[0];
+    expect([...(input?.allowedLines ?? [])]).toEqual([2]);
+    expect(input?.annotatedPatch).toContain("[L2] +beta");
   });
 });

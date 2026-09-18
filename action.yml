@@ -105,6 +105,14 @@ inputs:
       them as review comments, or every finding shows twice.
     required: false
     default: "true"
+  log-level:
+    description: >-
+      How much the run says on stderr: debug, info, warn, error, silent.
+      Empty leaves it to the runner -- which means INFO, or DEBUG when the
+      job is re-run with debug logging (RUNNER_DEBUG). Logs never touch
+      stdout, so this cannot affect the findings.
+    required: false
+    default: ""
   bun-version:
     description: >-
       Bun the reviewer runs on. Empty takes the version this release was
@@ -195,6 +203,7 @@ runs:
         IN_EXCLUDE: ${{ inputs.exclude }}
         IN_MAX_FINDINGS: ${{ inputs.max-findings-per-file }}
         IN_VERIFY: ${{ inputs.verify }}
+        IN_LOG_LEVEL: ${{ inputs.log-level }}
         REVIEWER_CONFIG: ${{ inputs.config }}
         HEAD_REF: ${{ inputs.head-ref }}
         FAIL_ON: ${{ inputs.fail-on }}
@@ -215,11 +224,18 @@ runs:
         [ -n "${IN_EXCLUDE}" ]      && export REVIEW_EXCLUDE_PATHS="${IN_EXCLUDE}"
         [ -n "${IN_MAX_FINDINGS}" ] && export REVIEW_MAX_FINDINGS_PER_FILE="${IN_MAX_FINDINGS}"
         [ -n "${IN_VERIFY}" ]       && export REVIEW_VERIFY="${IN_VERIFY}"
+        [ -n "${IN_LOG_LEVEL}" ] && export REVIEWER_LOG_LEVEL="${IN_LOG_LEVEL}"
         args=(
           --base "origin/${BASE_REF}"
           --branch "${HEAD_REF}"
           --fail-on "${FAIL_ON}"
         )
+        # Log lines as workflow commands, so the runner folds and colours
+        # them: ::debug:: is hidden unless the job was re-run with debug
+        # logging, which is the same threshold the reviewer calls DEBUG.
+        # This is `--log-format auto` on a runner anyway; stating it keeps
+        # the action's behaviour from depending on that inference.
+        args+=(--log-format github)
         # `--out` keeps the machine copy either way, so one model call serves
         # both the humans and the CI bot. `--format github` adds annotations
         # on the diff; a workflow whose comment job posts the same findings
