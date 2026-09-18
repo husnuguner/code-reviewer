@@ -51,13 +51,22 @@ defaults:
   language: tr
 
   # ---- review policy ---------------------------------------------------
-  # There is no key for it. The policy -- who the reviewer is, what it looks
-  # for, what it leaves alone, and the hard rules that stop reviewed content
-  # from steering it -- is the reviewer's own, as is the JSON contract it
-  # answers with: replacing that text would drop a guardrail by accident. To
-  # add rules of your own, write a skill (below); a skill reaches the model as
-  # data, capped by the max-skill-* limits, and one mapped to ["**/*"] applies
-  # to every reviewed file.
+  # There is no key that REPLACES it. The policy -- who the reviewer is, what
+  # it looks for, what it leaves alone, and the hard rules that stop reviewed
+  # content from steering it -- is the reviewer's own, as is the JSON contract
+  # it answers with: replacing that text would drop a guardrail by accident.
+  #
+  # What a project ADDS to it goes here: files of standing instructions,
+  # appended to the policy for every reviewed file, after the hard rules and
+  # before the contract. Relative paths are taken from beside this file, so
+  # in a repository's .review/config.yaml `prompts/prompts.md` means
+  # .review/prompts/prompts.md -- the empty file `reviewer init` writes. A
+  # list, or one path. Whole cap: 20000 characters. Default [].
+  #
+  # Rules that concern only some paths belong in a skill (below) instead:
+  # every file of every run pays for what is here.
+  prompts:
+    - ~/.config/reviewer/prompts/house-style.md
 
   # Whether each file's findings are checked against its own diff by a second
   # model call before anything is reported, so that a finding the diff proves
@@ -141,6 +150,9 @@ projects:
       model: claude-sonnet-5
     language: tr
     verify: true
+    # Standing instructions for this project alone; they replace the
+    # defaults' list rather than adding to it, like every other key.
+    prompts: ["prompts/shop.md"]
     # The checkout this project reviews. Omit to review the current
     # directory, which is what a CI job does after actions/checkout.
     local-path: ~/work/shop

@@ -24,7 +24,7 @@ printf 'ANTHROPIC_API_KEY=sk-ant-...\n' > ~/.config/reviewer/.env && chmod 600 ~
 
 # 3. in the repository you want reviewed
 cd ~/work/my-repo
-reviewer init            # writes ./.review/ -- config, skills folder
+reviewer init            # writes ./.review/ -- config, prompts/prompts.md, skills folder
 reviewer --preview --base main   # what would be reviewed; no model call, no cost
 reviewer --base main             # the real thing
 ```
@@ -49,6 +49,8 @@ The `(skills: …)` line names the guideline skills that were in the prompt for 
 my-repo/
 └── .review/
     ├── config.yaml        which skill applies to which paths, the model, excludes
+    ├── prompts/
+    │   └── prompts.md     standing instructions, added to every file's prompt (written empty)
     ├── skills/            one Markdown file per convention (README explains the format)
     │   └── README.md
     └── .gitignore         keeps .review/.env (a project-specific key) out of git
@@ -303,6 +305,34 @@ prompt-injected diff could talk its way past is not a gate, so that word stays a
 skills changed — give the workflow a `workflow_dispatch` with a `pr` input and run it from the _Actions_ tab. GitHub's
 _Re-request review_ button appears only for reviewers that were requested, which a bot posting on its own cannot be.
 
+## Standing instructions: `prompts`
+
+The review policy is the reviewer's own and cannot be replaced. What a repository can do is **add** to it: `reviewer init` writes an empty `.review/prompts/prompts.md` and the starter catalogue names it, so filling that file in is the whole of being heard.
+
+```yaml
+projects:
+  this-repo:
+    prompts: ["prompts/prompts.md"] # relative to the catalogue, as every path is
+```
+
+```markdown
+<!-- .review/prompts/prompts.md -->
+
+This service is written against MedusaJS 2.x; a module's public surface is its
+service class, and a route that reaches into another module's repository is a
+bug however well it works today.
+```
+
+What it does and does not do:
+
+- **Where it lands.** Appended to the system prompt, after the policy and its hard rules, before the output contract. The hard rules therefore still stand and the contract still has the last word on the shape of the answer — a project adds, it cannot rearrange.
+- **When it applies.** Every reviewed file, every run. That is the difference from a skill: a skill applies to the paths its mapping names, and costs nothing on the files it does not match.
+- **What it costs.** Every file of every run pays for this text, so it is capped at 20 000 characters, whole. Rules that concern some paths belong in a skill; the cap is not a setting because the answer to "my standing instructions do not fit" is a skill.
+- **An empty file adds nothing.** The composed prompt is then byte-for-byte the prompt of a project that named none, which is what `init` leaves behind.
+- **A path that cannot be read is a warning**, not a failed run: losing the instructions degrades a review; losing the review because a path was mistyped is worse. The run says which file, at WARN.
+
+More than one file is a list, read in order, and a machine-wide catalogue can name a shared one (`~/.config/reviewer/prompts/house-style.md`) that every project inherits from `defaults`.
+
 ## Review skills
 
 A **skill** is one Markdown file of review guidelines scoped to a set of path globs. For every changed file, the skills whose globs match are rendered into that file's prompt under _"Project/framework standards for this file (apply IN ADDITION to the four lenses)"_. A file that matches nothing is still reviewed — just with the four lenses alone.
@@ -440,11 +470,11 @@ A key set on the project wins over `defaults`, which wins over the built-in defa
 
 **The model's key** — `llm.api-key` — takes either the **name** of an environment variable (spelled like one: `ANTHROPIC_API_KEY`; read from the environment and the `.env` files) or the value itself. Naming keeps the file shareable; a named variable that is not set is an error rather than a confusing 401 later.
 
-**There is no key for the review policy.** Who the reviewer is, what it looks for, what it leaves alone, the hard rules that stop reviewed content from steering it, and the exact JSON that comes back are all the reviewer's own ([`prompts/system.md`](prompts/system.md) and [`prompts/output-contract.md`](prompts/output-contract.md)). Replacing that text would mean dropping a guardrail by accident — the anti-hallucination rules and the injection rule are load-bearing, and the verification pass assumes they are in force. What a project needs _on top_ of the policy is a **skill**: it reaches the model as data rather than as instructions, it is capped by `max-skill-chars` / `max-skills-total-chars`, and one mapped to `["**/*"]` applies to every reviewed file.
+**There is no key that replaces the review policy.** Who the reviewer is, what it looks for, what it leaves alone, the hard rules that stop reviewed content from steering it, and the exact JSON that comes back are all the reviewer's own ([`prompts/system.md`](prompts/system.md) and [`prompts/output-contract.md`](prompts/output-contract.md)). Replacing that text would mean dropping a guardrail by accident — the anti-hallucination rules and the injection rule are load-bearing, and the verification pass assumes they are in force. What a project adds _on top_ of it has two shapes: **`prompts`**, standing instructions appended to the policy for every file, and a **skill**, guidelines rendered into the prompt of the files its mapping matches.
 
 A key the schema does not recognise is **rejected**, not ignored. A key from an earlier spelling (`lang`, `skills_path`, `max_*`, `maxFindingsPerFile`…) is answered with its current name, and a key that this build removed (`repositories`, `repository`, `severities`, `max-prior-comment-chars`, `max-concurrent-prs`, `prompts`) is answered with what replaced it — `prompts` with the skill that replaces it.
 
-Setting keys (`defaults` and project): `llm` (`provider`, `model`, `base-url`, `api-key`), `language`, `verify`, `skills` (`path`; `mappings` on a project), `local-path`, `exclude`, `max-findings-per-file`, `max-file-chars`, `max-skill-chars`, `max-skills-total-chars`, `max-context-chars`, `max-concurrent-files`.
+Setting keys (`defaults` and project): `llm` (`provider`, `model`, `base-url`, `api-key`), `language`, `verify`, `prompts`, `skills` (`path`; `mappings` on a project), `local-path`, `exclude`, `max-findings-per-file`, `max-file-chars`, `max-skill-chars`, `max-skills-total-chars`, `max-context-chars`, `max-concurrent-files`.
 
 ### Environment
 
@@ -460,6 +490,7 @@ The environment is the override layer: any variable below beats its `config.yaml
 | `REVIEW_LANG`                   | `en`             | Language of finding bodies (`tr` / `en`).                                                             |
 | `REVIEW_EXCLUDE_PATHS`          | —                | Comma-separated globs skipped entirely.                                                               |
 | `REVIEW_MAX_FINDINGS_PER_FILE`  | `3`              | Max findings reported per file; the most severe survive. `0` = uncapped.                              |
+| `REVIEW_PROMPTS`                | —                | Comma-separated prompt files appended to the policy; overrides the catalogue's `prompts`.             |
 | `REVIEW_SKILLS_PATH`            | —                | Directory of review skills inside the reviewed repo; empty disables skills.                           |
 | `REVIEW_SKILL_MAPPINGS`         | `{}`             | The project's `skills` map as JSON; normally set in `config.yaml`.                                    |
 | `REVIEW_VERIFY`                 | `true`           | Check findings against the diff and drop the refuted ones. `--no-verify` wins.                        |

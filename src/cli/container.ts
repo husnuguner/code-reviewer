@@ -40,6 +40,7 @@ import { systemPrompt } from "../core/review/prompts";
 import { type PerFileVerifier } from "../core/review/review-file";
 import { FindingVerifier } from "../core/review/verify";
 import { SkillRegistry } from "../core/skills/registry";
+import { readProjectPrompts } from "../providers/assets/project-prompts";
 import { shippedFile } from "../providers/assets/shipped-files";
 import {
   configHome,
@@ -221,12 +222,16 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
           logger,
         }),
     ).singleton(),
-    // Both halves of the system prompt are the reviewer's own: the policy
-    // states the lenses and the hard rules, the contract states the JSON that
-    // comes back. Neither is composed from the catalogue -- a project adds
-    // what it needs through `skills`, which reach the model as data.
-    systemPrompt: asFunction(() =>
-      systemPrompt(shippedFile("prompts/system.md"), shippedFile("prompts/output-contract.md")),
+    // Two of the three parts are the reviewer's own and are not replaceable:
+    // the policy states the lenses and the hard rules, the contract states
+    // the JSON that comes back. Between them go the project's own standing
+    // instructions, if its catalogue names any under `prompts`.
+    systemPrompt: asFunction(({ config, logger }: RunCradle) =>
+      systemPrompt(
+        shippedFile("prompts/system.md"),
+        shippedFile("prompts/output-contract.md"),
+        readProjectPrompts(config.promptFiles, logger),
+      ),
     ).singleton(),
     fileReviewer: asFunction(
       ({ chatModel, systemPrompt: prompt, logger }: RunCradle) =>

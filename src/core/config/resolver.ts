@@ -41,6 +41,7 @@ export const PROJECT_FIELDS: Readonly<
 > = {
   language: "reviewLang",
   verify: "verifyFindings",
+  prompts: "promptPaths",
   "local-path": "localPath",
   exclude: "excludePaths",
   "max-findings-per-file": "maxFindingsPerFile",
@@ -96,7 +97,7 @@ const SKILLS_FIELDS: Readonly<Record<SkillsSectionKey, ConfigField>> = {
 };
 
 /** Fields the file may set as a list but the review layer reads as a CSV string. */
-const LIST_FIELDS: ReadonlySet<ConfigField> = new Set(["excludePaths"]);
+const LIST_FIELDS: ReadonlySet<ConfigField> = new Set(["excludePaths", "promptPaths"]);
 
 /** Name/value pairs from one source; names are matched case-insensitively. */
 export type EnvironmentValues = Readonly<Record<string, string | undefined>>;
@@ -280,14 +281,25 @@ function withProjectPlaceholders(values: Values, projectName: string): Values {
 }
 
 /**
- * The catalogue's skills directory is beside the catalogue: a relative path
- * is anchored here, once, and the flow that reads it never has to ask which
- * base a path meant.
+ * The paths a catalogue names are beside the catalogue: each is anchored
+ * here, once, and the flow that reads one never has to ask which base it
+ * meant. `skills.path` is one directory; `prompts` is a CSV of files, so
+ * every entry gets the same rule.
  */
-function withAnchoredSkillsPath(values: Values, catalogDirectory: string): Values {
-  return typeof values.skillsPath === "string"
-    ? { ...values, skillsPath: besideCatalog(values.skillsPath, catalogDirectory) }
-    : values;
+function withAnchoredPaths(values: Values, catalogDirectory: string): Values {
+  const anchored: Values = { ...values };
+  if (typeof anchored.skillsPath === "string") {
+    anchored.skillsPath = besideCatalog(anchored.skillsPath, catalogDirectory);
+  }
+  if (typeof anchored.promptPaths === "string") {
+    anchored.promptPaths = anchored.promptPaths
+      .split(",")
+      .map((path) => path.trim())
+      .filter((path) => path !== "")
+      .map((path) => besideCatalog(path, catalogDirectory))
+      .join(",");
+  }
+  return anchored;
 }
 
 /**
@@ -315,10 +327,7 @@ export function projectValues({
     ...skillsValues(settings),
     ...llmValues(settings, { environment, configHome, requiresModel, hasApiKey }),
   };
-  const values = withAnchoredSkillsPath(
-    withProjectPlaceholders(merged, spec.name),
-    catalogDirectory,
-  );
+  const values = withAnchoredPaths(withProjectPlaceholders(merged, spec.name), catalogDirectory);
 
   const where = typeof values.localPath === "string" ? values.localPath : "the current directory";
   logger.child("config_resolver").info(`Project ${show(spec.name)}: reviewing ${where}.`);

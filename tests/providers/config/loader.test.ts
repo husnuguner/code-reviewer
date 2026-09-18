@@ -43,6 +43,7 @@ const CATALOG = {
         mappings: { "api-routes": ["src/api/**/route.ts"], models: "src/modules/**/models/*.ts" },
       },
       exclude: ["**/*.spec.ts", "**/migrations/*.ts"],
+      prompts: ["prompts/prompts.md", "~/.config/reviewer/prompts/house.md"],
       "max-findings-per-file": 2,
     },
     legacy: {
@@ -354,6 +355,13 @@ describe("resolution", () => {
     const s = scratch();
     const config = load(s, { project: "app", configFile: s.catalogFile });
     expect(config.skillSettings().path).toBe(join(s.root, ".review/skills"));
+    // `prompts` is a list of files rather than one directory, and every
+    // entry gets the same rule -- including the anchored one, which keeps
+    // its own place.
+    expect(config.promptFiles).toEqual([
+      join(s.root, "prompts/prompts.md"),
+      "~/.config/reviewer/prompts/house.md",
+    ]);
     // An anchored path is left alone: `~` and `/` already say where.
     const legacy = load(s, { project: "legacy", configFile: s.catalogFile });
     expect(legacy.skillSettings().path).toBe("~/.config/reviewer/skills/legacy");

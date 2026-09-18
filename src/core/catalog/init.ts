@@ -20,8 +20,9 @@ export interface StarterFiles {
  * Write the starter catalogue and, in a repository, the files beside it.
  *
  * No review policy is written: the policy is the reviewer's own and is not
- * replaceable, so what an operator owns from day one is the catalogue and
- * the skills folder -- which is where a project's own rules go.
+ * replaceable. What an operator owns from day one is the catalogue, an
+ * empty `prompts/prompts.md` for standing instructions, and the skills
+ * folder for the rules that belong to particular paths.
  */
 export function initCatalog(
   files: CatalogFiles,
@@ -43,12 +44,19 @@ export function initCatalog(
  * A repository's own `.review/`: everything the team and CI need, committed.
  *
  * The skills directory is created now, with a README, so the folder exists
- * to be found and the first person who opens it learns what goes there. The
- * `.gitignore` is not optional: `.review/.env` is where a project-specific
- * key may live, and a committed key is the one mistake `init` must make
- * impossible by default.
+ * to be found and the first person who opens it learns what goes there. So
+ * is `prompts/prompts.md`, and it is written *empty*: the catalogue already
+ * names it, so whoever has something to say to the reviewer about this
+ * repository types it into a file that is already wired, and a file nobody
+ * fills in adds nothing to any prompt. The `.gitignore` is not optional:
+ * `.review/.env` is where a project-specific key may live, and a committed
+ * key is the one mistake `init` must make impossible by default.
  */
 function finishRepoInit(files: CatalogFiles, out: ConsoleOutput, starter: StarterFiles): number {
+  if (!files.sidecarExists("prompts/prompts.md")) {
+    files.writeSidecar("prompts/prompts.md", "");
+    out.line(`Wrote ${files.directory}/prompts/prompts.md`);
+  }
   if (!files.sidecarExists("skills/README.md")) {
     files.writeSidecar("skills/README.md", starter.skillsReadme);
     out.line(`Wrote ${files.directory}/skills/README.md`);
@@ -70,11 +78,14 @@ function finishRepoInit(files: CatalogFiles, out: ConsoleOutput, starter: Starte
     `  1. Put the model's key in ~/.config/reviewer/.env (or ${files.directory}/.env, gitignored).`,
   );
   out.line(
-    `  2. Add this project's review skills to ${files.directory}/skills/ -- see the README there.`,
+    `  2. Say what holds for every file of this repository: ${files.directory}/prompts/prompts.md.`,
   );
-  out.line(`  3. Map each skill to the paths it reviews: skills.mappings in ${files.path}.`);
-  out.line("  4. reviewer --preview --base main    # what would be reviewed; no model call");
-  out.line("  5. reviewer --base main");
+  out.line(
+    `  3. Add this project's review skills to ${files.directory}/skills/ -- see the README there.`,
+  );
+  out.line(`  4. Map each skill to the paths it reviews: skills.mappings in ${files.path}.`);
+  out.line("  5. reviewer --preview --base main    # what would be reviewed; no model call");
+  out.line("  6. reviewer --base main");
   return 0;
 }
 

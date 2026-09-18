@@ -17,8 +17,9 @@ defaults:
     # base-url: http://127.0.0.1:1234/v1
   language: en
   # The review policy -- who the reviewer is, what it looks for, what it leaves
-  # alone -- is the reviewer's own and is not configurable. What THIS project
-  # needs on top of it goes in skills/ below.
+  # alone -- is the reviewer's own and cannot be replaced. What THIS repository
+  # adds to it is below, on the project: prompts/ for what holds on every file,
+  # skills/ for what holds on the paths a mapping names.
   exclude: ["**/*.spec.ts", "**/*.test.ts", "**/migrations/*.ts"]
   max-findings-per-file: 3 # the most severe survive; the rest are counted
 
@@ -26,6 +27,11 @@ projects:
   # One project: this repository. No local-path -- the reviewer already knows
   # where it is, because this file is inside it.
   this-repo:
+    # Standing instructions, appended to the policy for every reviewed file.
+    # `reviewer init` writes prompts/prompts.md empty: fill it in and the
+    # reviewer reads it; leave it empty and nothing is added. Relative to
+    # this file, so this means .review/prompts/prompts.md.
+    prompts: ["prompts/prompts.md"]
     skills:
       # Every relative path in this catalogue is taken from the catalogue's own
       # directory (.review/), so this means .review/skills.

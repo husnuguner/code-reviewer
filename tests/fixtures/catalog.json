@@ -227,7 +227,7 @@
       },
       "expected": {
         "error": "CatalogError",
-        "message": "Project 'x' has unrecognised setting(s) ['exlude']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'skills', 'verify']"
+        "message": "Project 'x' has unrecognised setting(s) ['exlude']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'prompts', 'skills', 'verify']"
       }
     },
     {
@@ -385,7 +385,7 @@
       },
       "expected": {
         "error": "CatalogError",
-        "message": "Project 'x' has unrecognised setting(s) ['exlude']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'skills', 'verify']"
+        "message": "Project 'x' has unrecognised setting(s) ['exlude']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'prompts', 'skills', 'verify']"
       }
     },
     {
@@ -482,7 +482,7 @@
       },
       "expected": {
         "error": "CatalogError",
-        "message": "defaults has unrecognised setting(s) ['languge']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'skills', 'verify']"
+        "message": "defaults has unrecognised setting(s) ['languge']; known: ['exclude', 'language', 'llm', 'local-path', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'prompts', 'skills', 'verify']"
       }
     },
     {

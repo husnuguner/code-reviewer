@@ -63,7 +63,6 @@ describe("keys this build removed", () => {
     ["severities", { severities: ["bug"] }],
     ["max-prior-comment-chars", { "max-prior-comment-chars": 3000 }],
     ["max-concurrent-prs", { "max-concurrent-prs": 2 }],
-    ["prompts", { prompts: ["prompts/system.md"] }],
   ])("refuses the project setting %s and says what to do instead", (key, settings) => {
     const payload = { projects: { app: settings } };
     expect(() => parseCatalog(payload, SOURCE)).toThrow(
@@ -78,10 +77,18 @@ describe("keys this build removed", () => {
     expect(() => parseCatalog({ projects: { app: { severities: [] } } }, SOURCE)).toThrow(
       /--fail-on/u,
     );
-    // The policy cannot be replaced, so the message has to say where a
-    // project's own rules go instead -- otherwise this reads as a removal
-    // with nothing behind it.
-    expect(() => parseCatalog({ projects: { app: { prompts: [] } } }, SOURCE)).toThrow(/skills/u);
+  });
+
+  // `prompts` names files that are ADDED to the policy, which is why it is a
+  // setting again: what v3 refuses is replacing the policy, and nothing here
+  // can. A file that carried the old meaning still parses -- its text is
+  // appended rather than substituted.
+  it("accepts prompts, the project's own standing instructions", () => {
+    const catalog = parseCatalog(
+      { projects: { app: { prompts: ["prompts/prompts.md"] } } },
+      SOURCE,
+    );
+    expect(catalog.project("app").settings.prompts).toEqual(["prompts/prompts.md"]);
   });
 });
 
