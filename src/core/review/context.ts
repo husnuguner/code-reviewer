@@ -24,12 +24,11 @@
 
 import pLimit from "p-limit";
 
+import { type ChangedFile } from "../domain/changed-file";
 import { type CodeContext } from "../ports/code-context";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { errorMessage } from "../util/errors";
 import { cutToLength, sortedByCodePoint } from "../util/text";
-
-import { type ChangedFile } from "./changed-file";
 
 /** How much context one file review may gather. */
 export interface ContextLimits {

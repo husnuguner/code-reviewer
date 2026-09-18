@@ -18,12 +18,12 @@
 import { type LimitFunction } from "p-limit";
 
 import { type FileReviewSettings } from "../config/settings";
-import { type ChangedFileEntry, type ChangedFileRecord } from "../domain/changed-file";
+import { newSideIndex } from "../diff/patch-view";
+import { type ChangedFile } from "../domain/changed-file";
 import { type Finding } from "../domain/finding";
 import { type CodeContext } from "../ports/code-context";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { type SkillMatcher } from "../ports/skill-matcher";
-import { hasContent } from "../util/json";
 import { show } from "../util/text";
 
 // The settings group lives with the other groups; re-exported here because
@@ -32,7 +32,6 @@ export { DEFAULT_FILE_REVIEW_SETTINGS, type FileReviewSettings } from "../config
 
 import { EXACT } from "./anchor";
 import { DEFAULT_CONTEXT_LIMITS, gatherContext, renderContext } from "./context";
-import { newSideIndex } from "./diff";
 import { type ReviewFileInput } from "./file-reviewer";
 import { isSecretPath } from "./guards";
 import { type SelectedFile } from "./selection";
@@ -58,32 +57,6 @@ export interface PerFileReviewer {
  */
 export interface PerFileVerifier {
   verify(input: VerifyInput): Promise<Verdict>;
-}
-
-/** One changed file as a provider or git reports it, validated. */
-export class ChangedFile implements ChangedFileEntry {
-  constructor(
-    readonly filename: string,
-    readonly status: string,
-    readonly patch: string,
-  ) {}
-
-  /** The repository-relative path. */
-  get path(): string {
-    return this.filename;
-  }
-
-  /**
-   * Build from a `filename`/`status`/`patch` record, or `null`.
-   *
-   * A file without a path or a patch cannot be reviewed, and that is a
-   * property of the input rather than an error to throw.
-   */
-  static fromEntry(entry: ChangedFileRecord): ChangedFile | null {
-    if (!hasContent(entry.filename) || !hasContent(entry.patch)) return null;
-    const status = hasContent(entry.status) ? String(entry.status) : "";
-    return new ChangedFile(String(entry.filename), status, String(entry.patch));
-  }
 }
 
 /** The outcome for one file that was actually reviewed. */

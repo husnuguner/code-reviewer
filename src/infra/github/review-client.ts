@@ -11,13 +11,13 @@
  * all exercised by tests without a network.
  */
 
+import { type Logger, NULL_LOGGER } from "../../core/ports/logger";
 import {
   PostingError,
   type PostingResult,
   type ReviewPoster,
   type ReviewSubmission,
-} from "../../core/comment/review-poster";
-import { type Logger, NULL_LOGGER } from "../../core/ports/logger";
+} from "../../core/posting/review-poster";
 
 /**
  * `fetch` as this client calls it: with a `URL`, never a string.

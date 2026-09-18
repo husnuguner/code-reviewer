@@ -11,15 +11,15 @@ import { describe, expect, it } from "vitest";
 
 import { parseArguments } from "../src/cli/comment";
 import { UsageError } from "../src/cli/program";
+import { type SummaryRecord } from "../src/core/ports/review-reporter";
 import {
   type Finding,
   buildReview,
   commentBody,
   parseRecords,
   reviewEventFor,
-} from "../src/core/comment/review-payload";
-import { PostingError } from "../src/core/comment/review-poster";
-import { type SummaryRecord } from "../src/core/ports/review-reporter";
+} from "../src/core/posting/review-payload";
+import { PostingError } from "../src/core/posting/review-poster";
 import { ValueError } from "../src/core/util/errors";
 import {
   GithubError,

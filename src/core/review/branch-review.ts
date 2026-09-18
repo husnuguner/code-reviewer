@@ -32,6 +32,7 @@ import { asCompleted } from "../util/as-completed";
 import { errorMessage } from "../util/errors";
 import { compareCodePoints } from "../util/text";
 
+import { previewReport, textBody } from "./render";
 import {
   type FileReviewSettings,
   type PerFileReviewer,
@@ -39,8 +40,7 @@ import {
   type ReviewedFile,
   countAnchors,
   reviewChangedFile,
-} from "./changed-file";
-import { previewReport, textBody } from "./render";
+} from "./review-file";
 import {
   type FileDecision,
   type SelectedFile,

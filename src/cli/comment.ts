@@ -15,8 +15,8 @@ import { readFileSync } from "node:fs";
 
 import { type Command, InvalidArgumentError } from "commander";
 
-import { MAX_INLINE, buildReview, parseRecords } from "../core/comment/review-payload";
-import { PostingError } from "../core/comment/review-poster";
+import { MAX_INLINE, buildReview, parseRecords } from "../core/posting/review-payload";
+import { PostingError } from "../core/posting/review-poster";
 import { errorMessage } from "../core/util/errors";
 import { PinoLogger } from "../infra/logging/pino-logger";
 import { builtinReviewPosterRegistry } from "../infra/posters/index";

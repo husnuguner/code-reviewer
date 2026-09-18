@@ -6,8 +6,8 @@
 
 import { describe, expect, it } from "vitest";
 
+import { ChangedFile } from "../src/core/domain/changed-file";
 import { type CodeContext, type CodeSearchHit } from "../src/core/ports/code-context";
-import { ChangedFile } from "../src/core/review/changed-file";
 import {
   DEFAULT_CONTEXT_LIMITS,
   EMPTY_CONTEXT,

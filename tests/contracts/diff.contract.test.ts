@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { splitPatches } from "../../src/core/diff/patch-set";
+import { addedLines, annotatePatch, newSideIndex } from "../../src/core/diff/patch-view";
 import { type ChangedFileEntry } from "../../src/core/domain/changed-file";
-import { addedLines, annotatePatch, newSideIndex } from "../../src/core/review/diff";
-import { splitPatches } from "../../src/core/review/patch-set";
 
 import { loadFixture } from "./fixtures";
 

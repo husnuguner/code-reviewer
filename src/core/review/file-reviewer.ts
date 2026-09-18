@@ -11,6 +11,7 @@
  * to discard it.
  */
 
+import { type NewSideEntry } from "../diff/patch-view";
 import { type Finding } from "../domain/finding";
 import { type ChatMessage, type ChatModel } from "../ports/chat-model";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
@@ -19,7 +20,6 @@ import { type JsonValue, decodeJson, hasContent, isJsonArray, isJsonObject } fro
 import { asText, collapseWhitespace, cutToLength, show } from "../util/text";
 
 import { type Anchor, CONFLICT, EXACT, FAILED, REPAIRED, resolveAnchor } from "./anchor";
-import { type NewSideEntry } from "./diff";
 import { RETRY_PROMPT, buildUserPrompt } from "./prompts";
 import { parseSeverity } from "./severity";
 

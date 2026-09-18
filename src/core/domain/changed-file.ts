@@ -1,3 +1,5 @@
+import { hasContent } from "../util/json";
+
 /**
  * One changed file as `git diff` reports it.
  *
@@ -27,6 +29,32 @@ export interface ChangedFileEntry {
   readonly status: string;
   /** The file's unified-diff patch, possibly headerless. */
   readonly patch: string;
+}
+
+/** One changed file as a provider or git reports it, validated. */
+export class ChangedFile implements ChangedFileEntry {
+  constructor(
+    readonly filename: string,
+    readonly status: string,
+    readonly patch: string,
+  ) {}
+
+  /** The repository-relative path. */
+  get path(): string {
+    return this.filename;
+  }
+
+  /**
+   * Build from a `filename`/`status`/`patch` record, or `null`.
+   *
+   * A file without a path or a patch cannot be reviewed, and that is a
+   * property of the input rather than an error to throw.
+   */
+  static fromEntry(entry: ChangedFileRecord): ChangedFile | null {
+    if (!hasContent(entry.filename) || !hasContent(entry.patch)) return null;
+    const status = hasContent(entry.status) ? String(entry.status) : "";
+    return new ChangedFile(String(entry.filename), status, String(entry.patch));
+  }
 }
 
 /** File statuses that carry no commentable added lines and are never reviewed. */

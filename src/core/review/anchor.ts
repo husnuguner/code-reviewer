@@ -28,10 +28,9 @@
  * question actually arises.
  */
 
+import { type NewSideEntry } from "../diff/patch-view";
 import { isInteger } from "../util/json";
 import { splitLines } from "../util/text";
-
-import { type NewSideEntry } from "./diff";
 
 export const EXACT = "exact";
 export const REPAIRED = "repaired";

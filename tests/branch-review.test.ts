@@ -24,11 +24,8 @@ import {
   reviewBranch,
   streamBranchReview,
 } from "../src/core/review/branch-review";
-import {
-  DEFAULT_FILE_REVIEW_SETTINGS,
-  type PerFileReviewer,
-} from "../src/core/review/changed-file";
 import { type ReviewFileInput } from "../src/core/review/file-reviewer";
+import { DEFAULT_FILE_REVIEW_SETTINGS, type PerFileReviewer } from "../src/core/review/review-file";
 import { type Verdict, type VerifyInput } from "../src/core/review/verify";
 import { sortedByCodePoint } from "../src/core/util/text";
 import { LocalGitReader } from "../src/infra/git/local-git";

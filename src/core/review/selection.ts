@@ -28,13 +28,12 @@
  */
 
 import { type FileReviewSettings } from "../config/settings";
-import { type ChangedFileRecord, SKIP_STATUSES } from "../domain/changed-file";
+import { addedLines, annotatePatch } from "../diff/patch-view";
+import { ChangedFile, type ChangedFileRecord, SKIP_STATUSES } from "../domain/changed-file";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { isGlobMatch } from "../skills/glob";
 import { countCodePoints, cutToLength, asText } from "../util/text";
 
-import { ChangedFile } from "./changed-file";
-import { addedLines, annotatePatch } from "./diff";
 import { isBinaryPatch, isSecretPath } from "./guards";
 
 /**

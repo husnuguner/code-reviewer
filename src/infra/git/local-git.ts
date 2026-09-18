@@ -16,10 +16,10 @@ import { join, resolve } from "node:path";
 
 import { execa } from "execa";
 
+import { splitPatches } from "../../core/diff/patch-set";
 import { type ChangedFileEntry } from "../../core/domain/changed-file";
 import { type GitReader } from "../../core/ports/git-reader";
 import { type Logger, NULL_LOGGER } from "../../core/ports/logger";
-import { splitPatches } from "../../core/review/patch-set";
 import { GitError, errorMessage } from "../../core/util/errors";
 import { cutToLength, show } from "../../core/util/text";
 import { expandUser } from "../config/paths";

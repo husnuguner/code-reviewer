@@ -13,8 +13,8 @@
  * first.
  */
 
-import { ReviewPosterRegistry } from "../../core/comment/poster-registry";
-import { type PosterSettings, type ReviewPosterProvider } from "../../core/comment/review-poster";
+import { ReviewPosterRegistry } from "../../core/posting/poster-registry";
+import { type PosterSettings, type ReviewPosterProvider } from "../../core/posting/review-poster";
 import { GithubReviewClient } from "../github/review-client";
 
 /**

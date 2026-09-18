@@ -1,15 +1,15 @@
 import pLimit from "p-limit";
 import { describe, expect, it } from "vitest";
 
+import { ChangedFile } from "../../src/core/domain/changed-file";
 import { type Finding, finding } from "../../src/core/domain/finding";
+import { type ReviewFileInput } from "../../src/core/review/file-reviewer";
 import {
-  ChangedFile,
   DEFAULT_FILE_REVIEW_SETTINGS,
   type PerFileReviewer,
   countAnchors,
   reviewChangedFile,
-} from "../../src/core/review/changed-file";
-import { type ReviewFileInput } from "../../src/core/review/file-reviewer";
+} from "../../src/core/review/review-file";
 import { type SelectedFile, decideFile, isSelected } from "../../src/core/review/selection";
 import { recordingLogger } from "../helpers/logging";
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { addedLines, newSideIndex } from "../../src/core/diff/patch-view";
 import { type Finding } from "../../src/core/domain/finding";
 import { type ChatMessage, type ChatModel } from "../../src/core/ports/chat-model";
-import { addedLines, newSideIndex } from "../../src/core/review/diff";
 import { FileReviewer, extractJson } from "../../src/core/review/file-reviewer";
 
 import { type FixtureCase, casesUnder, expectContract, loadFixture } from "./fixtures";

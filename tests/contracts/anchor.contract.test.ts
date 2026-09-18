@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { addedLines, newSideIndex } from "../../src/core/diff/patch-view";
 import { resolveAnchor } from "../../src/core/review/anchor";
-import { addedLines, newSideIndex } from "../../src/core/review/diff";
 
 import { loadFixture } from "./fixtures";
 
