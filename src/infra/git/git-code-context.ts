@@ -31,6 +31,23 @@ const MEMOISED_FILES = 256;
 /** Hits memoised per needle; a request for more than this bypasses the memo. */
 const MEMOISED_HITS = 256;
 
+/**
+ * Matches `git grep` reports per file.
+ *
+ * A cap on the subprocess's output, not on the answer. `-m` bounds how many
+ * lines each file contributes but never which files are reported, and the
+ * one thing asked of this search -- which other files mention a changed
+ * export -- reduces the hits to a set of paths anyway. So the reported paths
+ * are identical with it and without it, while a common identifier stops
+ * pushing its every occurrence through a pipe: in this repository `const`
+ * falls from 1318 rows to 528 across the same 91 files.
+ *
+ * Not `1`, though that would serve today's only caller: the port promises a
+ * line and a text per hit, and a reader that wanted a couple of examples per
+ * file should get them.
+ */
+const MAX_MATCHES_PER_FILE = 8;
+
 export class GitCodeContext implements CodeContext {
   private readonly log: Logger;
   /** The ref's paths, read on first use; `null` when `ls-tree` failed. */
@@ -116,7 +133,8 @@ export class GitCodeContext implements CodeContext {
     try {
       // -F: literal; -n: line numbers; -I: skip binaries; -w: whole word so
       // `id` does not match `identity`; -z: NUL after the path and the line
-      // number, so neither can be confused with a colon inside a path.
+      // number, so neither can be confused with a colon inside a path;
+      // -m: at most this many matches per file (see the constant).
       // `--` ends the options, in case a needle starts with a dash.
       out = await this.run(this.root, [
         "grep",
@@ -125,6 +143,8 @@ export class GitCodeContext implements CodeContext {
         "-F",
         "-I",
         "-w",
+        "-m",
+        String(MAX_MATCHES_PER_FILE),
         "--",
         needle,
         this.reference,

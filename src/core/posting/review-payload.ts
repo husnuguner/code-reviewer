@@ -29,6 +29,24 @@ import { type ReviewEvent } from "./review-poster";
 /** One finding as the record stream carries it (no `type` discriminator). */
 export type Finding = Omit<FindingRecord, "type">;
 
+/** A finding that was anchored: it has a line, and the type says so. */
+type AnchoredFinding = Finding & { readonly line: number };
+
+/**
+ * Whether this finding has a line to hang on -- narrowing as it answers.
+ *
+ * A predicate rather than an inline `!== null`, because the answer has to
+ * survive the `filter` that asks it. Written the plain way, the compiler
+ * still believes the result may carry `line: null` and the one place that
+ * builds an inline comment has to assert otherwise; the assertion is then
+ * the only thing standing between a `null` line and a hosting API, and it
+ * is exactly the kind of claim that stays in the code after the filter
+ * above it has been edited.
+ */
+function isAnchored(finding: Finding): finding is AnchoredFinding {
+  return finding.line !== null;
+}
+
 /** A run's records, split into what a review is built from. */
 export interface ReviewRecords {
   readonly findings: readonly Finding[];
@@ -228,15 +246,15 @@ export function buildReview(
 ): ReviewPayload {
   const maxInline = options.maxInline ?? MAX_INLINE;
   const ordered = records.findings.toSorted(bySeverityThenPlace);
-  const anchored = ordered.filter((finding) => finding.line !== null);
-  const loose = ordered.filter((finding) => finding.line === null);
+  const anchored = ordered.filter((finding) => isAnchored(finding));
+  const loose = ordered.filter((finding) => !isAnchored(finding));
 
   const inline = maxInline <= 0 ? [] : anchored.slice(0, maxInline);
   const spilled = anchored.slice(inline.length);
 
   const comments: InlineComment[] = inline.map((finding) => ({
     path: finding.path,
-    line: finding.line as number,
+    line: finding.line,
     // A span only when it really is one: `start_line === line` is a
     // single-line anchor spelled the long way, and some providers reject it.
     ...(finding.start_line !== null &&

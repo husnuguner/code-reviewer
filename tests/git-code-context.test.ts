@@ -177,6 +177,20 @@ describe("what the code context asks git", () => {
     expect(commands().filter((command) => command.startsWith("grep"))).toHaveLength(1);
   });
 
+  it("asks grep for the exact shape it parses, and caps the output per file", async () => {
+    // Pinned as one command because two of these flags are not preferences.
+    // `-z` is what `parseGrep` reads: drop it and the rows come back
+    // colon-separated and are silently split in the wrong place. `-m` bounds how much a
+    // common identifier pushes through the pipe; it never changes *which*
+    // files are reported, which is the only thing the caller keeps, so no
+    // behavioural test can notice if it disappears.
+    const { run, commands } = recorded();
+    await new GitCodeContext("/repo", "feature", run).search("total", 10);
+    expect(commands().filter((command) => command.startsWith("grep"))).toEqual([
+      "grep -n -z -F -I -w -m 8 -- total feature",
+    ]);
+  });
+
   it("probes git as before when the ref cannot be listed", async () => {
     const { run, commands } = recorded({ listable: false });
     const context = new GitCodeContext("/repo", "feature", run);
