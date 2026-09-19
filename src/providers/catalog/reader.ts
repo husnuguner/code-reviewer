@@ -4,7 +4,6 @@
  */
 
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 
 import { parse as parseYaml } from "yaml";
 
@@ -26,11 +25,10 @@ export function loadCatalog(
   explicit: string | null | undefined,
   environment: Environment = process.env,
   logger: Logger = NULL_LOGGER,
-  home: string = homedir(),
   cwd: string = process.cwd(),
 ): Catalog | null {
   const log = logger.child("catalog");
-  const path = configPath(explicit, environment, home, existsSync, cwd);
+  const path = configPath(explicit, environment, cwd);
   if (!existsSync(path) || !statSync(path).isFile()) {
     if (explicit !== null && explicit !== undefined && explicit !== "") {
       throw new CatalogError(`No config file at ${path}`);

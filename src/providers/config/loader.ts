@@ -3,7 +3,6 @@
  * @packageDocumentation
  */
 
-import { homedir } from "node:os";
 import { dirname } from "node:path";
 
 import { type Config, type ConfigField, type RegisteredProviders } from "../../core/config/config";
@@ -26,7 +25,6 @@ export interface LoadRunConfigOptions {
   readonly cpuCount: number | null;
   readonly environment?: Environment;
   readonly cwd?: string;
-  readonly home?: string;
   readonly logger?: Logger;
 }
 
@@ -37,14 +35,13 @@ export interface LoadRunConfigOptions {
  */
 export function loadRunConfig(options: LoadRunConfigOptions): Config {
   const environment = options.environment ?? process.env;
-  const home = options.home ?? homedir();
   const cwd = options.cwd ?? process.cwd();
   const logger = options.logger ?? NULL_LOGGER;
   const sources: ConfigSources = {
     processEnv: environment,
-    envFiles: environmentFilePaths(environment, cwd, home).map(readEnvironmentFile),
+    envFiles: environmentFilePaths(environment, cwd).map(readEnvironmentFile),
   };
-  const catalog = loadCatalog(options.configFile, environment, logger, home, cwd);
+  const catalog = loadCatalog(options.configFile, environment, logger, cwd);
   return resolveConfig({
     catalog,
     ...(catalog !== null && { catalogDirectory: dirname(catalog.source) }),
@@ -52,7 +49,7 @@ export function loadRunConfig(options: LoadRunConfigOptions): Config {
     ...(options.overrides && { overrides: options.overrides }),
     ...(options.requiresModel !== undefined && { requiresModel: options.requiresModel }),
     sources,
-    configHome: configHome(environment, home),
+    configHome: configHome(environment),
     providers: options.providers,
     cpuCount: options.cpuCount,
     logger,

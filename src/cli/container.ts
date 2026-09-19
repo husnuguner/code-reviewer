@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import { appendFileSync, existsSync } from "node:fs";
+import { appendFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 
 import {
@@ -212,9 +212,7 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
       return SkillRegistry.build([skillSource(checkoutRoot, path, logger)], logger, mappings);
     }).singleton(),
     configHomePath: asFunction(() => configHome()).singleton(),
-    catalogPath: asFunction(({ request: r }: RunCradle) =>
-      configPath(r.configFile, process.env, undefined, existsSync),
-    ).singleton(),
+    catalogPath: asFunction(({ request: r }: RunCradle) => configPath(r.configFile)).singleton(),
     promptsPath: asFunction(({ catalogPath }: RunCradle) =>
       promptsDirectory(catalogPath),
     ).singleton(),

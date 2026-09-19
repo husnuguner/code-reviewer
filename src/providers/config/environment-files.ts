@@ -5,7 +5,6 @@
  */
 
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { parseEnv } from "node:util";
 
@@ -25,12 +24,11 @@ export function readEnvironmentFile(path: string): EnvironmentValues {
 export function environmentFilePaths(
   environment: Environment = process.env,
   cwd: string = process.cwd(),
-  home: string = homedir(),
 ): string[] {
   const repoConfig = findRepoConfig(cwd);
   return [
     join(cwd, ENV_FILENAME),
-    join(configHome(environment, home), ENV_FILENAME),
+    join(configHome(environment), ENV_FILENAME),
     ...(repoConfig === null ? [] : [join(dirname(repoConfig), ENV_FILENAME)]),
   ];
 }

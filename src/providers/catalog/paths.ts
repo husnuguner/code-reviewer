@@ -1,12 +1,15 @@
 /**
- * Where configuration lives: the repository's `.review/`, found like `git` finds `.git`, else the
- * machine's `~/.config/reviewer`.
+ * Where configuration lives: the repository's `.review/`, found by walking up from the working
+ * directory the way `git` finds `.git`, else the machine's `~/.config/reviewer`.
  * @packageDocumentation
  */
 
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+
+import { findUpSync } from "find-up";
+import untildify from "untildify";
 
 const ENV_OVERRIDE = "REVIEWER_CONFIG";
 const APP_DIR = "reviewer";
@@ -22,19 +25,20 @@ export const ENV_FILENAME = ".env";
 /** An environment map. */
 export type Environment = Readonly<Record<string, string | undefined>>;
 
-/** Expands `~` and `~/x` to the home directory. */
-export function expandUser(path: string, home: string = homedir()): string {
-  if (path === "~") return home;
-  return path.startsWith("~/") ? join(home, path.slice(2)) : path;
+/** Expands a leading `~` to the home directory. */
+export function expandUser(path: string): string {
+  return untildify(path);
 }
 
-/** The machine's config home: `$XDG_CONFIG_HOME/reviewer`, else `~/.config/reviewer`. */
-export function configHome(
-  environment: Environment = process.env,
-  home: string = homedir(),
-): string {
+/**
+ * The machine's config home: `$XDG_CONFIG_HOME/reviewer`, else `~/.config/reviewer`.
+ *
+ * @remarks Not `xdg-basedir`: it fixes `$XDG_CONFIG_HOME` at import, and the loader's tests redirect
+ * the config home through `environment` to keep off the developer's real `~/.config/reviewer/.env`.
+ */
+export function configHome(environment: Environment = process.env): string {
   const xdg = (environment["XDG_CONFIG_HOME"] ?? "").trim();
-  const base = xdg === "" ? join(home, ".config") : resolve(expandUser(xdg, home));
+  const base = xdg === "" ? join(homedir(), ".config") : resolve(expandUser(xdg));
   return join(base, APP_DIR);
 }
 
@@ -43,32 +47,15 @@ export function configHome(
  *
  * @returns The path, or `null`. Stops at the filesystem root; never consults the home directory.
  */
-export function findRepoConfig(
-  cwd: string = process.cwd(),
-  isPresent: (path: string) => boolean = existsSync,
-): string | null {
-  let directory = resolve(cwd);
-  for (;;) {
-    const candidate = join(directory, REPO_CONFIG_DIR, CONFIG_FILENAME);
-    if (isPresent(candidate)) return candidate;
-    const parent = dirname(directory);
-    if (parent === directory) return null;
-    directory = parent;
-  }
+export function findRepoConfig(cwd: string = process.cwd()): string | null {
+  return findUpSync(join(REPO_CONFIG_DIR, CONFIG_FILENAME), { cwd, type: "file" }) ?? null;
 }
 
 /** The root of the git repository containing `cwd`, or `null` outside one. */
-export function findGitRoot(
-  cwd: string = process.cwd(),
-  isPresent: (path: string) => boolean = existsSync,
-): string | null {
-  let directory = resolve(cwd);
-  for (;;) {
-    if (isPresent(join(directory, ".git"))) return directory;
-    const parent = dirname(directory);
-    if (parent === directory) return null;
-    directory = parent;
-  }
+export function findGitRoot(cwd: string = process.cwd()): string | null {
+  // `.git` is a file in a worktree or submodule, hence `both`.
+  const marker = findUpSync(".git", { cwd, type: "both" });
+  return marker === undefined ? null : dirname(marker);
 }
 
 /** `<repo>/.review/config.yaml`. */
@@ -90,25 +77,23 @@ export function repoRootOf(configFile: string): string {
  * Where the catalogue is expected.
  *
  * @param explicit - `--config`.
- * @param isPresent - Existence check; when the YAML file is absent and a legacy `config.json` exists, that is named.
- * @returns `--config` › `REVIEWER_CONFIG` › the repository's `.review/config.yaml` › the config home's.
+ * @returns `--config` › `REVIEWER_CONFIG` › the repository's `.review/config.yaml` › the config home's;
+ * there, a legacy `config.json` is named when it exists and the YAML file does not.
  */
 export function configPath(
   explicit: string | null | undefined,
   environment: Environment = process.env,
-  home: string = homedir(),
-  isPresent: (path: string) => boolean = () => true,
   cwd: string = process.cwd(),
 ): string {
   if (explicit !== null && explicit !== undefined && explicit !== "") {
-    return resolve(expandUser(explicit, home));
+    return resolve(expandUser(explicit));
   }
   const fromEnvironment = (environment[ENV_OVERRIDE] ?? "").trim();
-  if (fromEnvironment !== "") return resolve(expandUser(fromEnvironment, home));
-  const inRepo = findRepoConfig(cwd, isPresent);
+  if (fromEnvironment !== "") return resolve(expandUser(fromEnvironment));
+  const inRepo = findRepoConfig(cwd);
   if (inRepo !== null) return inRepo;
-  const directory = configHome(environment, home);
+  const directory = configHome(environment);
   const preferred = join(directory, CONFIG_FILENAME);
   const legacy = join(directory, LEGACY_CONFIG_FILENAME);
-  return !isPresent(preferred) && isPresent(legacy) ? legacy : preferred;
+  return !existsSync(preferred) && existsSync(legacy) ? legacy : preferred;
 }

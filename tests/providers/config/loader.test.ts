@@ -3,9 +3,9 @@
  * configuration: command line > environment (real and `.env`) > project > default.
  */
 
-import { describe, expect, it } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { afterAll, describe, expect, it } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
@@ -64,8 +64,21 @@ interface Scratch {
   readonly cwdEnvFile: string;
 }
 
-function scratch(): Scratch {
+/** Every temporary tree made by this file, removed when it is done. */
+const temporaryRoots: string[] = [];
+
+afterAll(() => {
+  for (const root of temporaryRoots) rmSync(root, { recursive: true, force: true });
+});
+
+function temporaryRoot(): string {
   const root = mkdtempSync(join(tmpdir(), "reviewer-config-"));
+  temporaryRoots.push(root);
+  return root;
+}
+
+function scratch(): Scratch {
+  const root = temporaryRoot();
   const home = join(root, "home");
   const cwd = join(root, "cwd");
   mkdirSync(join(home, ".config", "reviewer"), { recursive: true });
@@ -114,88 +127,101 @@ function load(
     cpuCount: 8,
     environment: options.env ?? cleanEnvironment(s),
     cwd: s.cwd,
-    home: s.home,
   });
 }
 
 // -- paths -----------------------------------------------------------------
 
-/** A disk that has only the pre-YAML `config.json`. */
-function isLegacyOnly(path: string): boolean {
-  return path.endsWith("config.json");
+/** A throwaway disk for the path walks: a home with a config home, and a checkout under it. */
+interface Disk {
+  readonly root: string;
+  readonly home: string;
+  /** What `XDG_CONFIG_HOME` is set to. */
+  readonly xdg: string;
+  readonly repo: string;
+  /** A working directory two levels into the checkout. */
+  readonly deep: string;
+  /** A working directory outside any checkout. */
+  readonly elsewhere: string;
 }
 
-/** A disk with nothing on it: no repo-local `.review/`, no legacy file. */
-function isNowhere(): boolean {
-  return false;
+function disk(): Disk {
+  const root = temporaryRoot();
+  const home = join(root, "home");
+  const xdg = join(home, ".config");
+  const repo = join(home, "work", "repo");
+  const deep = join(repo, "src", "deep");
+  const elsewhere = join(root, "elsewhere");
+  for (const directory of [join(xdg, "reviewer"), deep, elsewhere]) {
+    mkdirSync(directory, { recursive: true });
+  }
+  return { root, home, xdg, repo, deep, elsewhere };
 }
 
-/** A disk where only `<repo>/.review/config.yaml` exists. */
-function isRepoLocalOnly(path: string): boolean {
-  return path === "/work/repo/.review/config.yaml";
-}
-
-/** A disk where only `~/.review/config.yaml` exists -- a trap for the walk. */
-function isHomeOnly(path: string): boolean {
-  return path === "/home/u/.review/config.yaml";
-}
-
-/** A disk where only `/home/u/work/repo/.git` exists. */
-function isRepoGitOnly(path: string): boolean {
-  return path === "/home/u/work/repo/.git";
+/** Writes a file, making its directory. */
+function touch(path: string, content = ""): void {
+  mkdirSync(join(path, ".."), { recursive: true });
+  writeFileSync(path, content, "utf8");
 }
 
 describe("configuration paths", () => {
   it("honours XDG_CONFIG_HOME and falls back to ~/.config", () => {
-    expect(configHome({ XDG_CONFIG_HOME: "/xdg" }, "/home/u")).toBe("/xdg/reviewer");
-    expect(configHome({}, "/home/u")).toBe("/home/u/.config/reviewer");
-    expect(configHome({ XDG_CONFIG_HOME: "~/cfg" }, "/home/u")).toBe("/home/u/cfg/reviewer");
+    expect(configHome({ XDG_CONFIG_HOME: "/xdg" })).toBe("/xdg/reviewer");
+    expect(configHome({})).toBe(join(homedir(), ".config", "reviewer"));
+    expect(configHome({ XDG_CONFIG_HOME: "~/cfg" })).toBe(join(homedir(), "cfg", "reviewer"));
   });
 
   it("lets --config beat REVIEWER_CONFIG beat the repository's own beat the config home", () => {
+    const d = disk();
+    const repoConfig = join(d.repo, ".review", "config.yaml");
+    touch(repoConfig);
+    const environment = { XDG_CONFIG_HOME: d.xdg };
     expect(
-      configPath(
-        "/explicit.json",
-        { REVIEWER_CONFIG: "/env.json" },
-        "/home/u",
-        isRepoLocalOnly,
-        "/work/repo/src",
-      ),
+      configPath("/explicit.json", { ...environment, REVIEWER_CONFIG: "/env.json" }, d.deep),
     ).toBe("/explicit.json");
-    expect(
-      configPath(
-        null,
-        { REVIEWER_CONFIG: "/env.json" },
-        "/home/u",
-        isRepoLocalOnly,
-        "/work/repo/src",
-      ),
-    ).toBe("/env.json");
+    expect(configPath(null, { ...environment, REVIEWER_CONFIG: "/env.json" }, d.deep)).toBe(
+      "/env.json",
+    );
     // The repository's own wins over the machine's, and is found from any
     // subdirectory -- the way git finds its repository.
-    expect(configPath(null, {}, "/home/u", isRepoLocalOnly, "/work/repo/src/deep")).toBe(
-      "/work/repo/.review/config.yaml",
-    );
-    expect(configPath(null, {}, "/home/u", isNowhere, "/work/repo")).toBe(
-      "/home/u/.config/reviewer/config.yaml",
-    );
+    expect(configPath(null, environment, d.deep)).toBe(repoConfig);
+    expect(configPath(null, environment, d.elsewhere)).toBe(join(d.xdg, "reviewer", "config.yaml"));
   });
 
   it("does not mistake the home directory for a repository", () => {
-    // `~/.review/config.yaml` would be found by the walk if the walk went
-    // through the home directory; a repository search must not.
-    expect(findRepoConfig("/home/u/work/repo", isHomeOnly)).toBe("/home/u/.review/config.yaml");
-    // ...so `init` never writes there: it asks for a git root, not a `.review/`.
-    expect(findGitRoot("/home/u/work/repo", isRepoGitOnly)).toBe("/home/u/work/repo");
-    expect(findGitRoot("/home/u/work/repo", isNowhere)).toBeNull();
+    const d = disk();
+    touch(join(d.home, ".review", "config.yaml"));
+    mkdirSync(join(d.repo, ".git"));
+    // The walk for `.review/config.yaml` goes through the home directory like
+    // any other, so a `~/.review/` is a catalogue for every checkout under it...
+    expect(findRepoConfig(d.repo)).toBe(join(d.home, ".review", "config.yaml"));
+    // ...but `init` never writes there: it asks for a git root, not a `.review/`.
+    expect(findGitRoot(d.deep)).toBe(d.repo);
+    expect(findGitRoot(d.elsewhere)).toBeNull();
+  });
+
+  it("takes a .git file for a repository root too, as a worktree or submodule has", () => {
+    const d = disk();
+    mkdirSync(join(d.repo, ".git"));
+    const worktree = join(d.repo, "trees", "feature");
+    touch(join(worktree, ".git"), "gitdir: ../../.git/worktrees/feature\n");
+    expect(findGitRoot(join(worktree, "src"))).toBe(worktree);
   });
 
   it("falls back to a config.json from before the format change when config.yaml is absent", () => {
-    expect(configPath(null, {}, "/home/u", isLegacyOnly, "/work")).toBe(
-      "/home/u/.config/reviewer/config.json",
+    const d = disk();
+    const environment = { XDG_CONFIG_HOME: d.xdg };
+    const configHomeDirectory = join(d.xdg, "reviewer");
+    expect(configPath(null, environment, d.elsewhere)).toBe(
+      join(configHomeDirectory, "config.yaml"),
     );
-    expect(configPath(null, {}, "/home/u", isNowhere, "/work")).toBe(
-      "/home/u/.config/reviewer/config.yaml",
+    touch(join(configHomeDirectory, "config.json"));
+    expect(configPath(null, environment, d.elsewhere)).toBe(
+      join(configHomeDirectory, "config.json"),
+    );
+    touch(join(configHomeDirectory, "config.yaml"));
+    expect(configPath(null, environment, d.elsewhere)).toBe(
+      join(configHomeDirectory, "config.yaml"),
     );
   });
 });
@@ -205,7 +231,7 @@ describe("configuration paths", () => {
 describe("loading the catalogue", () => {
   it("parses the projects", () => {
     const s = scratch();
-    const catalog = loadCatalog(s.catalogFile, cleanEnvironment(s), undefined, s.home);
+    const catalog = loadCatalog(s.catalogFile, cleanEnvironment(s));
     expect(catalog).not.toBeNull();
     expect(sortedByCodePoint(catalog?.projects.keys() ?? [])).toEqual(["app", "legacy"]);
     expect(catalog?.project("app").name).toBe("app");
@@ -213,23 +239,21 @@ describe("loading the catalogue", () => {
 
   it("treats a missing catalogue as no catalogue", () => {
     const s = scratch();
-    expect(loadCatalog(null, cleanEnvironment(s), undefined, s.home)).toBeNull();
+    expect(loadCatalog(null, cleanEnvironment(s))).toBeNull();
   });
 
   it("treats an explicitly named missing file as an error", () => {
     const s = scratch();
-    expect(() =>
-      loadCatalog(join(s.root, "nope.json"), cleanEnvironment(s), undefined, s.home),
-    ).toThrow(/No config file/u);
+    expect(() => loadCatalog(join(s.root, "nope.json"), cleanEnvironment(s))).toThrow(
+      /No config file/u,
+    );
   });
 
   it("refuses a future schema version", () => {
     const s = scratch();
     const path = join(s.root, "future.json");
     writeFileSync(path, JSON.stringify({ version: 99 }), "utf8");
-    expect(() => loadCatalog(path, cleanEnvironment(s), undefined, s.home)).toThrow(
-      /understands up to/u,
-    );
+    expect(() => loadCatalog(path, cleanEnvironment(s))).toThrow(/understands up to/u);
   });
 
   it("reads the catalogue as YAML, which JSON also is", () => {
@@ -246,7 +270,7 @@ describe("loading the catalogue", () => {
       ].join("\n"),
       "utf8",
     );
-    const catalog = loadCatalog(yamlFile, cleanEnvironment(s), undefined, s.home);
+    const catalog = loadCatalog(yamlFile, cleanEnvironment(s));
     expect(catalog?.project("one").settings["max-findings-per-file"]).toBe(1);
   });
 
@@ -254,9 +278,7 @@ describe("loading the catalogue", () => {
     const s = scratch();
     const path = join(s.root, "broken.yaml");
     writeFileSync(path, "projects: [unclosed", "utf8");
-    expect(() => loadCatalog(path, cleanEnvironment(s), undefined, s.home)).toThrow(
-      /not valid YAML/u,
-    );
+    expect(() => loadCatalog(path, cleanEnvironment(s))).toThrow(/not valid YAML/u);
   });
 });
 
@@ -308,7 +330,6 @@ describe("secrets", () => {
       cpuCount: 8,
       environment,
       cwd: s.cwd,
-      home: s.home,
     });
     expect(config.apiKey).toBe("");
     expect(config.provider).toBe("claude"); // everything else still resolves
