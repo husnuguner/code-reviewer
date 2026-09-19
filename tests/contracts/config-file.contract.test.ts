@@ -1,19 +1,20 @@
 import { describe, expect, it } from "bun:test";
 
-import { type SettingValues, layerSettings } from "../../src/core/config/config-file";
+import { type Config, buildConfig } from "../../src/core/config/config";
+import { type ConfigFile, type SettingValues } from "../../src/core/config/config-file";
 import { parseConfigFile } from "../../src/core/config/parse";
 import { type ConfigHome } from "../../src/core/ports/config-directory";
 
-import { casesUnder, expectContract, loadFixture } from "./fixtures";
+import { casesUnder, expectContract, isErrorContract, loadFixture } from "./fixtures";
 
 const cases = loadFixture("config-file");
 const SOURCE = "/x/config.yaml";
+const PROVIDERS = { names: ["local", "claude"], default: "local" };
 
-describe("parsing config.yaml", () => {
-  // Every case runs the same way, including the ones whose message names a
-  // value the JavaScript way (`null`, `'a'`) and the unrecognised-key case
-  // this build refuses at parse time. Each expectation says what this
-  // program does; there is no second implementation to be measured against.
+describe("the reviewer's own checks on a decoded config.yaml", () => {
+  // The version, where a setting may sit, and what the machine's file may not
+  // say are policy; the parser does nothing else. Unknown keys and value
+  // types are convict's, pinned under build/* below.
   const parseCases = casesUnder<{ home: ConfigHome; payload: unknown }>(cases, "parse");
 
   it.each(parseCases)("$name", ({ input, expected }) => {
@@ -23,87 +24,59 @@ describe("parsing config.yaml", () => {
   });
 });
 
-/**
- * A key nobody declared is refused by name, whatever shape it came in: a
- * typo, a spelling from someone's other tool, or a setting this build does
- * not have. There is no migration table behind the message -- the tool is
- * unreleased -- so the accepted set IS the answer.
- */
-describe("keys the schema does not declare", () => {
-  it.each([
-    ["a typo", { exlude: ["**/*.md"] }],
-    ["a snake_case spelling", { max_findings_per_file: 2 }],
-    ["a camelCase spelling", { maxFindingsPerFile: 2 }],
-    ["a setting this build has not", { severities: ["bug"] }],
-  ])("refuses %s under settings and names the accepted set", (_what, settings) => {
-    const call = (): unknown => parseConfigFile({ settings }, SOURCE, "repo");
-    expect(call).toThrow(/\/x\/config\.yaml: settings has unrecognised setting\(s\)/u);
-    expect(call).toThrow(/known: \['exclude', 'language', 'llm'/u);
-  });
+/** A file as the reader would hand it over: content as written, `${...}` already expanded. */
+function fileOf(home: ConfigHome, values: SettingValues): ConfigFile {
+  return { source: `/${home}/config.yaml`, home, values };
+}
 
-  it("refuses the old two-level layout at the root and names the two sections", () => {
-    expect(() => parseConfigFile({ defaults: {}, projects: {} }, SOURCE, "repo")).toThrow(
-      /\/x\/config\.yaml has unrecognised key\(s\) \['defaults', 'projects'\]; known: \['settings', 'skills'\]/u,
-    );
-  });
+/** The facade's fields a fixture may pin. */
+type Pinned = Partial<
+  Pick<
+    Config,
+    | "provider"
+    | "model"
+    | "reviewLang"
+    | "verifyFindings"
+    | "excludeGlobs"
+    | "maxFindingsPerFile"
+    | "skillsPath"
+    | "skillMappings"
+  >
+>;
 
-  it("points a setting written at the root to the settings section", () => {
-    // The likeliest slip after the section was introduced: the message says
-    // where the key goes rather than only that it is unknown here.
-    expect(() => parseConfigFile({ language: "tr" }, SOURCE, "repo")).toThrow(
-      /has \['language'\] at the root; a setting goes under the settings section/u,
-    );
-  });
-
-  it("refuses an unknown key in an llm section, in either home", () => {
-    for (const home of ["repo", "machine"] as const) {
-      expect(() => parseConfigFile({ settings: { llm: { apiKey: "K" } } }, SOURCE, home)).toThrow(
-        /settings\.llm has unrecognised key\(s\) \['apiKey'\]; known: \['api-key'/u,
-      );
-    }
-  });
-});
-
-describe("what the machine's file may not say", () => {
-  it("refuses skills, naming where they belong", () => {
-    expect(() => parseConfigFile({ skills: { path: "x" } }, SOURCE, "machine")).toThrow(
-      /sets \['skills'\], which belongs to a repository's \.review\/config\.yaml/u,
-    );
-  });
-
-  it("accepts the same key in the repository's file", () => {
-    expect(parseConfigFile({ skills: { path: "x" } }, SOURCE, "repo").values).toEqual({
-      skills: { path: "x" },
-    });
-  });
-});
-
-describe("the parsed value", () => {
-  it("is flat: the settings section's keys beside skills, whatever section each was written under", () => {
-    const file = parseConfigFile(
-      { settings: { language: "tr", llm: { model: "x" } }, skills: { path: "s" } },
-      SOURCE,
-      "repo",
-    );
-    expect(file.values).toEqual({ language: "tr", llm: { model: "x" }, skills: { path: "s" } });
-  });
-});
-
-describe("the repository's file on top of the machine's", () => {
+describe("what convict makes of the files", () => {
+  // Two files merge lowest first, `llm` key by key and a list whole; an
+  // unknown key anywhere is refused by its full path; every error is
+  // reported at once. The messages are convict's and are pinned as such.
   it.each(
-    casesUnder<{ machine: SettingValues | null; repo: SettingValues | null }, SettingValues>(
+    casesUnder<{ machine: SettingValues | null; repo: SettingValues | null }, Pinned>(
       cases,
-      "layer",
+      "build",
     ),
   )("$name", ({ input, expected }) => {
-    expect(layerSettings(input.machine, input.repo)).toEqual(expected);
+    const files = [
+      ...(input.machine === null ? [] : [fileOf("machine", input.machine)]),
+      ...(input.repo === null ? [] : [fileOf("repo", input.repo)]),
+    ];
+    const build = (): Config =>
+      buildConfig({ environment: { LLM_API_KEY: "k" }, files, providers: PROVIDERS, cpuCount: 4 });
+    if (isErrorContract(expected)) {
+      expectContract(build, expected, { exactMessage: true });
+      return;
+    }
+    expect(build()).toMatchObject(expected);
   });
 
-  it("leaves both inputs untouched", () => {
-    const machine = { llm: { provider: "claude" } };
-    const repo = { llm: { model: "x" } };
-    layerSettings(machine, repo);
-    expect(machine).toEqual({ llm: { provider: "claude" } });
-    expect(repo).toEqual({ llm: { model: "x" } });
+  it("leaves the files' values untouched", () => {
+    const machine = fileOf("machine", { settings: { llm: { provider: "claude" } } });
+    const repo = fileOf("repo", { settings: { llm: { model: "x" } } });
+    buildConfig({
+      environment: { LLM_API_KEY: "k" },
+      files: [machine, repo],
+      providers: PROVIDERS,
+      cpuCount: 4,
+    });
+    expect(machine.values).toEqual({ settings: { llm: { provider: "claude" } } });
+    expect(repo.values).toEqual({ settings: { llm: { model: "x" } } });
   });
 });

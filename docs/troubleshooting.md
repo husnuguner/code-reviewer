@@ -13,10 +13,11 @@ scope, without calling a model.
 
 | Symptom                                                            | Cause / fix                                                                                                                    |
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| exit 2, `ANTHROPIC_API_KEY ... is not set`                         | Put the key in `~/.config/reviewer/.env` (or `.review/.env`), or export it.                                                    |
+| exit 2, `settings.llm.api-key reads '${...}', which is not set`    | Put the variable in `~/.config/reviewer/.env` (or `.review/.env`), or export it.                                               |
+| exit 2, `... is spelled like a variable's name, not a key`         | Write `api-key: ${NAME}`; a bare name is taken as the key itself.                                                              |
 | exit 2, `1 validation error for Config`                            | A setting has the wrong shape; the message names the variable.                                                                 |
 | exit 2, `... is not a git repository`                              | Run inside a checkout: the one owning `.review/config.yaml`, else the working directory.                                       |
-| exit 2, `... has unrecognised setting(s) [...]`                    | A key the schema does not know; the message names the accepted set.                                                            |
+| exit 2, `configuration param '...' not declared in the schema`     | A key the schema does not know, named by its place in the file. Every such key is listed.                                      |
 | exit 2, `... sets ['skills'], which belongs to a repository's ...` | `skills` is in `~/.config/reviewer/config.yaml`; move it to the repository's `.review/config.yaml`.                            |
 | exit 2, `... declares schema version N ... up to 1`                | A config file from a newer build; upgrade the reviewer or lower `version`.                                                     |
 | The model is not the one I set                                     | Two files and the environment speak; `-v` logs which files were read, and `LLM_*` variables (a CI input among them) beat both. |

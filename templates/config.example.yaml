@@ -27,7 +27,8 @@ settings:
   llm:
     provider: claude # or: local (any OpenAI-compatible server). Default local
     model: claude-sonnet-4-6 # default: the provider's own
-    api-key: ANTHROPIC_API_KEY # env var name, or the key itself. Required
+    # The variable holding the key -- yours to name. Required.
+    api-key: ${ANTHROPIC_API_KEY}
     # local: the server's root; claude: a proxy. Default: the public endpoint
     # base-url: http://127.0.0.1:1234/v1
 

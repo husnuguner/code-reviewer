@@ -107,7 +107,6 @@
         "max_findings_per_file": 3,
         "verify_findings": true,
         "review_lang": "English",
-        "exclude_paths": "",
         "exclude_globs": [],
         "max_concurrent_files": 8
       }
@@ -134,7 +133,6 @@
         "max_findings_per_file": 3,
         "verify_findings": true,
         "review_lang": "English",
-        "exclude_paths": "**/*.md , **/*.lock\n**/dist/**,,",
         "exclude_globs": [
           "**/*.md",
           "**/*.lock",
@@ -166,7 +164,6 @@
         "max_findings_per_file": 3,
         "verify_findings": true,
         "review_lang": "English",
-        "exclude_paths": "",
         "exclude_globs": [],
         "max_concurrent_files": 8
       }
@@ -192,7 +189,6 @@
         "max_findings_per_file": 3,
         "verify_findings": true,
         "review_lang": "English",
-        "exclude_paths": "",
         "exclude_globs": [],
         "max_concurrent_files": 8
       }
@@ -218,7 +214,6 @@
         "max_findings_per_file": 3,
         "verify_findings": true,
         "review_lang": "English",
-        "exclude_paths": "",
         "exclude_globs": [],
         "max_concurrent_files": 8
       }
@@ -244,7 +239,6 @@
         "max_findings_per_file": 3,
         "verify_findings": true,
         "review_lang": "English",
-        "exclude_paths": "",
         "exclude_globs": [],
         "max_concurrent_files": 8
       }
@@ -270,7 +264,6 @@
         "max_findings_per_file": 3,
         "verify_findings": true,
         "review_lang": "English",
-        "exclude_paths": "",
         "exclude_globs": [],
         "max_concurrent_files": 8
       }
@@ -296,7 +289,6 @@
         "max_findings_per_file": 3,
         "verify_findings": true,
         "review_lang": "English",
-        "exclude_paths": "",
         "exclude_globs": [],
         "max_concurrent_files": 8
       }
@@ -323,7 +315,6 @@
         "max_findings_per_file": 3,
         "verify_findings": true,
         "review_lang": "English",
-        "exclude_paths": "",
         "exclude_globs": [],
         "max_concurrent_files": 8
       }
@@ -373,7 +364,6 @@
         "max_findings_per_file": 3,
         "verify_findings": true,
         "review_lang": "Turkish",
-        "exclude_paths": "",
         "exclude_globs": [],
         "max_concurrent_files": 8
       }
@@ -400,7 +390,6 @@
         "max_findings_per_file": 3,
         "verify_findings": true,
         "review_lang": "English",
-        "exclude_paths": "",
         "exclude_globs": [],
         "max_concurrent_files": 8
       }
@@ -429,7 +418,6 @@
         "max_findings_per_file": 2,
         "verify_findings": true,
         "review_lang": "English",
-        "exclude_paths": "",
         "exclude_globs": [],
         "max_concurrent_files": 9
       }
@@ -469,7 +457,6 @@
         "max_findings_per_file": 3,
         "verify_findings": true,
         "review_lang": "English",
-        "exclude_paths": "",
         "exclude_globs": [],
         "max_concurrent_files": 8
       }
@@ -495,7 +482,6 @@
         "max_findings_per_file": 3,
         "verify_findings": true,
         "review_lang": "English",
-        "exclude_paths": "",
         "exclude_globs": [],
         "max_concurrent_files": 8
       }
@@ -522,7 +508,6 @@
         "max_findings_per_file": 3,
         "verify_findings": true,
         "review_lang": "Turkish",
-        "exclude_paths": "",
         "exclude_globs": [],
         "max_concurrent_files": 8
       }

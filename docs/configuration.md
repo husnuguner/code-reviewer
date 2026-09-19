@@ -30,7 +30,7 @@ code is held to and exists only in the repository's file.
 # ~/.config/reviewer/config.yaml -- this machine
 version: 1
 settings:
-  llm: { provider: claude, model: claude-sonnet-4-6, api-key: ANTHROPIC_API_KEY }
+  llm: { provider: claude, model: claude-sonnet-4-6, api-key: ${ANTHROPIC_API_KEY} }
   language: en
   max-concurrent-files: 4
 ```
@@ -128,19 +128,46 @@ Keys are kebab-case. Everything under `settings` may be set in either file;
 | `skills.mappings`                 | `{}`             |         |  ✓   | Skill name → globs it reviews.                                                              |
 
 A key the schema does not recognise is **rejected**, not ignored: the error
-names the key and the accepted set. The schema is at `version: 1`; a newer
-number than the build knows is refused.
+names it by its place in the file (`configuration param 'settings.exlude' not
+declared in the schema`), and every problem in a file is reported at once. The
+schema is at `version: 1`; a newer number than the build knows is refused.
+
+The schema, merging, precedence and validation are
+[convict](https://github.com/mozilla/node-convict)'s; the reviewer declares
+the table of settings and adds its own rules on top — where a setting may be
+written, what the machine's file may not say, and the `${...}` references
+below.
 
 A word on `settings.exclude` and `settings.language` in the machine's file: they change what the
 review says, and a runner does not have that file, so a local run then differs
 from CI. Rules that are the team's belong in the repository's file.
 
-### The model's key
+### Reading the environment from a file: `${VARIABLE}`
 
-`settings.llm.api-key` takes either the name of an environment variable (spelled like
-one: `ANTHROPIC_API_KEY`) or the value itself. Naming keeps the file
-shareable; a named variable that is not set is an error at startup rather
-than a 401 later.
+Any string setting may read the environment by writing a reference, with
+[dotenv-expand](https://github.com/motdotla/dotenv-expand)'s rules:
+
+```yaml
+settings:
+  llm:
+    api-key: ${ANTHROPIC_API_KEY} # the whole value
+    base-url: ${LLM_HOST:-http://localhost:11434}/v1 # inside a string, with a default
+```
+
+- `${NAME}` is replaced by the variable's value; `${NAME:-default}` falls back
+  when it is unset; `\${` is a literal.
+- The variable's **name is yours**. The reviewer knows nothing about
+  `ANTHROPIC_API_KEY`; it is the example because that is what Anthropic's SDK
+  reads. Name it after what it holds.
+- A reference the environment cannot answer is an error at startup, named by
+  its setting (`settings.llm.api-key reads '${ANTHROPIC_API_KEY}', which is
+not set`), rather than a 401 later. The one exception is the key under
+  `--preview`, which calls no model and so demands none.
+- A key written as a bare variable name (`api-key: ANTHROPIC_API_KEY`) is
+  refused with the spelling that reads the variable: a key never looks like
+  that, so the `${}` was forgotten.
+- A reference stands for a string; `max-findings-per-file: ${N}` is refused
+  as not a number.
 
 The variable is read from the environment and from the `.env` files, in this
 order (strongest first): the process environment, the repository's

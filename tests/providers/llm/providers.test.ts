@@ -14,8 +14,8 @@ import { APICallError } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 import { parse as parseYaml } from "yaml";
 
+import { buildConfig } from "../../../src/core/config/config";
 import { parseConfigFile } from "../../../src/core/config/parse";
-import { resolveConfig } from "../../../src/core/config/resolver";
 import { type LlmSettings } from "../../../src/core/config/settings";
 import { ValueError } from "../../../src/core/util/errors";
 import { AiSdkChatModel, toPrompt } from "../../../src/providers/llm/ai-sdk-chat-model";
@@ -346,17 +346,15 @@ describe("the model provider registry", () => {
     const registry = builtinModelProviders();
     const providers = { names: registry.names(), default: registry.defaultName() };
     const resolve = (environment: Record<string, string>) =>
-      resolveConfig({
-        files: { machine: null, repo: null },
-        sources: { processEnv: { LLM_API_KEY: "k", ...environment }, envFiles: [] },
-        configHome: "/tmp/none",
+      buildConfig({
+        environment: { LLM_API_KEY: "k", ...environment },
         providers,
         cpuCount: 4,
       });
     expect(resolve({}).provider).toBe("local");
     expect(resolve({ LLM_PROVIDER: "Claude" }).provider).toBe("claude");
     expect(() => resolve({ LLM_PROVIDER: "gemini" })).toThrow(
-      "LLM_PROVIDER must be one of ['claude', 'local'], got: 'gemini'",
+      /settings\.llm\.provider: must be one of \['claude', 'local'\], got: 'gemini'/u,
     );
   });
 
@@ -394,17 +392,17 @@ describe("what the config files say about the model", () => {
       // The example file carries the repository-only `skills` key too, so it is read as a repository's.
       const home = file.endsWith("config.example.yaml") ? "repo" : "machine";
       const parsed = parseConfigFile(parseYaml(readFileSync(path, "utf8")), path, home);
-      const config = resolveConfig({
-        files: home === "repo" ? { machine: null, repo: parsed } : { machine: parsed, repo: null },
-        sources: { processEnv: { LLM_API_KEY: "k" }, envFiles: [] },
-        configHome: "/tmp/none",
+      const config = buildConfig({
+        environment: { LLM_API_KEY: "k" },
+        files: [parsed],
         providers,
         cpuCount: 4,
       });
       // The file's `llm` section is what the run reads: its `provider` is
       // registered, and its `model` is what the vendor is asked for -- through
       // the registry, the way the composition root builds it.
-      const llm = parsed.values.llm as { provider?: string; model?: string };
+      const settings = parsed.values["settings"] as { llm?: { provider?: string; model?: string } };
+      const llm = settings.llm ?? {};
       expect(config.provider).toBe(llm.provider ?? providers.default);
       expect(registry.has(config.provider)).toBe(true);
       expect(config.llmSettings().model).toBe(llm.model ?? null);

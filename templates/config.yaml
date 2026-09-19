@@ -9,16 +9,16 @@
 # top of this file: a key restated under its `settings` wins; `llm` merges key
 # by key. What describes the reviewed code (`skills`) cannot be set here.
 #
-# Secrets: llm.api-key takes either the NAME of an environment variable (read
-# from the environment and from the .env beside this file) or the value
-# itself. Naming a variable keeps this file shareable.
+# Secrets: write ${VARIABLE} to read the environment (and the .env beside this
+# file); the variable's name is yours. Anything else is taken as the value
+# itself, so keep the key out of this file.
 version: 1
 
 settings:
   llm:
     provider: claude # or: local (any OpenAI-compatible server)
     model: claude-sonnet-4-6
-    api-key: ANTHROPIC_API_KEY # the variable holding the key, or the key
+    api-key: ${ANTHROPIC_API_KEY} # the variable holding the key; yours to name
     # base-url: http://127.0.0.1:1234/v1
   language: en
   max-concurrent-files: 4 # file reviews in flight at once

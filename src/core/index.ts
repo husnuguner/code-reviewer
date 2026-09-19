@@ -29,10 +29,10 @@ export type {
   SummaryWriter,
 } from "./ports/review-reporter";
 export type { SkillSource } from "./ports/skill-source";
-export { layerSettings } from "./config/config-file";
 export type { ConfigFile, SettingValues } from "./config/config-file";
 export { parseConfigFile } from "./config/parse";
-export { REPO_ONLY_KEYS, SCHEMA_VERSION, SETTING_KEYS } from "./config/schema";
+export { REPO_ONLY_KEYS, SCHEMA_VERSION, SETTINGS_SECTION_KEYS } from "./config/schema";
+export type { ConfigShape } from "./config/schema";
 export { initConfigFile } from "./config/init";
 export type { StarterFiles } from "./config/init";
 export type { ConfigDirectory, ConfigHome } from "./ports/config-directory";
@@ -44,7 +44,6 @@ export type {
   ReportPolicy,
 } from "./config/settings";
 export { DEFAULT_FILE_REVIEW_SETTINGS, DEFAULT_REPORT_POLICY } from "./config/settings";
-export { resolveConfig } from "./config/resolver";
 export {
   branchReviewText,
   iterBranchReview,

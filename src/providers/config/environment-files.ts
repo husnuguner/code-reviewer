@@ -8,9 +8,32 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseEnv } from "node:util";
 
-import { type EnvironmentValues } from "../../core/config/resolver";
-
 import { ENV_FILENAME, type Environment, configHome, findRepoConfig } from "./paths";
+
+/** Name/value pairs from one source; names are matched case-insensitively. */
+export type EnvironmentValues = Readonly<Record<string, string | undefined>>;
+
+/** Whether an environment value counts as said; `""` does not. */
+function isSet(value: string | undefined): value is string {
+  return value !== undefined && value.trim() !== "";
+}
+
+/**
+ * The environment as one map: the `.env` files lowest first, the process environment on top, names uppercased,
+ * empty values dropped.
+ */
+export function mergedEnvironment(
+  processEnvironment: EnvironmentValues,
+  environmentFiles: readonly EnvironmentValues[],
+): Record<string, string> {
+  const merged: Record<string, string> = {};
+  for (const source of [...environmentFiles, processEnvironment]) {
+    for (const [name, value] of Object.entries(source)) {
+      if (isSet(value)) merged[name.toUpperCase()] = value;
+    }
+  }
+  return merged;
+}
 
 /** One `.env` file's pairs, or `{}` when it cannot be read. */
 export function readEnvironmentFile(path: string): EnvironmentValues {

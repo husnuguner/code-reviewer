@@ -11,10 +11,11 @@ import { join } from "node:path";
 
 import { parse as parseYaml } from "yaml";
 
+import { buildConfig } from "../../../src/core/config/config";
 import { parseConfigFile } from "../../../src/core/config/parse";
-import { resolveConfig } from "../../../src/core/config/resolver";
-import { REPO_ONLY_KEYS, SETTING_KEYS } from "../../../src/core/config/schema";
+import { REPO_ONLY_KEYS, ROOT_KEYS, SETTINGS_SECTION_KEYS } from "../../../src/core/config/schema";
 import { sortedByCodePoint } from "../../../src/core/util/text";
+import { loadConfigFiles } from "../../../src/providers/config/reader";
 
 // Up out of tests/core/config/ to the repository root. The only test that
 // reads a file by walking out of its own directory, which is why moving it
@@ -31,7 +32,13 @@ describe("templates/config.example.yaml", () => {
   const example = parseConfigFile(readYaml(EXAMPLE), EXAMPLE, "repo");
 
   it("documents every setting the schema accepts, and nothing else", () => {
-    expect(sortedByCodePoint(Object.keys(example.values))).toEqual(sortedByCodePoint(SETTING_KEYS));
+    expect(sortedByCodePoint(Object.keys(example.values))).toEqual(
+      sortedByCodePoint(["version", ...ROOT_KEYS]),
+    );
+    const settings = example.values["settings"] as Record<string, unknown>;
+    expect(sortedByCodePoint(Object.keys(settings))).toEqual(
+      sortedByCodePoint(SETTINGS_SECTION_KEYS),
+    );
   });
 
   it("is refused as the machine's file, for the repository-only keys it documents", () => {
@@ -41,10 +48,14 @@ describe("templates/config.example.yaml", () => {
   });
 
   it("resolves into a run's settings", () => {
-    const config = resolveConfig({
-      files: { machine: null, repo: example },
-      sources: { processEnv: { LLM_API_KEY: "k" }, envFiles: [] },
-      configHome: "/tmp/none",
+    // Through the reader, so the relative skills path is anchored beside the file.
+    const [file] = loadConfigFiles(
+      { machine: "/nowhere/config.yaml", repo: EXAMPLE, isRepoNamed: true },
+      { LLM_API_KEY: "k" },
+    );
+    const config = buildConfig({
+      environment: { LLM_API_KEY: "k" },
+      files: file === undefined ? [] : [file],
       providers: { names: ["local", "claude"], default: "local" },
       cpuCount: 4,
     });
@@ -70,22 +81,24 @@ describe("the starters `reviewer init` writes", () => {
     const path = join(TEMPLATES, "config.yaml");
     const machine = parseConfigFile(readYaml(path), path, "machine");
     for (const key of REPO_ONLY_KEYS) expect(machine.values).not.toHaveProperty(key);
-    expect(machine.values.llm).toMatchObject({
-      provider: "claude",
-      "api-key": "ANTHROPIC_API_KEY",
+    expect(machine.values["settings"]).toMatchObject({
+      llm: { provider: "claude", "api-key": "${ANTHROPIC_API_KEY}" },
     });
   });
 
   it("templates/repo-config.yaml is a valid repository file that leaves the model to the machine", () => {
     const path = join(TEMPLATES, "repo-config.yaml");
     const repo = parseConfigFile(readYaml(path), path, "repo");
-    expect(repo.values).not.toHaveProperty("llm");
-    expect(repo.values.skills).toEqual({ path: "skills", mappings: {} });
+    expect(repo.values["settings"]).not.toHaveProperty("llm");
+    expect(repo.values["skills"]).toEqual({ path: "skills", mappings: {} });
   });
 });
 
 describe("the schema's tables", () => {
-  it("name only setting keys as repository-only", () => {
-    for (const key of REPO_ONLY_KEYS) expect(SETTING_KEYS).toContain(key);
+  it("name only root keys as repository-only, and never a setting", () => {
+    for (const key of REPO_ONLY_KEYS) {
+      expect(ROOT_KEYS).toContain(key);
+      expect(SETTINGS_SECTION_KEYS).not.toContain(key);
+    }
   });
 });

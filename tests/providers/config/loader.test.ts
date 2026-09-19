@@ -32,7 +32,7 @@ const PROVIDERS = { names: ["local", "claude"], default: "local" };
 const MACHINE = {
   version: 1,
   settings: {
-    llm: { provider: "claude", model: "claude-opus-5", "api-key": "ANTHROPIC_API_KEY" },
+    llm: { provider: "claude", model: "claude-opus-5", "api-key": "${ANTHROPIC_API_KEY}" },
     language: "en",
     "max-file-chars": 4000,
     "max-concurrent-files": 3,
@@ -225,35 +225,36 @@ describe("configuration paths", () => {
 // -- reading on disk -------------------------------------------------------
 
 describe("loading the config files", () => {
-  it("reads both, each knowing which home it is", () => {
+  it("reads both, lowest first, each knowing which home it is", () => {
     const s = scratchWithBoth();
-    const files = loadConfigFiles(configPaths(null, { XDG_CONFIG_HOME: s.xdg }, s.deep));
-    expect(files.machine).toMatchObject({ source: s.machineFile, home: "machine" });
-    expect(files.repo).toMatchObject({ source: s.repoFile, home: "repo" });
-    expect(files.repo?.values.language).toBe("tr");
+    const files = loadConfigFiles(configPaths(null, { XDG_CONFIG_HOME: s.xdg }, s.deep), {});
+    expect(files.map((file) => [file.source, file.home])).toEqual([
+      [s.machineFile, "machine"],
+      [s.repoFile, "repo"],
+    ]);
+    expect(files[1]?.values["settings"]).toMatchObject({ language: "tr" });
   });
 
   it("treats a missing file as no file, in either slot", () => {
     const s = scratch();
-    const files = loadConfigFiles(configPaths(null, { XDG_CONFIG_HOME: s.xdg }, s.deep));
-    expect(files).toEqual({ machine: null, repo: null });
+    expect(loadConfigFiles(configPaths(null, { XDG_CONFIG_HOME: s.xdg }, s.deep), {})).toEqual([]);
   });
 
   it("treats an explicitly named missing file as an error", () => {
     const s = scratch();
     const paths = configPaths(join(s.root, "nope.yaml"), { XDG_CONFIG_HOME: s.xdg }, s.deep);
-    expect(() => loadConfigFiles(paths)).toThrow(/No config file/u);
+    expect(() => loadConfigFiles(paths, {})).toThrow(/No config file/u);
   });
 
   it("refuses a future schema version, and names the file that is not valid YAML", () => {
     const s = scratch();
     touch(s.machineFile, JSON.stringify({ version: 99 }));
     const environment = { XDG_CONFIG_HOME: s.xdg };
-    expect(() => loadConfigFiles(configPaths(null, environment, s.deep))).toThrow(
+    expect(() => loadConfigFiles(configPaths(null, environment, s.deep), {})).toThrow(
       /understands up to/u,
     );
     touch(s.machineFile, "llm: [unclosed");
-    expect(() => loadConfigFiles(configPaths(null, environment, s.deep))).toThrow(
+    expect(() => loadConfigFiles(configPaths(null, environment, s.deep), {})).toThrow(
       /config\.yaml is not valid YAML/u,
     );
   });
@@ -268,15 +269,15 @@ describe("loading the config files", () => {
         "  max-findings-per-file: 1   # a comment, which JSON could not carry",
       ].join("\n"),
     );
-    const files = loadConfigFiles(configPaths(null, { XDG_CONFIG_HOME: s.xdg }, s.deep));
-    expect(files.repo?.values["max-findings-per-file"]).toBe(1);
+    const [repo] = loadConfigFiles(configPaths(null, { XDG_CONFIG_HOME: s.xdg }, s.deep), {});
+    expect(repo?.values["settings"]).toEqual({ "max-findings-per-file": 1 });
   });
 
   it("refuses skills in the machine's file, naming where they belong", () => {
     const s = scratch();
     touch(s.machineFile, JSON.stringify({ skills: { path: "~/rules" } }));
     const attempt = (): unknown =>
-      loadConfigFiles(configPaths(null, { XDG_CONFIG_HOME: s.xdg }, s.deep));
+      loadConfigFiles(configPaths(null, { XDG_CONFIG_HOME: s.xdg }, s.deep), {});
     expect(attempt).toThrow(ConfigFileError);
     expect(attempt).toThrow(/belongs to a repository's \.review\/config\.yaml/u);
   });
@@ -299,7 +300,7 @@ describe("secrets", () => {
 
   it("does not demand the key the file names when the environment supplies LLM_API_KEY", () => {
     // The CI case: the workflow hands the key in as LLM_API_KEY, while a
-    // config file says `api-key: ANTHROPIC_API_KEY`. That variable is the
+    // config file says `api-key: ${ANTHROPIC_API_KEY}`. That variable is the
     // override layer above the files -- a run that has it has its key, and
     // the file's *name* for a different variable must not be demanded as well.
     const s = scratchWithBoth();
@@ -417,10 +418,10 @@ describe("the repository's file on top of the machine's", () => {
   it("reports an unrecognised setting rather than ignoring it, in either file", () => {
     const s = scratch();
     touch(s.machineFile, JSON.stringify({ settings: { exlude: ["*.md"] } }));
-    expect(() => load(s)).toThrow(/unrecognised setting/u);
+    expect(() => load(s)).toThrow(/'settings\.exlude' not declared in the schema/u);
     touch(s.machineFile, JSON.stringify(MACHINE));
     touch(s.repoFile, JSON.stringify({ settings: { "local-path": "~/src/x" } }));
-    expect(() => load(s)).toThrow(/unrecognised setting\(s\) \['local-path'\]/u);
+    expect(() => load(s)).toThrow(/'settings\.local-path' not declared in the schema/u);
     // A setting at the root is pointed to the section rather than merely refused.
     touch(s.repoFile, JSON.stringify({ language: "tr" }));
     expect(() => load(s)).toThrow(/at the root; a setting goes under the settings section/u);
@@ -441,7 +442,8 @@ describe("the environment and the command line", () => {
     const attempt = (): Config =>
       load(s, { env: cleanEnvironment(s, { REVIEW_SKILL_MAPPINGS: "not json" }) });
     expect(attempt).toThrow(ConfigError);
-    expect(attempt).toThrow(/REVIEW_SKILL_MAPPINGS/u);
+    // convict names the setting by its place in the file, whatever alias set it.
+    expect(attempt).toThrow(/skills\.mappings: must be an object/u);
   });
 
   it("lets the environment override both files", () => {
@@ -523,7 +525,6 @@ function snapshot(config: Config): Record<string, unknown> {
     max_findings_per_file: config.maxFindingsPerFile,
     verify_findings: config.verifyFindings,
     review_lang: config.reviewLang,
-    exclude_paths: config.excludePaths,
     exclude_globs: config.excludeGlobs,
     max_concurrent_files: config.maxConcurrentFiles,
   };
@@ -535,7 +536,7 @@ interface SchemaInput {
 }
 
 function build(input: SchemaInput): Config {
-  return buildConfig(input.env, { providers: PROVIDERS, cpuCount: input.cpu });
+  return buildConfig({ environment: input.env, providers: PROVIDERS, cpuCount: input.cpu });
 }
 
 describe("the settings schema", () => {
@@ -556,22 +557,23 @@ describe("the settings schema", () => {
     },
   );
 
-  // pydantic's ValidationError is this implementation's ConfigError; the first
-  // line of the message is the contract.
+  // convict's validation report is this implementation's ConfigError; each
+  // line names the setting's path in the file, whatever alias set it.
   it.each(schemaCases.filter((c) => isErrorContract(c.expected)))("config/$name", ({ input }) => {
     const attempt = (): Config => build(input);
     expect(attempt).toThrow(ConfigError);
-    expect(attempt).toThrow(/^1 validation error for Config/u);
+    expect(attempt).toThrow(/^settings\./u);
   });
 
   it("demands the model's key, unless the flow builds no model", () => {
     const environment = { LLM_PROVIDER: "local" };
-    expect(() => buildConfig(environment, { providers: PROVIDERS, cpuCount: 4 })).toThrow(
+    expect(() => buildConfig({ environment, providers: PROVIDERS, cpuCount: 4 })).toThrow(
       ConfigError,
     );
     // `--preview` resolves the same configuration but calls nobody, so the
     // key it would never send is not a reason to refuse the run.
-    const config = buildConfig(environment, {
+    const config = buildConfig({
+      environment,
       providers: PROVIDERS,
       cpuCount: 4,
       requiresModel: false,
@@ -579,10 +581,12 @@ describe("the settings schema", () => {
     expect(config.llmSettings().apiKey).toBe("");
     // Everything else about the model is still validated.
     expect(() =>
-      buildConfig(
-        { LLM_PROVIDER: "nonesuch" },
-        { providers: PROVIDERS, cpuCount: 4, requiresModel: false },
-      ),
+      buildConfig({
+        environment: { LLM_PROVIDER: "nonesuch" },
+        providers: PROVIDERS,
+        cpuCount: 4,
+        requiresModel: false,
+      }),
     ).toThrow(ConfigError);
   });
 });

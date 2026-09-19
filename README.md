@@ -217,7 +217,7 @@ The machine's file and a repository's, at their smallest useful:
 # ~/.config/reviewer/config.yaml
 version: 1
 settings:
-  llm: { provider: claude, model: claude-sonnet-4-6, api-key: ANTHROPIC_API_KEY }
+  llm: { provider: claude, model: claude-sonnet-4-6, api-key: ${ANTHROPIC_API_KEY} }
   language: en
 ```
 
@@ -240,10 +240,10 @@ repository restates wins, and `llm` merges key by key, so
 machine's provider. `skills` is what the code is held to and belongs to the
 repository's file alone.
 
-`settings.llm.api-key` takes the **name** of an environment variable, so the file is
-shareable; the key lives in `~/.config/reviewer/.env` or the gitignored
-`.review/.env`. A key the schema does not recognise is rejected with the
-accepted set named.
+`${ANTHROPIC_API_KEY}` reads the environment, so the file is shareable and the
+variable's name is yours; the key itself lives in `~/.config/reviewer/.env` or
+the gitignored `.review/.env`. A key the schema does not recognise is rejected
+by its place in the file.
 
 Without any file, environment variables describe the whole run
 (`LLM_PROVIDER`, `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, `REVIEW_*`) —

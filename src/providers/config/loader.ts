@@ -1,13 +1,17 @@
 /**
- * One run's configuration from disk and environment. I/O glue only; meaning is the core resolver's.
+ * One run's configuration from disk and environment. I/O glue only; meaning is the core's.
  * @packageDocumentation
  */
 
-import { type Config, type ConfigField, type RegisteredProviders } from "../../core/config/config";
-import { type ConfigSources, resolveConfig } from "../../core/config/resolver";
+import {
+  type Config,
+  type ConfigField,
+  type RegisteredProviders,
+  buildConfig,
+} from "../../core/config/config";
 import { type Logger, NULL_LOGGER } from "../../core/ports/logger";
 
-import { environmentFilePaths, readEnvironmentFile } from "./environment-files";
+import { environmentFilePaths, mergedEnvironment, readEnvironmentFile } from "./environment-files";
 import { type Environment, configHome, configPaths } from "./paths";
 import { loadConfigFiles } from "./reader";
 
@@ -33,22 +37,30 @@ export interface LoadRunConfigOptions {
  * @returns The validated `Config`.
  */
 export function loadRunConfig(options: LoadRunConfigOptions): Config {
-  const environment = options.environment ?? process.env;
+  const processEnvironment = options.environment ?? process.env;
   const cwd = options.cwd ?? process.cwd();
   const logger = options.logger ?? NULL_LOGGER;
-  const sources: ConfigSources = {
-    processEnv: environment,
-    envFiles: environmentFilePaths(environment, cwd).map(readEnvironmentFile),
-  };
-  const files = loadConfigFiles(configPaths(options.configFile, environment, cwd), logger);
-  return resolveConfig({
+  const environment = mergedEnvironment(
+    processEnvironment,
+    environmentFilePaths(processEnvironment, cwd).map(readEnvironmentFile),
+  );
+  const files = loadConfigFiles(
+    configPaths(options.configFile, processEnvironment, cwd),
+    environment,
+    logger,
+  );
+  if (files.length > 0) {
+    logger
+      .child("config")
+      .info(`Config files, lowest first: ${files.map((file) => file.source).join(" < ")}.`);
+  }
+  return buildConfig({
+    environment,
     files,
     ...(options.overrides && { overrides: options.overrides }),
     ...(options.requiresModel !== undefined && { requiresModel: options.requiresModel }),
-    sources,
-    configHome: configHome(environment),
     providers: options.providers,
     cpuCount: options.cpuCount,
-    logger,
+    configHome: configHome(processEnvironment),
   });
 }

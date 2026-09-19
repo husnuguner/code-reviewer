@@ -19,7 +19,7 @@ src/
 │   ├── diff/        unified-diff parsing, patch views
 │   ├── skills/      glob engine, frontmatter parser, registry
 │   ├── posting/     records → one review payload (pure)
-│   ├── config/      config.yaml: schema, parse, layering, init · settings schema, resolver, secrets
+│   ├── config/      the convict schema of config.yaml · policy checks on a file · ${VAR} · init · the Config facade
 │   └── util/        errors, text, JSON, timing, completion-ordered promises
 ├── providers/   what can change; every implementation of a port
 │   ├── llm/         model-provider (kind) · claude/ · local/ · AI SDK adapter · retry decorator
@@ -27,7 +27,7 @@ src/
 │   ├── reporting/   format-provider (kind) · text/ · ndjson/ · github/ · tee, collecting, closable
 │   ├── git/         Bun.spawn: diff source and pre-context
 │   ├── skills/      directory and worktree sources
-│   ├── config/      where the two config.yaml files live, how they are read; .env layers; one run's Config
+│   ├── config/      where the two config.yaml files live, how they are read; .env layers; one run's Config via convict
 │   ├── logging/     pino → stderr
 │   ├── console/, assets/, http/
 │   ├── provider.ts  Provider<In, Out>
