@@ -3,16 +3,12 @@
  * @packageDocumentation
  */
 
+import { type JsonArray, type JsonObject, type JsonValue } from "type-fest";
+
 import { errorMessage } from "./errors";
 
-/** A JSON scalar. */
-export type JsonPrimitive = string | number | boolean | null;
-/** Any decoded JSON value. */
-export type JsonValue = JsonPrimitive | JsonValue[] | JsonObject;
-/** A decoded JSON object. */
-export interface JsonObject {
-  readonly [key: string]: JsonValue;
-}
+/** The JSON types are type-fest's, re-exported so callers keep importing them from here. */
+export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "type-fest";
 
 /**
  * Decodes text as JSON.
@@ -36,7 +32,7 @@ export function isJsonObject(value: JsonValue | undefined): value is JsonObject 
 }
 
 /** Whether a JSON value is an array. */
-export function isJsonArray(value: JsonValue | undefined): value is JsonValue[] {
+export function isJsonArray(value: JsonValue | undefined): value is JsonArray {
   return Array.isArray(value);
 }
 

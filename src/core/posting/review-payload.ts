@@ -125,7 +125,7 @@ function toFinding(record: JsonObject): Finding | null {
     severity: text_(record["severity"], "readability"),
     example: text_(record["example"]),
     skills: isJsonArray(skills)
-      ? skills.filter((skill): skill is string => typeof skill === "string")
+      ? skills.flatMap((skill) => (typeof skill === "string" ? [skill] : []))
       : [],
   };
 }
