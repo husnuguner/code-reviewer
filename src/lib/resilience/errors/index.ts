@@ -1,10 +1,6 @@
 /**
- * The errors this library raises on its own behalf.
- *
- * Deliberately few. A resilience policy's job is to hand back what the
- * operation produced -- the value it returned or the error it threw,
- * unchanged -- so the only errors declared here are the ones no operation
- * could have produced, because the policy itself is what happened.
+ * The errors this library raises on its own behalf: only those no operation could have produced.
+ * @packageDocumentation
  */
 
 export { PolicyError } from "./policy.error";

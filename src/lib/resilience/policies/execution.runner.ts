@@ -1,11 +1,6 @@
 /**
- * One attempt, judged.
- *
- * Every policy runs the caller's function through this, so "did it fail" is
- * answered in one place and the success/failure events every policy publishes
- * are emitted from one place too. What it adds to a bare call is exactly
- * three things: the handler's verdict, the duration, and the guarantee that
- * an error nobody claimed leaves as it arrived.
+ * One attempt, judged: the handler's verdict, the duration, and the success/failure events, in one place.
+ * @packageDocumentation
  */
 
 import { type Event, EventPublisher } from "../events";
@@ -17,6 +12,7 @@ import {
 } from "../handling";
 import { type ITimer } from "../timing";
 
+/** Runs the caller's function once and judges the result. */
 export class ExecutionRunner {
   readonly onSuccess: Event<ISuccessEvent>;
   readonly onFailure: Event<IFailureEvent>;
@@ -33,12 +29,11 @@ export class ExecutionRunner {
   }
 
   /**
-   * Run `fn` once.
+   * Runs `operation` once.
    *
-   * Returns what happened when the handler recognises it; **rethrows anything
-   * it does not**. That asymmetry is the point: a policy's loop can only act
-   * on outcomes it is handed, so an error the caller never asked to have
-   * handled cannot be retried, counted, or quietly turned into a value.
+   * @returns The outcome when the handler recognises it.
+   * @throws The error itself when the handler does not, so a policy cannot retry or swallow what the
+   * caller never asked to have handled.
    */
   async invoke<T>(operation: () => PromiseLike<T> | T): Promise<ExecutionOutcome<T>> {
     const started = this.timer.now();

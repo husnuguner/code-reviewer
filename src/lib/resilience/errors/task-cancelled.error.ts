@@ -1,11 +1,9 @@
 /**
- * The work was abandoned before it could answer: a timeout elapsed, or the
- * caller's signal was aborted.
- *
- * Named rather than reusing `DOMException`, because "whose deadline was it"
- * is the question a caller actually has, and a `TimeoutError` from a nested
- * `fetch` answers it differently from this one.
+ * The work was abandoned before it could answer.
+ * @packageDocumentation
  */
+
+/** A timeout elapsed or the caller's signal aborted. Named so "whose deadline" is answerable. */
 export class TaskCancelledError extends Error {
   override readonly name = "TaskCancelledError";
 }

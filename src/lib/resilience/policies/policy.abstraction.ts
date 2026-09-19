@@ -1,9 +1,7 @@
 /**
- * The shape every policy presents, so that they are interchangeable.
- *
- * One `execute` and two events. A caller that holds an `IPolicy` cannot tell a
- * retry from a timeout from a no-op, which is what lets a policy be chosen by
- * configuration, stubbed in a test, or nested inside another.
+ * The shape every policy presents: one `execute` and two events, so a retry, a timeout and a stub are
+ * interchangeable.
+ * @packageDocumentation
  */
 
 import { type Event } from "../events";
@@ -15,15 +13,16 @@ export interface IDefaultPolicyContext {
   readonly signal: AbortSignal;
 }
 
+/** A policy. */
 export interface IPolicy<C extends IDefaultPolicyContext = IDefaultPolicyContext> {
-  /** Fired once when the call finally succeeds, however many attempts it took. */
+  /** Fired once when the call finally succeeds. */
   readonly onSuccess: Event<ISuccessEvent>;
   /** Fired for every attempt that failed, handled or not. */
   readonly onFailure: Event<IFailureEvent>;
   /**
-   * `signal` accepts `null` as well as being omitted, because the platform
-   * types a caller is most likely to forward one from -- `RequestInit.signal`
-   * -- spells "no signal" that way.
+   * Runs `operation` under the policy.
+   *
+   * @param signal - Accepts `null` as well, since `RequestInit.signal` spells "none" that way.
    */
   execute<T>(
     operation: (context: C) => PromiseLike<T> | T,

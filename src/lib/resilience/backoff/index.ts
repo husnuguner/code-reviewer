@@ -1,8 +1,6 @@
 /**
- * How long to wait before trying again.
- *
- * The abstraction is an immutable chain; the two schedules and the jitter
- * generators are the implementations this library ships with.
+ * Backoff: the abstraction, two schedules, and the jitter generators.
+ * @packageDocumentation
  */
 
 export { type IBackoff, type IBackoffFactory, type JitterGenerator } from "./backoff.abstraction";

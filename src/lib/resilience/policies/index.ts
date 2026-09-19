@@ -1,10 +1,7 @@
 /**
- * What to do about a failure.
- *
- * `IPolicy` is the shape they all share; `PolicyBase` is the half of it every
- * policy has before it has a behaviour; the rest are the behaviours.
- * `ExecutionRunner` stays inside the folder: it is how a policy judges one
- * attempt, not something a policy's caller holds.
+ * What to do about a failure: the `IPolicy` shape, the shared base, and the behaviours. `ExecutionRunner`
+ * stays inside the folder.
+ * @packageDocumentation
  */
 
 export { PolicyBase } from "./base.policy";

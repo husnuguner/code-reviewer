@@ -1,13 +1,6 @@
 /**
- * What every policy has before it has a behaviour.
- *
- * A retry and a timeout differ entirely in what `execute` does and not at all
- * in what surrounds it: both judge attempts through a handler, both keep a
- * clock, both publish the same two events. That shared half lives here, and
- * `execute` is left abstract -- the one thing a subclass exists to decide.
- *
- * The runner and the timer are `protected` rather than public: a subclass is
- * meant to build on them, and a caller is meant to see only `IPolicy`.
+ * What every policy shares before it has a behaviour: a handler, a clock, and two events.
+ * @packageDocumentation
  */
 
 import { type Event } from "../events";
@@ -17,6 +10,7 @@ import { type ITimer } from "../timing";
 import { ExecutionRunner } from "./execution.runner";
 import { type IDefaultPolicyContext, type IPolicy } from "./policy.abstraction";
 
+/** The shared half of a policy; `execute` is the subclass's. */
 export abstract class PolicyBase<C extends IDefaultPolicyContext> implements IPolicy<C> {
   readonly onSuccess: Event<ISuccessEvent>;
   readonly onFailure: Event<IFailureEvent>;

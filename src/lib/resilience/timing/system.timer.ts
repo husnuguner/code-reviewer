@@ -1,10 +1,7 @@
 /**
- * The real clock, and the only place in this library that schedules anything.
- *
- * Every policy takes an `ITimer`, and this is what they take when nobody says
- * otherwise. Keeping the single `setTimeout` here is what lets the rest of
- * the library be pure: a test swaps this for a recording timer and the whole
- * backoff schedule runs instantly, with the waits asserted rather than spent.
+ * The real clock: the only `setTimeout` in the library, so a test can swap it and run a whole backoff
+ * schedule instantly.
+ * @packageDocumentation
  */
 
 import { TaskCancelledError } from "../errors";
@@ -35,5 +32,5 @@ class SystemTimer implements ITimer {
   }
 }
 
-/** The shared instance; it holds no state worth having twice. */
+/** The shared instance. */
 export const systemTimer: ITimer = new SystemTimer();

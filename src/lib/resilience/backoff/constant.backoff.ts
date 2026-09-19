@@ -1,14 +1,11 @@
 /**
- * The same wait, every time.
- *
- * Its own factory and its own chain: `next()` returns itself, because a
- * constant sequence has nothing to carry forward. `new ConstantBackoff(0)` is
- * also how a policy spells "retry immediately" without special-casing the
- * absence of a backoff.
+ * The same wait every time. `new ConstantBackoff(0)` spells "retry immediately".
+ * @packageDocumentation
  */
 
 import { type IBackoff } from "./backoff.abstraction";
 
+/** A constant schedule; `next()` returns itself. */
 export class ConstantBackoff implements IBackoff<unknown> {
   constructor(readonly duration: number) {}
 

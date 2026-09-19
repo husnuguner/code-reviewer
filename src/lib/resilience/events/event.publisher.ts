@@ -1,16 +1,11 @@
 /**
  * The default `IEventPublisher`: a set of listeners and a way to tell them.
- *
- * Its owner keeps the publisher private and hands out `addListener` as the
- * public event, so subscribing is possible from outside and emitting is not.
- *
- * Not `EventTarget`, and not named `EventEmitter`: both of those carry a
- * string-keyed API, and a string key is exactly what this design removes --
- * a subscriber that misspells an event name should not compile.
+ * @packageDocumentation
  */
 
 import { type Event, type IEventPublisher, type Listener } from "./event.abstraction";
 
+/** Stores listeners; the owner hands out `addListener` and keeps `emit`. */
 export class EventPublisher<T> implements IEventPublisher<T> {
   private readonly listeners = new Set<Listener<T>>();
 
@@ -23,12 +18,7 @@ export class EventPublisher<T> implements IEventPublisher<T> {
     };
   };
 
-  /**
-   * Tell every current listener.
-   *
-   * Over a snapshot: a listener that unsubscribes itself while being called is
-   * ordinary, and mutating the set mid-iteration would skip its neighbour.
-   */
+  /** Tells every current listener, over a snapshot so one that unsubscribes mid-call skips nobody. */
   emit(data: T): void {
     const current = [...this.listeners];
     for (const listener of current) listener(data);

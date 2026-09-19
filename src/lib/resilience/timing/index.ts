@@ -1,7 +1,6 @@
 /**
- * The clock a policy reads and the wait it takes.
- *
- * One abstraction, one real implementation; a test supplies its own.
+ * The clock a policy reads and the wait it takes; one abstraction, one real implementation.
+ * @packageDocumentation
  */
 
 export { systemTimer } from "./system.timer";

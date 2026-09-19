@@ -1,12 +1,7 @@
 /**
- * Try again, while it is worth trying and there is time to.
- *
- * Three limits, each answering a different question. `maxAttempts` bounds how
- * many times; the backoff decides how long between; `maxDuration` bounds the
- * whole sequence, because a policy that only counted attempts could spend a
- * CI job's entire budget on a host that will never answer.
- *
- * What comes out is what the operation produced -- see `unwrap`.
+ * Retries while it is worth trying and there is time: `maxAttempts` bounds how many, the backoff how long
+ * between, `maxDuration` the whole sequence. What comes out is what the operation produced.
+ * @packageDocumentation
  */
 
 import { ConstantBackoff, type IBackoff, type IBackoffFactory } from "../backoff";
@@ -18,9 +13,9 @@ import { type ITimer, systemTimer } from "../timing";
 import { PolicyBase } from "./base.policy";
 import { type IDefaultPolicyContext } from "./policy.abstraction";
 
-/** What the retried function is told about the attempt it is making. */
+/** What the retried function is told about its attempt. */
 export interface IRetryContext extends IDefaultPolicyContext {
-  /** 1 on the first call, 2 on the first retry. */
+  /** `1` on the first call, `2` on the first retry. */
   readonly attempt: number;
 }
 
@@ -28,10 +23,11 @@ export interface IRetryContext extends IDefaultPolicyContext {
 export interface IRetryBackoffContext<R> {
   /** The attempt that just failed, 1-based. */
   readonly attempt: number;
-  /** Why it failed: what it threw, or the result that counted as a failure. */
+  /** Why it failed. */
   readonly result: FailureReason<R>;
 }
 
+/** Fired before each wait. */
 export interface IRetryEvent {
   /** The attempt that failed; the one about to run is this plus one. */
   readonly attempt: number;
@@ -39,45 +35,38 @@ export interface IRetryEvent {
   readonly reason: FailureReason<unknown>;
 }
 
+/** Fired once, when the last attempt has failed. */
 export interface IGiveUpEvent {
-  /** How many attempts were made in total. */
+  /** Attempts made in total. */
   readonly attempts: number;
   readonly reason: FailureReason<unknown>;
 }
 
+/** Options for {@link RetryPolicy}. */
 export interface IRetryOptions {
-  /**
-   * Total calls, **the first one included**: `3` means one call and two
-   * retries, and `1` disables retrying.
-   *
-   * Spelled out because the other reading -- "retries after the first" --
-   * differs by exactly one request, and one extra request is how a POST that
-   * was already committed gets committed twice.
-   */
+  /** Total calls, the first included: `3` is one call and two retries; `1` disables retrying. */
   readonly maxAttempts: number;
-  /** How long between attempts; omitted means retry immediately. */
+  /** How long between attempts; omitted retries immediately. */
   readonly backoff?: IBackoffFactory<IRetryBackoffContext<unknown>>;
-  /**
-   * Budget for the whole sequence, attempts and waits together.
-   *
-   * Checked *before* a wait rather than after: a wait that would end past the
-   * budget is a wait nobody benefits from, so the failure surfaces at once
-   * instead of a minute later.
-   */
+  /** Budget for the whole sequence, checked before each wait so a wait that would overrun is not taken. */
   readonly maxDuration?: number;
-  /** Injected so a test can run the schedule without spending the waits. */
+  /** Injectable so a test need not spend the waits. */
   readonly timer?: ITimer;
 }
 
+/** Retries the failures its handler recognises. */
 export class RetryPolicy extends PolicyBase<IRetryContext> {
-  /** Fired before each wait, for the telemetry a silent retry cannot give. */
+  /** Fired before each wait. */
   readonly onRetry: Event<IRetryEvent>;
-  /** Fired once, when the last attempt has failed and the answer is going out. */
+  /** Fired once, when the answer is going out after the last failure. */
   readonly onGiveUp: Event<IGiveUpEvent>;
 
   private readonly retries = new EventPublisher<IRetryEvent>();
   private readonly giveUps = new EventPublisher<IGiveUpEvent>();
 
+  /**
+   * @throws {@link PolicyError} when `maxAttempts` is not a positive whole number.
+   */
   constructor(
     handler: IFailureHandler,
     private readonly options: IRetryOptions,
@@ -92,15 +81,18 @@ export class RetryPolicy extends PolicyBase<IRetryContext> {
     this.onGiveUp = this.giveUps.addListener;
   }
 
+  /**
+   * Runs `operation`, retrying handled failures.
+   *
+   * @returns The first success, or the last attempt's result unwrapped (its value returned, its error thrown).
+   */
   async execute<T>(
     operation: (context: IRetryContext) => PromiseLike<T> | T,
     signal?: AbortSignal | null,
   ): Promise<T> {
     const { maxAttempts, maxDuration } = this.options;
     const guard = signal ?? new AbortController().signal;
-    // Read through a call, not through the property: the answer changes while
-    // this loop is awaiting, and narrowing the property once would let the
-    // compiler conclude the second check can never be true.
+    // A call, not a narrowed property: the answer changes while the loop awaits.
     const isAborted = (): boolean => guard.aborted;
     const started = this.timer.now();
     let backoff: IBackoffFactory<IRetryBackoffContext<unknown>> =
@@ -111,7 +103,6 @@ export class RetryPolicy extends PolicyBase<IRetryContext> {
       if (outcome.kind === "success") return outcome.value;
 
       const { reason } = outcome;
-      // A caller who cancelled is not waiting for a better answer.
       if (attempt >= maxAttempts || isAborted()) return this.giveUp(attempt, reason);
 
       const next: IBackoff<IRetryBackoffContext<unknown>> = backoff.next({
@@ -127,18 +118,14 @@ export class RetryPolicy extends PolicyBase<IRetryContext> {
       try {
         await this.timer.sleep(next.duration, guard);
       } catch {
-        // The wait was cancelled; the last failure is the answer.
         return this.giveUp(attempt, reason);
       }
-      // Asked again after the wait, not only before it. A cancellation that
-      // lands *during* a backoff is the common one -- it is the longest part
-      // of the sequence -- and a timer that resolves instead of rejecting on
-      // abort would otherwise buy one more attempt nobody is waiting for.
+      // Checked after the wait too: a cancellation during the backoff must not buy one more attempt.
       if (isAborted()) return this.giveUp(attempt, reason);
     }
   }
 
-  /** Hand back what the last attempt produced, having said that we stopped. */
+  /** Emits `onGiveUp` and hands back what the last attempt produced. */
   private giveUp<T>(attempts: number, reason: FailureReason<T>): T {
     this.giveUps.emit({ attempts, reason });
     return unwrap(reason);

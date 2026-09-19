@@ -1,24 +1,23 @@
 /**
- * A window that grows with each attempt, jittered, and capped.
- *
- * The factory is immutable and reusable; each `next()` walks one step further
- * along a chain it creates lazily, so two executions sharing one factory do
- * not share a position in the sequence.
+ * A window that grows with each attempt, jittered and capped. The factory is reusable; each chain is
+ * created lazily, so executions sharing one factory do not share a position.
+ * @packageDocumentation
  */
 
 import { type IBackoff, type IBackoffFactory, type JitterGenerator } from "./backoff.abstraction";
 import { fullJitter } from "./jitter.generators";
 
+/** Options for {@link ExponentialBackoff}. */
 export interface IExponentialBackoffOptions {
-  /** The first window, in milliseconds. */
+  /** The first window, in milliseconds. Default 128. */
   readonly initialDelay?: number;
-  /** The window's ceiling, so attempt twenty is not an hour. */
+  /** The window's ceiling. Default 30 000. */
   readonly maxDelay?: number;
-  /** What the window is multiplied by each attempt. */
+  /** The window's multiplier per attempt. Default 2. */
   readonly exponent?: number;
-  /** Where inside the window this client lands. */
+  /** Where inside the window this client lands. Default {@link fullJitter}. */
   readonly generator?: JitterGenerator;
-  /** Injected so a test can pin the wait. */
+  /** Injectable so a test can pin the wait. */
   readonly random?: () => number;
 }
 
@@ -30,6 +29,7 @@ const DEFAULTS = {
   random: Math.random,
 } satisfies Required<IExponentialBackoffOptions>;
 
+/** An exponential schedule. */
 export class ExponentialBackoff<C = unknown> implements IBackoffFactory<C> {
   private readonly options: Required<IExponentialBackoffOptions>;
 
@@ -41,7 +41,7 @@ export class ExponentialBackoff<C = unknown> implements IBackoffFactory<C> {
     return this.step(1);
   }
 
-  /** The `index`-th wait of the sequence, and the tail that follows it. */
+  /** The `index`-th wait, and the tail that follows it. */
   private step(index: number): IBackoff<C> {
     const { initialDelay, maxDelay, exponent, generator, random } = this.options;
     const window = Math.min(maxDelay, initialDelay * exponent ** (index - 1));

@@ -1,8 +1,6 @@
 /**
- * What counts as a failure.
- *
- * The abstraction is the caller's verdict on one attempt; `FailureHandler` is
- * the composable value most callers will build that verdict from.
+ * What counts as a failure: the abstraction, and the composable `FailureHandler`.
+ * @packageDocumentation
  */
 
 export {
