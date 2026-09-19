@@ -218,6 +218,36 @@ describe("AI SDK chat model adapter", () => {
     });
     expect(model.doGenerateCalls[0]?.abortSignal).toBe(controller.signal);
   });
+
+  it("asks the vendor for JSON when the caller does, and hands the answer up as text", async () => {
+    const model = mockModel('{"findings": []}');
+    const response = await new AiSdkChatModel(model).generate([{ role: "user", content: "u" }], {
+      responseFormat: "json",
+    });
+    expect(model.doGenerateCalls[0]?.responseFormat).toEqual({ type: "json" });
+    expect(response.text).toBe('{"findings": []}');
+  });
+
+  it("asks for no particular format when the caller says nothing about it", async () => {
+    const model = mockModel("ok");
+    await new AiSdkChatModel(model).generate([{ role: "user", content: "u" }]);
+    expect(model.doGenerateCalls[0]?.responseFormat).toBeUndefined();
+  });
+
+  it("hands up an answer that is not JSON as text, leaving the retry to the caller", async () => {
+    // The SDK parses a JSON-mode answer itself and throws when it cannot.
+    // The reviewer has a tolerant parser and its own malformed-JSON retry,
+    // so the raw text must reach it -- with the tokens it cost.
+    const model = mockModel("Here you go: ```json\n{}\n```");
+    const response = await new AiSdkChatModel(model).generate([{ role: "user", content: "u" }], {
+      responseFormat: "json",
+    });
+    expect(response).toEqual({
+      text: "Here you go: ```json\n{}\n```",
+      usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: null, cacheWriteTokens: null },
+    });
+    expect(model.doGenerateCalls).toHaveLength(1);
+  });
 });
 
 describe("the model provider registry", () => {

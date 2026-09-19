@@ -167,7 +167,7 @@ export class FindingVerifier {
     let response: ChatResponse;
     const elapsed = stopwatch(this.now);
     try {
-      response = await this.model.generate(messages);
+      response = await this.model.generate(messages, { responseFormat: "json" });
     } catch (error) {
       return this.failOpen(input, `the call failed (${errorMessage(error)})`);
     }

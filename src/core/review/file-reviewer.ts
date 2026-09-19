@@ -133,7 +133,7 @@ export class FileReviewer {
       let response: ChatResponse;
       const elapsed = stopwatch(this.now);
       try {
-        response = await this.model.generate(messages);
+        response = await this.model.generate(messages, { responseFormat: "json" });
       } catch (error) {
         this.log.warn(
           `LLM call failed for ${path} after ${seconds(elapsed())}: ${errorMessage(error)}`,

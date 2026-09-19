@@ -11,7 +11,11 @@ import { describe, expect, it } from "bun:test";
 
 import { APICallError } from "ai";
 
-import { type ChatMessage, type ChatModel } from "../../../src/core/ports/chat-model";
+import {
+  type ChatCallOptions,
+  type ChatMessage,
+  type ChatModel,
+} from "../../../src/core/ports/chat-model";
 import { type ITimer } from "../../../src/lib/resilience/index";
 import { RetryingChatModel } from "../../../src/providers/llm/retrying-chat-model";
 import { recordingLogger } from "../../helpers/logging";
@@ -34,18 +38,18 @@ function recordingTimer(waits: number[] = []): ITimer {
 /** A model that answers from `script`, repeating its last answer. */
 function scripted(script: readonly (string | Error)[]) {
   let calls = 0;
-  const signals: (AbortSignal | undefined)[] = [];
+  const options: ChatCallOptions[] = [];
   const model: ChatModel = {
     // An `async` body: a scripted failure is thrown, as a real client throws.
-    async generate(_messages, options = {}) {
+    async generate(_messages, callOptions = {}) {
       const answer = script[Math.min(calls, script.length - 1)];
       calls++;
-      signals.push(options.signal);
+      options.push(callOptions);
       if (answer instanceof Error) throw answer;
       return { text: answer ?? "" };
     },
   };
-  return { model, calls: () => calls, signals };
+  return { model, calls: () => calls, options, signals: () => options.map((o) => o.signal) };
 }
 
 /** An `APICallError` as the AI SDK raises one. */
@@ -129,8 +133,16 @@ describe("the deadline that did not exist before", () => {
   it("hands every attempt a signal, so a silent model cannot hold a slot", async () => {
     const inner = scripted(["done"]);
     await new RetryingChatModel(inner.model, { timer: recordingTimer() }).generate(MESSAGES);
-    expect(inner.signals[0]).toBeInstanceOf(AbortSignal);
-    expect(inner.signals[0]?.aborted).toBe(false);
+    expect(inner.signals()[0]).toBeInstanceOf(AbortSignal);
+    expect(inner.signals()[0]?.aborted).toBe(false);
+  });
+
+  it("forwards the caller's other options with the signal, to every attempt", async () => {
+    const inner = scripted([apiError(503, true), "done"]);
+    await new RetryingChatModel(inner.model, { timer: recordingTimer() }).generate(MESSAGES, {
+      responseFormat: "json",
+    });
+    expect(inner.options.map((o) => o.responseFormat)).toEqual(["json", "json"]);
   });
 
   it("abandons an attempt that never answers, and tries again", async () => {

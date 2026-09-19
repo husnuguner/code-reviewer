@@ -101,7 +101,8 @@ export class RetryingChatModel implements ChatModel {
     return this.policy.execute(
       (context) =>
         this.perAttempt.execute(
-          (attemptContext) => this.inner.generate(messages, { signal: attemptContext.signal }),
+          (attemptContext) =>
+            this.inner.generate(messages, { ...options, signal: attemptContext.signal }),
           context.signal,
         ),
       options.signal,

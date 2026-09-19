@@ -4,13 +4,22 @@
  */
 
 import { type JSONObject } from "@ai-sdk/provider";
-import { type LanguageModel, type ModelMessage, type SystemModelMessage, generateText } from "ai";
+import {
+  type LanguageModel,
+  type LanguageModelUsage,
+  type ModelMessage,
+  NoObjectGeneratedError,
+  Output,
+  type SystemModelMessage,
+  generateText,
+} from "ai";
 
 import {
   type ChatCallOptions,
   type ChatMessage,
   type ChatModel,
   type ChatResponse,
+  type ChatUsage,
 } from "../../core/ports/chat-model";
 
 /** Per-message provider options keyed by vendor, e.g. `{ anthropic: { cacheControl: … } }`. */
@@ -38,31 +47,42 @@ export class AiSdkChatModel implements ChatModel {
    *
    * @remarks `maxRetries: 0` because the decorator above retries; two loops would multiply, and the SDK's
    * loop is invisible and skips errors that crossed a proxy.
+   *
+   * In JSON mode the SDK parses the answer itself and throws `NoObjectGeneratedError` when it cannot; that
+   * is handed up as the raw text instead, because the caller has its own tolerant parser and its own
+   * malformed-JSON retry, and a second opinion here would preempt both.
    */
   async generate(
     messages: readonly ChatMessage[],
     options: ChatCallOptions = {},
   ): Promise<ChatResponse> {
     const { instructions, conversation } = toPrompt(messages, this.stablePrefix);
-    const result = await generateText({
-      model: this.model,
-      ...(instructions.length > 0 && { instructions }),
-      messages: conversation,
-      maxRetries: 0,
-      ...(options.signal !== undefined && { abortSignal: options.signal }),
-    });
-    const { usage } = result;
-    return {
-      text: result.text,
-      // The SDK spells "not reported" as `undefined`; the port spells it `null`.
-      usage: {
-        inputTokens: usage.inputTokens ?? null,
-        outputTokens: usage.outputTokens ?? null,
-        cacheReadTokens: usage.inputTokenDetails.cacheReadTokens ?? null,
-        cacheWriteTokens: usage.inputTokenDetails.cacheWriteTokens ?? null,
-      },
-    };
+    try {
+      const result = await generateText({
+        model: this.model,
+        ...(instructions.length > 0 && { instructions }),
+        messages: conversation,
+        maxRetries: 0,
+        ...(options.signal !== undefined && { abortSignal: options.signal }),
+        ...(options.responseFormat === "json" && { output: Output.json() }),
+      });
+      // `result.text` is the raw generated text whether or not an output format was asked for.
+      return { text: result.text, usage: toUsage(result.usage) };
+    } catch (error) {
+      if (!NoObjectGeneratedError.isInstance(error)) throw error;
+      return { text: error.text ?? "", usage: toUsage(error.usage) };
+    }
   }
+}
+
+/** The SDK's token counts as the port spells them: `undefined` ("not reported") becomes `null`. */
+function toUsage(usage: LanguageModelUsage | undefined): ChatUsage {
+  return {
+    inputTokens: usage?.inputTokens ?? null,
+    outputTokens: usage?.outputTokens ?? null,
+    cacheReadTokens: usage?.inputTokenDetails.cacheReadTokens ?? null,
+    cacheWriteTokens: usage?.inputTokenDetails.cacheWriteTokens ?? null,
+  };
 }
 
 /** The conversation as the SDK takes it: system messages apart from the turns. */

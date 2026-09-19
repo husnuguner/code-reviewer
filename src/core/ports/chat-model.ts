@@ -1,5 +1,6 @@
 /**
- * The LLM port: a conversation in, text out. Vendor, SDK and retries live behind it.
+ * The LLM port: a conversation in, text out (JSON on request, still delivered as text). Vendor, SDK and
+ * retries live behind it.
  * @packageDocumentation
  */
 
@@ -43,6 +44,13 @@ export interface ChatResponse {
 export interface ChatCallOptions {
   /** Abandons the call when it aborts. Supplied by the adapter side, not the review layer. */
   readonly signal?: AbortSignal;
+  /**
+   * What shape of answer to ask for; `text` when omitted.
+   *
+   * @remarks `json` asks a vendor that supports it for a JSON-only answer. The reply is still delivered as
+   * text, so callers parse as before; a vendor that ignores the request answers as it would have anyway.
+   */
+  readonly responseFormat?: "text" | "json";
 }
 
 /** A language model that answers one conversation with one completion. */
