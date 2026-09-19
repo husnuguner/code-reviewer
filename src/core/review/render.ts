@@ -1,9 +1,6 @@
 /**
- * How findings look when written down.
- *
- * Rendering has no opinion about what a flow decided; it takes the decision
- * and gives it a shape. Keeping it apart from the flow is what lets the flow
- * be read as a sequence of decisions rather than a sequence of strings.
+ * Text rendering of findings and of the preview.
+ * @packageDocumentation
  */
 
 import { compareCodePoints } from "../util/text";
@@ -11,21 +8,18 @@ import { compareCodePoints } from "../util/text";
 import { type FileDecision, isSelected, skipCounts, skipDetail } from "./selection";
 import { severityLabel } from "./severity";
 
-/** One finding as a line of terminal output (no fix example). */
+/** One finding as a line of terminal output: `**[Label]** body`. */
 export function textBody(severity: string, body: string): string {
   return `**[${severityLabel(severity)}]** ${body}`;
 }
 
 /**
- * What `--preview` prints instead of reviewing: every changed file, whether
- * it would be reviewed, and why not when it would not be.
+ * The `--preview` report: every changed file, whether it would be reviewed, and why not.
  *
- * The table is the whole report -- no model was called, so there is nothing
- * else to say -- and the closing line says so, because "0 findings" and "no
- * model was asked" are answers a reader must not confuse.
- *
- * Files to review come first, then the skipped ones, each block by path, so
- * two previews of the same change set are comparable line for line.
+ * @param title - The scope, e.g. `branch HEAD vs main`.
+ * @param decisions - The selection.
+ * @param maxFileChars - The diff cap, for the truncation note.
+ * @returns Files to review first, then skipped ones, each block by path; closes with "No model was called."
  */
 export function previewReport(
   title: string,

@@ -1,13 +1,7 @@
 /**
- * `reviewer comment`: what it does.
- *
- * Read the records, build the review, post it; returns the exit code. A
- * stream with no findings is still posted: "I looked and found nothing" is
- * information a reviewer wants, and silence is indistinguishable from a run
- * that never happened.
- *
- * Equally usable from a workflow, a cron job, or by hand against a file on
- * disk.
+ * `reviewer comment`: reads the records, builds the review, posts it. A stream with no findings is
+ * still posted.
+ * @packageDocumentation
  */
 
 import { readFileSync } from "node:fs";
@@ -22,6 +16,12 @@ import { REPOSITORIES } from "../../options/repository";
 
 import { type CommentArguments } from "./command";
 
+/**
+ * Runs `comment`.
+ *
+ * @returns The exit code.
+ * @throws {@link OperatorError} when the findings file cannot be read or the token variable is unset.
+ */
 export async function runComment(
   arguments_: CommentArguments,
   logging: LogSettings,
@@ -56,19 +56,12 @@ export async function runComment(
     return 0;
   }
 
-  // The host says which variable holds its token, so a GitLab workflow sets
-  // GITLAB_TOKEN and nothing here has to know.
   const repository = REPOSITORIES.get(arguments_.provider);
   const token = process.env[repository.tokenVariable] ?? "";
   if (token === "") {
     throw new OperatorError(`${repository.tokenVariable} is not set; it is what posts the review.`);
   }
 
-  // The logger goes with the settings, not without them: everything a poster
-  // has to say is a workaround it chose on the operator's behalf -- a review
-  // it could not dismiss, inline comments the host refused, a request it had
-  // to repeat -- and a poster built without one decides all of that in
-  // silence.
   const poster: ReviewPoster = REPOSITORIES.create(repository.name, {
     token,
     baseUrl: arguments_.baseUrl,

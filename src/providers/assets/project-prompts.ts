@@ -1,22 +1,7 @@
 /**
- * The project's own standing instructions, read from the directory beside
- * the catalogue.
- *
- * A repository may have things the reviewer should know on every file, not
- * just the ones a skill's globs match. They go in Markdown files under
- * `prompts/` next to `config.yaml` -- `.review/prompts/` in a repository,
- * `~/.config/reviewer/prompts/` for the machine-wide catalogue -- and every
- * `*.md` under it, at any depth, is read in path order. Nothing names them:
- * the catalogue used to list the same files the convention already fixed,
- * which was one place too many for the same fact to be wrong.
- *
- * Each file keeps its own label (`prompts/security.md`), so the model is
- * told which instruction came from where rather than one anonymous wall of
- * text, and so is the log.
- *
- * A file that cannot be read is logged and skipped, not fatal: losing one
- * set of standing instructions degrades a review, and losing the whole
- * review because one file was unreadable is worse.
+ * The project's standing instructions: every `*.md` under `prompts/` beside the catalogue, read in path
+ * order, each labelled with its file.
+ * @packageDocumentation
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -27,26 +12,19 @@ import { type StandingInstruction } from "../../core/review/prompts";
 import { errorMessage } from "../../core/util/errors";
 import { compareCodePoints, show } from "../../core/util/text";
 
-/** The directory, beside the catalogue, a project's standing instructions live in. */
+/** The directory beside the catalogue that holds standing instructions. */
 export const PROMPTS_DIR_NAME = "prompts";
 
-/**
- * Where this run's standing instructions are: `prompts/` beside the
- * catalogue, whether that catalogue exists yet or not. Derived from the
- * catalogue's path rather than configured, so the answer to "where do I put
- * this?" is the same in every repository.
- */
+/** `prompts/` beside the catalogue, whether or not the catalogue exists yet. */
 export function promptsDirectory(catalogPath: string): string {
   return join(dirname(catalogPath), PROMPTS_DIR_NAME);
 }
 
 /**
- * Every standing instruction in `directory`, deepest paths included, in path
- * order.
+ * Reads every standing instruction in `directory`, recursively, in path order.
  *
- * Empty when the directory is absent or holds nothing but empty files, which
- * is the ordinary case: the reviewer's policy then stands alone, exactly as
- * it did before a repository had anything to add.
+ * @returns The instructions; `[]` when the directory is absent or holds only empty files. A file that
+ * cannot be read is warned about and skipped.
  */
 export function readProjectPrompts(
   directory: string,
@@ -77,20 +55,12 @@ export function readProjectPrompts(
   return instructions;
 }
 
-/**
- * How a file is announced to the model and in the log: the directory's own
- * name and the path below it (`prompts/api/errors.md`), always with forward
- * slashes, so the label is the same thing an operator would type.
- */
+/** The file's label: the directory's name plus the path below it, forward slashes (`prompts/api/errors.md`). */
 function labelOf(directory: string, file: string): string {
   return [basename(directory), ...relative(directory, file).split(sep)].join("/");
 }
 
-/**
- * Every `*.md` under `directory`, recursively, sorted; `null` when there is
- * no such directory -- which is not an error, only a project with nothing to
- * add.
- */
+/** Every `*.md` under `directory`, recursively, sorted; `null` when there is no such directory. */
 function markdownFiles(directory: string): string[] | null {
   try {
     return statSync(directory).isDirectory()

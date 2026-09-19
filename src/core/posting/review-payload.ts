@@ -1,22 +1,6 @@
 /**
- * Turning a run's records into one change-request review.
- *
- * This is the CI bot's half of the split: the reviewer writes NDJSON and
- * never posts; this decides what that stream should *say* on a pull request.
- * It is deliberately pure — records in, a payload out — so the shape of a
- * review is testable without a token, a network or a language model, and so
- * the process that builds it can be the one that has no model at all.
- *
- * Three rules make the payload trustworthy:
- *
- * 1. **An unanchored finding is listed, never dropped.** It has no line to
- *    hang on, and those are often the findings hardest to place and most
- *    worth reading.
- * 2. **What does not fit is counted.** A provider will refuse an oversized
- *    review, so inline comments are capped — and the body says how many were
- *    left out rather than letting them vanish.
- * 3. **The body repeats the run's own tallies.** `refuted` and `capped` are
- *    what make "only three findings" mean something.
+ * Turns a run's records into one change-request review. Pure: records in, a payload out.
+ * @packageDocumentation
  */
 
 import { type ReviewEvent } from "../ports/review-poster";
@@ -28,20 +12,10 @@ import { compareCodePoints } from "../util/text";
 /** One finding as the record stream carries it (no `type` discriminator). */
 export type Finding = Omit<FindingRecord, "type">;
 
-/** A finding that was anchored: it has a line, and the type says so. */
+/** A finding with a line. */
 type AnchoredFinding = Finding & { readonly line: number };
 
-/**
- * Whether this finding has a line to hang on -- narrowing as it answers.
- *
- * A predicate rather than an inline `!== null`, because the answer has to
- * survive the `filter` that asks it. Written the plain way, the compiler
- * still believes the result may carry `line: null` and the one place that
- * builds an inline comment has to assert otherwise; the assertion is then
- * the only thing standing between a `null` line and a hosting API, and it
- * is exactly the kind of claim that stays in the code after the filter
- * above it has been edited.
- */
+/** Whether the finding has a line, narrowing as it answers. */
 function isAnchored(finding: Finding): finding is AnchoredFinding {
   return finding.line !== null;
 }
@@ -67,33 +41,23 @@ export interface InlineComment {
 export interface ReviewPayload {
   readonly body: string;
   readonly comments: readonly InlineComment[];
-  /** Anchored findings the inline cap left out; they are named in the body. */
+  /** Anchored findings the inline cap left out; named in the body. */
   readonly overflow: number;
-  /**
-   * What kind of review these findings amount to: `request-changes` when any
-   * finding carries a severity in `requestChangesOn`, `comment` otherwise.
-   */
+  /** `request-changes` when any finding's severity is gated, else `comment`. */
   readonly event: ReviewEvent;
 }
 
-/**
- * How many inline comments one review may carry.
- *
- * Not a style choice: a review with too many inline comments is refused by
- * the API as a whole, which would lose every finding rather than the last
- * few. Fifty is also well past what anyone reads in one sitting.
- */
+/** Default cap on inline comments; a review with too many is refused whole by the API. */
 export const MAX_INLINE = 50;
 
 /** How many listed findings a collapsed block shows before summarising. */
 const MAX_LISTED = 50;
 
 /**
- * Read a record stream, tolerating a line this build does not understand.
+ * Reads a record stream.
  *
- * A bad line costs that line and nothing else: the alternative — throwing —
- * would turn one malformed record into a review nobody gets, which is the
- * wrong trade for a reporting path.
+ * @param text - NDJSON as `reviewer --out` wrote it.
+ * @returns The findings, the summary, and how many lines could not be read. A bad line costs only itself.
  */
 export function parseRecords(text: string): ReviewRecords {
   const findings: Finding[] = [];
@@ -113,18 +77,11 @@ export function parseRecords(text: string): ReviewRecords {
   return { findings, summary, unreadable };
 }
 
-/** One decoded line, or `null` when it is not a record this build reads. */
 type DecodedLine =
   | { readonly kind: "finding"; readonly finding: Finding }
   | { readonly kind: "summary"; readonly summary: SummaryRecord };
 
-/**
- * Decode and *validate* one line.
- *
- * Every field is read through a narrowing helper rather than asserted: this
- * input arrives from a file on disk, and a record whose `line` is a string
- * would otherwise reach a hosting API as one and fail the whole review.
- */
+/** Decodes and validates one line; every field is narrowed, never asserted. */
 function decodeLine(line: string): DecodedLine | null {
   let value: JsonValue;
   try {
@@ -148,12 +105,12 @@ function count(value: JsonValue | undefined): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-/** A line number, or `null` for an unanchored finding or a bad value. */
+/** A positive line number, or `null`. */
 function lineNumber(value: JsonValue | undefined): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
-/** A finding needs a path and a body; without either there is nothing to say. */
+/** A finding, or `null` without a path and a body. */
 function toFinding(record: JsonObject): Finding | null {
   const path = text_(record["path"]);
   const body = text_(record["body"]);
@@ -193,19 +150,20 @@ function toSummary(record: JsonObject): SummaryRecord {
   };
 }
 
-/** One finding as an inline comment body: label, text, the fix example. */
+/**
+ * One finding as an inline comment body: label, text, example, skills.
+ *
+ * @remarks The example is a plain fence, not a `suggestion`: it is illustrative, not a one-click commit.
+ */
 export function commentBody(finding: Finding): string {
   const head = `**[${severityLabel(finding.severity)}]** ${finding.body}`;
-  // A fenced block, not a ```suggestion: the example is illustrative code,
-  // and offering it as a one-click commit would apply text nobody checked
-  // against the surrounding lines.
   const example = finding.example === "" ? "" : `\n\n\`\`\`\n${finding.example}\n\`\`\``;
   const skills =
     finding.skills.length === 0 ? "" : `\n\n<sub>skills: ${finding.skills.join(", ")}</sub>`;
   return `${head}${example}${skills}`;
 }
 
-/** Most severe first, then by path and line, so two runs read the same way. */
+/** Most severe first, then by path and line. */
 function bySeverityThenPlace(a: Finding, b: Finding): number {
   return (
     severityRankOf(a.severity) - severityRankOf(b.severity) ||
@@ -214,18 +172,20 @@ function bySeverityThenPlace(a: Finding, b: Finding): number {
   );
 }
 
+/** Options for {@link buildReview}. */
 export interface BuildReviewOptions {
-  /** Cap on inline comments; the rest are named in the body. Default `MAX_INLINE`. */
+  /** Cap on inline comments; the rest are named in the body. Default {@link MAX_INLINE}. */
   readonly maxInline?: number;
-  /**
-   * Severities that turn the review into a request for changes. Empty (the
-   * default) posts a comment whatever was found: the review informs, the
-   * humans decide.
-   */
+  /** Severities that make the review a request for changes. Empty (default) always posts a comment. */
   readonly requestChangesOn?: readonly string[];
 }
 
-/** Which of the port's events these findings call for, under the given gate. */
+/**
+ * The review event these findings call for.
+ *
+ * @param requestChangesOn - The gating severities.
+ * @returns `request-changes` when any finding is gated, else `comment`.
+ */
 export function reviewEventFor(
   findings: readonly Finding[],
   requestChangesOn: readonly string[],
@@ -235,12 +195,10 @@ export function reviewEventFor(
 }
 
 /**
- * Build the review a record stream describes.
+ * Builds the review a record stream describes.
  *
- * Anchored findings become inline comments, most severe first, so that the
- * ones the cap keeps are the ones worth keeping. Everything else — the
- * unanchored, the overflow, the tallies — goes in the body, because a review
- * that silently carries less than the run found is worse than a long one.
+ * @returns Anchored findings as inline comments, most severe first, up to the cap; unanchored and
+ * overflow findings listed in the body with the run's tallies.
  */
 export function buildReview(
   records: ReviewRecords,
@@ -257,8 +215,7 @@ export function buildReview(
   const comments: InlineComment[] = inline.map((finding) => ({
     path: finding.path,
     line: finding.line,
-    // A span only when it really is one: `start_line === line` is a
-    // single-line anchor spelled the long way, and some providers reject it.
+    // `start_line === line` is a single line spelled long; some providers reject it.
     ...(finding.start_line !== null &&
       finding.start_line !== finding.line && { start_line: finding.start_line }),
     body: commentBody(finding),
@@ -272,7 +229,7 @@ export function buildReview(
   };
 }
 
-/** The review's own comment: a headline, what is not inline, and the tallies. */
+/** The review's own comment: headline, what is not inline, tallies. */
 function reviewBody(
   records: ReviewRecords,
   loose: readonly Finding[],
@@ -319,13 +276,13 @@ function details(summary: string, findings: readonly Finding[]): string {
   ].join("\n");
 }
 
-/** A body squeezed onto one line, so a list stays skimmable. */
+/** A body on one line, cut at 240 characters. */
 function oneLine(body: string): string {
   const text = body.replaceAll("\n", " ").replaceAll(/\s+/gu, " ").trim();
   return text.length > 240 ? `${text.slice(0, 239).trimEnd()}…` : text;
 }
 
-/** The run's own counters, so "three findings" can be read in context. */
+/** The run's counters, so the finding count reads in context. */
 function tallies(summary: SummaryRecord | null, unreadable: number): string {
   const notes = [
     ...(summary === null
@@ -335,8 +292,6 @@ function tallies(summary: SummaryRecord | null, unreadable: number): string {
           ...(summary.refuted > 0 ? [`${summary.refuted} refuted by verification`] : []),
           ...(summary.capped > 0 ? [`${summary.capped} withheld by the per-file cap`] : []),
         ]),
-    // A stream this build could not read fully is worth saying out loud: the
-    // alternative is a review that quietly describes less than the run found.
     ...(unreadable > 0 ? [`${unreadable} unreadable record(s)`] : []),
   ];
   return notes.length === 0 ? "" : `<sub>${notes.join("; ")}.</sub>`;

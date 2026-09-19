@@ -1,30 +1,7 @@
 /**
- * Which changed files are reviewed, and why each of the others is not.
- *
- * One pure function answers that for a whole change set, and it is the only
- * place the question is answered: `--preview` prints these decisions and the
- * real run reviews them, so the free pre-flight and the paid run cannot
- * disagree about scope. That is the entire reason this module exists -- the
- * exclusions used to be scattered across three files (a credential guard
- * here, an `exclude` glob there, a missing patch in the orchestrator's own
- * loop), which is exactly the shape of code where a preview slowly stops
- * describing the run it is previewing.
- *
- * Two further things fall out of having the decisions in one value:
- *
- * - **Every skip carries a reason**, so "the reviewer ignored my Dockerfile"
- *   is answerable (`excluded`, `no_added_lines`, ...) instead of being
- *   invisible. A run reports the distribution; the preview names it per file.
- * - **The change set handed to the model is the selected set.** A file's
- *   pre-context may quote *other* files' diffs (`context.ts`), so building
- *   that list from the raw input would have let an excluded -- or a
- *   credential -- file reach a prompt as somebody else's "related change".
- *
- * What is deliberately *not* decided here: anything unknowable before the
- * call is made. A model failure, a content fetch that comes back empty, a
- * finding that survives verification -- those are outcomes of reviewing, and
- * a decision function that pretended to know them would be lying to the
- * preview.
+ * Which changed files are reviewed, and why each of the others is not. One pure function, consumed by
+ * both `--preview` and the real run.
+ * @packageDocumentation
  */
 
 import { type FileReviewSettings } from "../config/settings";
@@ -37,45 +14,30 @@ import { asText } from "../util/text";
 import { isBinaryPatch, isSecretPath } from "./guards";
 
 /**
- * Why a changed file is, or is not, reviewed. `none` means "nothing stood in
- * the way" -- the file is reviewed.
+ * Why a file is, or is not, reviewed. `none` means reviewed.
  *
- * The order the reasons are asked in is `GATES`, not the order below, and the
- * first one that answers wins: the two guarantees that are not the project's
- * to make (`secret`, `binary`) are settled before any configuration is
- * consulted.
- *
- * There is no `too_large`: a diff over `max-file-chars` is *cut*, not
- * dropped, so the model still reviews the part it was given. The decision
- * records that as `truncated` instead of pretending the file was skipped.
+ * @remarks Asked in {@link GATES} order; `secret` and `binary` are settled before any configuration.
+ * There is no `too_large`: an oversized diff is cut, not dropped, and recorded as `truncated`.
  */
 export type SelectionReason =
   | "none"
-  /** The record carried no path or no patch -- there is nothing to review. */
+  /** No path or no patch. */
   | "no_patch"
-  /** The path names a credential file; its contents are never sent. */
+  /** Names a credential file. */
   | "secret"
   /** A patch git could not express as text. */
   | "binary"
-  /** A status with nothing to comment on (`removed`, `renamed`). */
+  /** `removed` or `renamed`. */
   | "status"
-  /** Matched one of the project's `exclude` globs. */
+  /** Matched an `exclude` glob. */
   | "excluded"
-  /** The patch adds no lines, so no comment could be anchored. */
+  /** No added lines to anchor a comment to. */
   | "no_added_lines";
 
-/** Every reason but `none`: the reasons a file is *not* reviewed. */
+/** Every reason but `none`. */
 export type SkipReason = Exclude<SelectionReason, "none">;
 
-/**
- * What every decision carries, whatever it decided.
- *
- * `annotatedPatch`, `addedLines` and `newSide` are carried rather than
- * recomputed because they *are* the decision: the exact diff text the model
- * is shown, the lines a finding may anchor to, and the text a finding's quote
- * is matched against. All three come from one `patchView`, so a diff cut at
- * the cap cannot advertise a line it does not contain.
- */
+/** What every decision carries. The three diff fields come from one `patchView`, so they agree. */
 interface DecisionFields {
   readonly path: string;
   readonly status: string;
@@ -83,40 +45,31 @@ interface DecisionFields {
   readonly annotatedPatch: string;
   /** New-file line numbers a finding may anchor to, as shown. */
   readonly addedLines: ReadonlySet<number>;
-  /** The shown diff's new side: the haystack a finding's quote is placed in. */
+  /** The shown diff's new side: the anchor haystack. */
   readonly newSide: readonly NewSideEntry[];
-  /** Length of the annotated diff before the cap was applied. */
+  /** Length of the annotated diff before the cap. */
   readonly diffChars: number;
-  /** Whether `annotatedPatch` is a cut-down view of `diffChars`. */
+  /** Whether `annotatedPatch` is a cut-down view. */
   readonly truncated: boolean;
 }
 
-/** A decision to review: the one shape the per-file step accepts. */
+/** A decision to review. */
 export interface SelectedFile extends DecisionFields {
   readonly reason: "none";
   readonly file: ChangedFile;
 }
 
-/** A decision not to review, and the reason why. */
+/** A decision not to review, and why. */
 export interface SkippedFile extends DecisionFields {
   readonly reason: SkipReason;
   /** Never a file: a skipped file's contents go nowhere. */
   readonly file: null;
 }
 
-/**
- * One changed file's fate, discriminated by `reason`.
- *
- * A union rather than one interface with a nullable `file`, because the two
- * members are the two things a caller does: review a file, or report why it
- * was not reviewed. Written as one shape, "reviewed but there is no file" is
- * a value the type permits and every caller has to null-check past; written
- * as two, it does not exist, and `isSelected` hands each branch the fields
- * that branch actually has.
- */
+/** One changed file's fate, discriminated by `reason`. */
 export type FileDecision = SelectedFile | SkippedFile;
 
-/** Whether this decision is one to review (and typed as such). */
+/** Whether this decision is one to review. */
 export function isSelected(decision: FileDecision): decision is SelectedFile {
   return decision.reason === "none";
 }
@@ -135,29 +88,13 @@ function skipped(path: string, status: string, reason: SkipReason): SkippedFile 
   };
 }
 
-/**
- * One skip question, asked of a file that has already been parsed.
- *
- * `no_patch` is not one of these -- it is the precondition that produces the
- * `ChangedFile` a gate is asked about -- and neither is `no_added_lines`,
- * whose answer (`addedLines`) is kept and handed to the review rather than
- * thrown away. The type says both: a gate names a reason that is neither.
- */
+/** One skip question asked of a parsed file. */
 interface SelectionGate {
   readonly reason: Exclude<SkipReason, "no_patch" | "no_added_lines">;
   readonly rejects: (file: ChangedFile, settings: FileReviewSettings) => boolean;
 }
 
-/**
- * The skip questions, in the order they are asked; the first `true` wins.
- *
- * The order is the point of writing them as a list: it used to live in the
- * sequence of `if`s and in a comment describing that sequence, which is two
- * statements of one rule and one of them free to rot. Here the rule that
- * `secret` is settled before `excluded` -- a credential the project also
- * excluded is still reported as the credential it is -- is a line of data a
- * reader can check against the reason table above.
- */
+/** The skip questions in the order they are asked; the first `true` wins. */
 const GATES: readonly SelectionGate[] = [
   { reason: "secret", rejects: (file) => isSecretPath(file.path) },
   { reason: "binary", rejects: (file) => isBinaryPatch(file.patch) },
@@ -168,17 +105,7 @@ const GATES: readonly SelectionGate[] = [
   },
 ];
 
-/**
- * The decision to review this file, with the diff the model will be shown.
- *
- * The allowed lines come from the *shown* diff rather than from the whole
- * patch, and that is the point of routing both through one `patchView`. A
- * patch over `max-file-chars` is cut, so the two answers used to be taken
- * from different texts: the model was handed a third of a diff together with
- * every line number the whole of it added, and the quote matcher searched
- * lines nobody had sent it. Now a line is allowed exactly when the model can
- * see it.
- */
+/** The decision to review, with the diff the model will be shown. */
 function reviewed(file: ChangedFile, settings: FileReviewSettings): SelectedFile {
   const view = patchView(file.patch, settings.maxFileChars);
   return {
@@ -195,19 +122,13 @@ function reviewed(file: ChangedFile, settings: FileReviewSettings): SelectedFile
 }
 
 /**
- * Decide one changed file, from the record the diff source reports.
+ * Decides one changed file. Pure.
  *
- * Pure: the same record and settings always yield the same decision, and
- * nothing is read, logged or called. A skipped file's diff is never parsed --
- * the cheap answers come first, which is what makes a preview of a large
- * change set cost nothing.
+ * @param entry - The record as the diff source reported it.
+ * @returns The decision. A skipped file's diff is never parsed.
  */
 export function decideFile(entry: ChangedFileRecord, settings: FileReviewSettings): FileDecision {
   const file = ChangedFile.fromEntry(entry);
-  // The only branch with no `ChangedFile` to name the file by, so it is the
-  // only one that has to read the raw record. An absent field reads as "":
-  // this decision is reported to a human, and a record with no path has no
-  // path rather than one spelled `null`.
   if (file === null) {
     return skipped(asText(entry.filename ?? ""), asText(entry.status ?? ""), "no_patch");
   }
@@ -215,14 +136,12 @@ export function decideFile(entry: ChangedFileRecord, settings: FileReviewSetting
   const gate = GATES.find((candidate) => candidate.rejects(file, settings));
   if (gate !== undefined) return skipped(file.path, file.status, gate.reason);
 
-  // Asked of the whole patch: whether there is anything to review is a
-  // property of the change, not of how much of it fits in a prompt.
   return addedLines(file.patch).size === 0
     ? skipped(file.path, file.status, "no_added_lines")
     : reviewed(file, settings);
 }
 
-/** Decide a whole change set, in the order it was reported. */
+/** Decides a whole change set, in the order it was reported. */
 export function selectFiles(
   entries: readonly ChangedFileRecord[],
   settings: FileReviewSettings,
@@ -230,23 +149,17 @@ export function selectFiles(
   return entries.map((entry) => decideFile(entry, settings));
 }
 
-/** The files to review, typed so the per-file step needs no null check. */
+/** The files to review. */
 export function selectedFiles(decisions: readonly FileDecision[]): SelectedFile[] {
   return decisions.filter((decision) => isSelected(decision));
 }
 
-/** The files not reviewed, each still carrying why. */
+/** The files not reviewed, each with its reason. */
 export function skippedFiles(decisions: readonly FileDecision[]): SkippedFile[] {
   return decisions.filter((decision): decision is SkippedFile => !isSelected(decision));
 }
 
-/**
- * How many files each reason skipped, reasons that skipped none omitted.
- *
- * This is what makes the exclusions measurable: a run that reviewed 3 of 40
- * files should be able to say what happened to the other 37, and a rule that
- * quietly eats half a change set shows up here first.
- */
+/** How many files each reason skipped; reasons that skipped none are omitted. */
 export function skipCounts(decisions: readonly FileDecision[]): Map<SkipReason, number> {
   const counts = new Map<SkipReason, number>();
   for (const decision of skippedFiles(decisions)) {
@@ -255,11 +168,7 @@ export function skipCounts(decisions: readonly FileDecision[]): Map<SkipReason, 
   return counts;
 }
 
-/**
- * How each reason reads to a human, in the words the logs already used.
- * One table so the log line and the preview row cannot describe the same
- * decision differently.
- */
+/** How each reason reads to a human; shared by the log and the preview. */
 const SKIP_LABELS: Readonly<Record<SkipReason, string>> = {
   no_patch: "no patch",
   secret: "credential file",
@@ -269,20 +178,13 @@ const SKIP_LABELS: Readonly<Record<SkipReason, string>> = {
   no_added_lines: "no added lines",
 };
 
-/** Why this file was skipped, in a few words (`status` names the status). */
+/** Why this file was skipped, in a few words; `status` names the status. */
 export function skipDetail(decision: SkippedFile): string {
   const label = SKIP_LABELS[decision.reason];
   return decision.reason === "status" ? `${label}=${decision.status}` : label;
 }
 
-/**
- * Log what the decisions did, one line per skipped file.
- *
- * Lives here so both flows say the same thing about the same decision. A
- * withheld credential is INFO, not DEBUG: an operator running without `-v`
- * should still be told that something was kept out of the prompt and which
- * file it was. Every other skip is the ordinary course of a review.
- */
+/** Logs one line per skipped file: a withheld credential at INFO, everything else at DEBUG. */
 export function logSkips(decisions: readonly FileDecision[], logger?: Logger): void {
   const log = (logger ?? NULL_LOGGER).child("review.selection");
   for (const decision of skippedFiles(decisions)) {

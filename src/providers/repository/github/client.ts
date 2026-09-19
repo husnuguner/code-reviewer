@@ -1,17 +1,7 @@
 /**
- * GitHub's reading of the posting port: one review, one endpoint.
- *
- * The narrowest client this repository has on purpose. It knows one endpoint
- * — `POST /repos/{owner}/{repo}/pulls/{n}/reviews` — because the process that
- * runs it must be able to do exactly one thing: say what the reviewer found.
- * It reads no diffs, lists no pull requests and calls no model, so a token
- * handed to it cannot be turned into anything else.
- *
- * The transport is injected, so the request, the fallback and the error
- * handling are all exercised by tests without a network. Repeating a request
- * the network or the host lost is not this module's business: the transport
- * it is handed has already done that (`providers/http/retrying-fetch`), and what
- * reaches the code below is an answer, not an accident.
+ * GitHub's `ReviewPoster`: one endpoint, `POST /repos/{owner}/{repo}/pulls/{n}/reviews`. Reads no diffs,
+ * calls no model. The transport is injected and has already retried; what reaches here is an answer.
+ * @packageDocumentation
  */
 
 import { type Logger, NULL_LOGGER } from "../../../core/ports/logger";
@@ -24,56 +14,41 @@ import {
 import { errorMessage } from "../../../core/util/errors";
 import { type FetchLike } from "../../http/fetch-like";
 
-/**
- * The transport's type, re-exported where its one caller reads about it.
- *
- * The client does not name the global. It is handed a transport by whoever
- * composes it -- the poster registry in production, a recorder in tests -- so
- * this module has no network dependency of its own to audit, and `allowedUrl`
- * below is the only thing that can produce an argument for it.
- */
+/** The transport's type, re-exported for this client's one caller. */
 export type { FetchLike } from "../../http/fetch-like";
 
-/** A response GitHub refused, carrying enough to act on it. */
+/** A response GitHub refused. */
 export class GithubError extends PostingError {
   override readonly name = "GithubError";
 
   constructor(
     status: number,
+    /** GitHub's response body, or the client's own reason. */
     readonly detail: string,
   ) {
     super(`GitHub answered ${String(status)}: ${detail}`, status);
   }
 }
 
-/**
- * The repository a review is posted to, as `owner` and `name`.
- *
- * Spelled out rather than abbreviated: `Repository` is the domain's word for
- * this, and a domain term is not the place to save four characters.
- */
+/** The repository a review is posted to. */
 export interface Repository {
   readonly owner: string;
   readonly repo: string;
 }
 
-/**
- * What GitHub allows in an owner or a repository name.
- *
- * Enforced rather than assumed: both halves are interpolated into a request
- * path, so a value carrying `/` or `..` would address a different endpoint
- * than the one this client is allowed to call.
- */
+/** What GitHub allows in an owner or repository name. Enforced because both are interpolated into a path. */
 const NAME = /^[A-Za-z0-9._-]+$/u;
 
-/** Parse `owner/repo`, refusing anything else. */
+/**
+ * Parses an `owner/repo` slug.
+ *
+ * @throws {@link GithubError} (status `0`) for anything else, including `.` and `..`.
+ */
 export function parseRepository(slug: string): Repository {
   const [owner, repo, ...rest] = slug.trim().split("/");
   if (owner === undefined || repo === undefined || rest.length > 0) {
     throw new GithubError(0, `'${slug}' is not an owner/repo slug`);
   }
-  // `.` and `..` pass the character check but address a directory, not a
-  // repository, so they are refused by name before the pattern is consulted.
   if (repo === "." || repo === ".." || !NAME.test(owner) || !NAME.test(repo)) {
     throw new GithubError(0, `'${slug}' is not an owner/repo slug`);
   }
@@ -81,11 +56,9 @@ export function parseRepository(slug: string): Repository {
 }
 
 /**
- * The origin this client is allowed to reach, from its base URL.
+ * The one origin this client may reach, from its base URL.
  *
- * One allowlist entry, derived from configuration and checked before every
- * request leaves the process: a base URL taken from the environment cannot
- * point the token at an arbitrary host, and no response can redirect it.
+ * @throws {@link GithubError} when the base URL is not an http(s) URL.
  */
 function allowedOrigin(baseUrl: string): string {
   let parsed: URL;
@@ -100,28 +73,25 @@ function allowedOrigin(baseUrl: string): string {
   return parsed.origin;
 }
 
+/** Options for {@link GithubReviewClient}. */
 export interface ReviewClientOptions {
   readonly token: string;
   /** REST root; GitHub Enterprise uses `https://host/api/v3`. */
   readonly baseUrl?: string;
-  /** The transport. Required: see `FetchLike`. */
+  /** The transport. */
   readonly fetch: FetchLike;
-  /**
-   * The login this token posts as, so `supersede` dismisses only this
-   * identity's earlier reviews and never a human's. Given rather than looked
-   * up: the Actions token may not call `GET /user`. Default: the Actions bot.
-   */
+  /** The login this token posts as, so `supersede` dismisses only its own reviews. Default: the Actions bot. */
   readonly identity?: string;
   readonly logger?: Logger;
 }
 
-/** What GitHub calls a review's kind, for each of the port's events. */
+/** GitHub's name for each of the port's events. */
 const GITHUB_EVENT = { comment: "COMMENT", "request-changes": "REQUEST_CHANGES" } as const;
 
 /** The login `GITHUB_TOKEN` posts as inside GitHub Actions. */
 const ACTIONS_BOT = "github-actions[bot]";
 
-/** The shape of one review in `GET /pulls/{n}/reviews`, as far as this client reads it. */
+/** One review in `GET /pulls/{n}/reviews`, as far as this client reads it. */
 interface ReviewRecord {
   readonly id: number;
   readonly state: string;
@@ -130,34 +100,16 @@ interface ReviewRecord {
 
 const DEFAULT_BASE_URL = "https://api.github.com";
 
-/** The largest page GitHub will serve; asking for fewer only costs requests. */
+/** The largest page GitHub serves. */
 const REVIEWS_PER_PAGE = 100;
 
-/**
- * The statuses that refuse the *review*, rather than the caller.
- *
- * What the fallback below can fix is a review GitHub would accept if it
- * carried no anchors. A `401` is a token, a `404` is a pull request, a `500`
- * is GitHub -- none of them changes when the comments are dropped, so
- * retrying them costs a second doomed request and writes a log line blaming
- * the wrong thing. `422` is the one GitHub documents for a comment naming an
- * uncommentable line, and `400` is a malformed body; those two are the
- * fallback's whole reason to exist.
- */
+/** Statuses that refuse the review's content (an uncommentable line, a malformed body), which dropping the anchors can fix. */
 const CONTENT_REFUSAL: ReadonlySet<number> = new Set([400, 422]);
 
-/**
- * How many pages of reviews `supersede` will walk before giving up.
- *
- * A bound rather than a true loop, because this runs against a remote that
- * decides how much there is: 2000 reviews on one pull request is already far
- * past anything real, and a client that would page forever on a misbehaving
- * endpoint is worse than one that stops and says so. Hitting it is logged --
- * the whole point of this pass is that superseding must not fail in silence.
- */
+/** Pages of reviews `supersede` walks before giving up; hitting it is logged. */
 const MAX_REVIEW_PAGES = 20;
 
-/** Posts one `COMMENT` review per call. */
+/** Posts one review per call. */
 export class GithubReviewClient implements ReviewPoster {
   private readonly token: string;
   private readonly baseUrl: string;
@@ -176,31 +128,19 @@ export class GithubReviewClient implements ReviewPoster {
   }
 
   /**
-   * Submit the review, falling back once to the body without inline comments.
+   * Submits the review, falling back once to the body alone when GitHub refuses the inline comments.
    *
-   * GitHub refuses a whole review when one comment names a line it does not
-   * consider commentable, and the diff it will accept is not always the diff
-   * the reviewer read (a force-push, a rebase). Losing every finding to one
-   * bad anchor is the worst outcome available, so the fallback keeps the body
-   * — which already lists what did not go inline — and drops the anchors.
-   *
-   * This is not the transport's retry and must not be confused with it: the
-   * transport repeats the *same* request when the network or the host was at
-   * fault (see `providers/http/retrying-fetch`), and by the time a refusal
-   * reaches here that has already been tried and exhausted. What is left is a
-   * refusal of the content, and only the two statuses that mean that one.
+   * @returns How many comments landed inline and how many earlier reviews were dismissed.
+   * @throws {@link GithubError} on any refusal the fallback cannot fix.
+   * @remarks Not the transport's retry: that repeated the same request; this drops the anchors on a content refusal.
    */
   async submit(submission: ReviewSubmission): Promise<PostingResult> {
     const { pullNumber, body, comments } = submission;
     const event = GITHUB_EVENT[submission.event ?? "comment"];
-    // The port carries the slug as written; splitting and validating it is
-    // this provider's reading, made here and nowhere upstream.
     const { owner, repo } = parseRepository(submission.repository);
     const reviews = `/repos/${owner}/${repo}/pulls/${String(pullNumber)}/reviews`;
 
-    // Dismiss before posting, so the PR never shows two verdicts from the
-    // same identity at once -- and a clean run lifts an earlier block even
-    // though it posts only a comment.
+    // Dismiss before posting, so one verdict stands and a clean run lifts an earlier block.
     const superseded = submission.supersede === true ? await this.dismissPending(reviews) : 0;
 
     try {
@@ -224,12 +164,9 @@ export class GithubReviewClient implements ReviewPoster {
   }
 
   /**
-   * Dismiss this identity's pending reviews on the change request.
+   * Dismisses this identity's pending reviews (`CHANGES_REQUESTED`, `APPROVED`); never a human's.
    *
-   * Only a review that *stands in the way* can be dismissed -- GitHub allows
-   * it for CHANGES_REQUESTED and APPROVED, never for a plain comment -- and
-   * only ours are touched: dismissing a human's review would be speaking for
-   * them. Returns how many were dismissed.
+   * @returns How many were dismissed. A dismissal GitHub refuses is logged and left standing.
    */
   private async dismissPending(reviews: string): Promise<number> {
     const pending = await this.ourPendingReviews(reviews);
@@ -256,20 +193,8 @@ export class GithubReviewClient implements ReviewPoster {
   /**
    * Every review of ours that still stands in the way, across every page.
    *
-   * Paged rather than read off the first response, and that is not a
-   * robustness nicety -- an unpaged read fails in the one direction that
-   * matters. GitHub documents that this list "returns in chronological
-   * order", so the first page holds the *oldest* reviews and ours are the
-   * newest. Once a pull request passes one page, the reviews `supersede`
-   * exists to dismiss are exactly the ones an unpaged read cannot see, and
-   * it would report nothing to dismiss rather than an error: a clean run
-   * would quietly stop lifting the block an earlier run raised. This client
-   * is itself what fills such a pull request up, one review per push.
-   *
-   * Superseding is housekeeping around the review, not the review itself, so
-   * a page GitHub refuses is said out loud and whatever was already found is
-   * still acted on. Failing here would lose every finding to keep the pull
-   * request tidy.
+   * @remarks Paged because GitHub lists oldest first, so ours are on the last page. A page GitHub refuses is
+   * logged and whatever was found is still acted on.
    */
   private async ourPendingReviews(reviews: string): Promise<ReviewRecord[]> {
     const pending: ReviewRecord[] = [];
@@ -288,7 +213,6 @@ export class GithubReviewClient implements ReviewPoster {
       if (!Array.isArray(listed)) return pending;
       const records = listed as ReviewRecord[];
       pending.push(...records.filter((review) => this.isOursAndPending(review)));
-      // A short page is the last page: GitHub fills a page it can fill.
       if (records.length < REVIEWS_PER_PAGE) return pending;
     }
     this.log.warn(
@@ -297,7 +221,7 @@ export class GithubReviewClient implements ReviewPoster {
     return pending;
   }
 
-  /** Ours, and of a kind GitHub will let us dismiss. */
+  /** Ours, and of a kind GitHub lets us dismiss. */
   private isOursAndPending(review: ReviewRecord): boolean {
     return (
       review.user?.login === this.identity &&
@@ -306,12 +230,10 @@ export class GithubReviewClient implements ReviewPoster {
   }
 
   /**
-   * The one place a request URL is made, and the allowlist check with it.
+   * The one place a request URL is made, with the origin allowlist check.
    *
-   * The path is built from validated names and the origin is the one the base
-   * URL named; a URL that will not even parse is refused rather than thrown
-   * from. Returning a `URL` (not its string) is what makes the check
-   * unskippable: `fetch` accepts nothing else.
+   * @returns A `URL`, which is all the transport accepts, so the check cannot be skipped.
+   * @throws {@link GithubError} when the result is not a URL or not on the allowed origin.
    */
   private allowedUrl(path: string): URL {
     const text = `${this.baseUrl}${path}`;
@@ -328,26 +250,18 @@ export class GithubReviewClient implements ReviewPoster {
   }
 
   /**
-   * One request; the parsed JSON body on success, a `GithubError` otherwise.
+   * One request.
    *
-   * *Every* failure leaves here as a `GithubError`, the transport's included.
-   * A rejected `fetch` -- a refused connection, a dead DNS name, an attempt
-   * that ran out of time -- is as much "the hosting system did not accept
-   * this review" as a 422 is, and it used to leave as a bare `TypeError`.
-   * That mattered beyond tidiness: `PostingError` is what the command line
-   * recognises as the operator's problem, so a network failure printed a
-   * stack trace and exited 1 where a 422 printed one `error:` line and
-   * exited 2. Status `0` is the port's own word for "the request was never
-   * answered", which is exactly what happened.
+   * @returns The parsed JSON body on success, or `null` when it is unreadable.
+   * @throws {@link GithubError} for every failure, the transport's included (status `0`), so the CLI treats
+   * a network failure like a 422: one `error:` line, exit 2.
    */
   private async request(
     method: "GET" | "POST" | "PUT",
     path: string,
     payload?: unknown,
   ): Promise<unknown> {
-    // Built before the try: `allowedUrl` refuses with a `GithubError` of its
-    // own, and catching it here would reword the allowlist as a transport
-    // failure.
+    // Built before the try so an allowlist refusal is not reworded as a transport failure.
     const target = this.allowedUrl(path);
     let response: Response;
     try {
@@ -366,17 +280,13 @@ export class GithubReviewClient implements ReviewPoster {
       throw new GithubError(0, `${method} ${path} did not complete: ${errorMessage(error)}`);
     }
     if (response.ok) {
-      // A dismissal answers with a body; a listing does too. Neither is fatal
-      // when unreadable -- the call succeeded.
       try {
         return await response.json();
       } catch {
         return null;
       }
     }
-    // The body is where GitHub says *which* comment it disliked, so it is
-    // carried into the error rather than reduced to a status code. A body
-    // that cannot be read must not replace the status with a stack trace.
+    // The body says which comment GitHub disliked, so it travels with the error.
     let detail: string;
     try {
       detail = await response.text();

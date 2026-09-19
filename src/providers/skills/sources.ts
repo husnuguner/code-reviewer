@@ -1,13 +1,7 @@
 /**
- * Where skills come from: a directory on this machine, or the checkout under
- * review.
- *
- * The project's `skills.path` decides. An absolute (or `~`) path is a
- * directory on the reviewer's machine -- typically `~/.config/reviewer/skills`.
- * A relative path is inside the reviewed repository, read from the working
- * tree, so a branch that revises a convention is reviewed under the revised
- * rule. Both hand back the same `Skill` objects, so nothing downstream knows
- * which one ran.
+ * Where skills come from: a directory on this machine, or the checkout under review. Both yield the
+ * same `Skill` objects.
+ * @packageDocumentation
  */
 
 import { readFile, readdir, stat } from "node:fs/promises";
@@ -24,27 +18,19 @@ import {
 import { errorMessage } from "../../core/util/errors";
 import { compareCodePoints, trimSlashes } from "../../core/util/text";
 
-/**
- * Shared by both readers deliberately: they read the same repository's own
- * skills and only the transport differs, so the registry's override policy
- * must treat them as one source rather than ranking one above the other.
- */
+/** Shared by both readers: same repository's skills, only the transport differs. */
 export const REPO_SOURCE_NAME = "repo";
 
-/** A skill document: where it came from (for logs) and its text. */
+/** A skill document: a label for logs, and its text. */
 export type SkillDocument = readonly [label: string, text: string];
 
+/** Options for a skill source. */
 export interface SkillSourceOptions {
   readonly parser?: SkillParser;
   readonly logger?: Logger;
 }
 
-/**
- * The shape every reader of the repository's skills shares: a normalised
- * repo-relative path, a parser strategy, and one `load` that reads documents
- * and parses them, skipping what is not a skill. Subclasses answer one
- * question -- where do the Markdown documents come from.
- */
+/** The shared template: a normalised path, a parser, and one `load`. Subclasses say where documents come from. */
 abstract class MarkdownSkillSource implements SkillSource {
   readonly sourceName = REPO_SOURCE_NAME;
   protected readonly path: string;
@@ -67,11 +53,7 @@ abstract class MarkdownSkillSource implements SkillSource {
   protected abstract documents(): Promise<SkillDocument[]>;
 }
 
-/**
- * Skills read from a directory on this machine. `directory` is absolute; the
- * caller has already decided the path is local (`isLocalSkillsPath`) and
- * expanded `~`.
- */
+/** Skills read from an absolute directory on this machine. */
 export class DirectorySkillSource extends MarkdownSkillSource {
   constructor(
     private readonly directory: string,
@@ -98,7 +80,7 @@ export class DirectorySkillSource extends MarkdownSkillSource {
   }
 }
 
-/** Skills read from a local checkout at a repo-relative path, for branch review. */
+/** Skills read from a checkout at a repository-relative path. */
 export class WorktreeSkillSource extends DirectorySkillSource {
   constructor(root: string, path: string, options: SkillSourceOptions = {}) {
     const relative = trimSlashes(path.trim());
@@ -106,10 +88,7 @@ export class WorktreeSkillSource extends DirectorySkillSource {
   }
 }
 
-/**
- * Whether a `skills.path` names a directory on this machine rather than one
- * inside the reviewed repository: absolute, or under the home directory.
- */
+/** Whether a `skills.path` names a directory on this machine: absolute, or under `~`. */
 export function isLocalSkillsPath(path: string): boolean {
   const trimmed = path.trim();
   return isAbsolute(trimmed) || trimmed === "~" || trimmed.startsWith("~/");
@@ -124,7 +103,7 @@ async function isDirectory(path: string): Promise<boolean> {
   }
 }
 
-/** Every `*.md` under `directory`, recursively, in a stable (sorted) order. */
+/** Every `*.md` under `directory`, recursively, sorted. */
 async function markdownFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true, recursive: true });
   return entries

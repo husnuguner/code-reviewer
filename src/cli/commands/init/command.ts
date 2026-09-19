@@ -1,10 +1,6 @@
 /**
- * `reviewer init`: what it takes -- the catalogue flags alone.
- *
- * Writes the review setup where it belongs: inside a git checkout, the
- * checkout's own `.review/` (committed, shared with the team, readable by
- * CI); outside one, or with `--config`, the machine-wide catalogue. Touches
- * no model and no hosting system, so it runs on a machine with no credential.
+ * `reviewer init`: the catalogue flags alone. Touches no model and no hosting system.
+ * @packageDocumentation
  */
 
 import { CatalogError } from "../../../core/util/errors";
@@ -13,6 +9,7 @@ import { type CatalogArguments, catalogArguments, catalogOptions } from "../../o
 
 import { runInit } from "./run";
 
+/** `reviewer init`, as the root registers it. */
 export const INIT = defineCommand<CatalogArguments>({
   name: "init",
   description:
@@ -20,6 +17,5 @@ export const INIT = defineCommand<CatalogArguments>({
   options: catalogOptions,
   arguments: catalogArguments,
   run: runInit,
-  // A catalogue that cannot be written as asked is the operator's to fix.
   isOperatorError: instanceOfAny(CatalogError),
 });

@@ -1,31 +1,30 @@
 /**
- * A Skill: one file of review guidelines scoped to a set of path globs.
- *
- * A skill applies to a changed file when one of its globs matches that file's
- * path; matching skills are injected into that file's review in addition to
- * the standing lenses. Skills belong to the repository whose code they govern,
- * not to the reviewer.
+ * A skill: one file of review guidelines scoped to path globs.
+ * @packageDocumentation
  */
 
 import { isGlobMatch } from "../skills/glob";
 
+/** Review guidelines that apply to the paths their globs match. */
 export interface Skill {
-  /** The unique id; a repeated name is one skill declared twice. */
+  /** The unique id. */
   readonly name: string;
-  /**
-   * Path globs the skill reviews: `**` across directories, `*` within a
-   * segment. Set by the project's `skills.mappings` and by nothing else -- a
-   * document leaves the parser with none, so an unmapped skill never matches.
-   */
+  /** Path globs the skill reviews; set only by the project's `skills.mappings`. */
   readonly globs: readonly string[];
-  /** The guidance text injected into the review prompt. */
+  /** The guidance text injected into the prompt. */
   readonly body: string;
   /** Which source produced it (`"repo"` for the reviewed repository). */
   readonly source: string;
+  /** The frontmatter description, or `""`. */
   readonly description: string;
 }
 
-/** True if any of the skill's globs match the given repository path. */
+/**
+ * Whether any of the skill's globs match a path.
+ *
+ * @param skill - The skill.
+ * @param path - A repository-relative path.
+ */
 export function isSkillMatch(skill: Skill, path: string): boolean {
   return skill.globs.some((glob) => isGlobMatch(path, glob));
 }

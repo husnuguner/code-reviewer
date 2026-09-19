@@ -1,18 +1,7 @@
 /**
- * Branch-vs-base review: read local git, review, report.
- *
- * The only review flow there is. The source is a working tree compared
- * against a base ref; the sink is a reporter (text, NDJSON or GitHub
- * workflow commands). Nothing is created anywhere and no credential beyond
- * the model's is needed -- which is why this works against a repository whose
- * hosting system nobody has implemented, against work that has not been
- * pushed, and inside CI with no write permission at all.
- *
- * Reporting is where this flow stops. Turning a finding into a comment on a
- * pull request is somebody else's job (a CI bot reading the NDJSON), and the
- * separation is deliberate: a reviewer that cannot write to a conversation
- * cannot spam one, and the same run behaves identically on a laptop and in a
- * pipeline.
+ * The review flow: read local git, select, review in parallel, cap, stream records. Reporting is where
+ * it stops; posting is another run's job.
+ * @packageDocumentation
  */
 
 import pLimit from "p-limit";
@@ -51,61 +40,47 @@ import {
 } from "./selection";
 import { capPerFile } from "./volume";
 
+/** Options for {@link iterBranchReview} and its wrappers. */
 export interface BranchReviewOptions {
   readonly base: string;
   readonly branch: string;
-  /**
-   * Review the working tree against `HEAD` instead of `branch` against
-   * `base`; `base` and `branch` are then not consulted at all.
-   */
+  /** Review the working tree against `HEAD`; `base` and `branch` are then not consulted. */
   readonly uncommitted?: boolean;
   readonly reviewer: PerFileReviewer;
-  /** Checks each file's findings against its diff; `null` reports them all. */
+  /** `null` reports every finding. */
   readonly verifier?: PerFileVerifier | null;
   readonly git: GitReader;
   readonly settings: FileReviewSettings;
   readonly skills: SkillMatcher | null;
-  /** Global cap on simultaneous file reviews (content read + model call). */
+  /** Simultaneous file reviews (content read + model call). */
   readonly maxConcurrentFiles: number;
-  /**
-   * Max findings reported per file; the most severe survive, the rest are
-   * counted into the summary's `capped`. `0` (the default) reports them all.
-   */
+  /** Per-file cap; the most severe survive, the rest count as `capped`. `0` reports all. */
   readonly maxFindingsPerFile?: number;
-  /** Reads the repository beyond the diff, at `branch`; `null` gathers no pre-context. */
+  /** Reads the repository beyond the diff at `branch`; `null` gathers no pre-context. */
   readonly codeContext?: CodeContext | null;
   readonly logger?: Logger;
 }
 
 /**
- * Stream review records for the diff between `base` and `branch`.
+ * Streams review records for `base...branch` (or the working tree).
  *
- * The changed-file set is a three-dot diff, so only what this branch itself
- * changed is reviewed -- not commits `base` gained after the fork.
- *
- * Yields one `finding` record per finding **as each file's review completes**,
- * then a single `summary` record.
+ * @returns One `finding` record per finding as each file completes, then a single `summary`.
+ * @remarks The change set handed to pre-context is the selected set, so an excluded or credential file
+ * cannot reach a prompt as a "related change".
  */
 export async function* iterBranchReview(
   options: BranchReviewOptions,
 ): AsyncGenerator<BranchReviewRecord> {
   const { git } = options;
-  // What the summary will say it compared, decided here rather than by the
-  // caller: a record naming a base the diff never used would be a lie no
-  // consumer of the NDJSON could catch.
   const { base, branch } = reviewedReferences(options);
   const log = (options.logger ?? NULL_LOGGER).child("review.branch_review");
 
   const files = await changedFilesOf(options, log);
-  // Scope first, and once: the same decisions `--preview` would have printed.
   const decisions = selectFiles(files, options.settings);
   const selected = selectedFiles(decisions);
   logSkips(decisions, options.logger);
 
   const limit = pLimit(options.maxConcurrentFiles);
-  // Built from the *selected* files: pre-context quotes other files' diffs,
-  // so an excluded -- or a credential -- file must not be reachable as
-  // somebody else's "related change".
   const changeSet = selected.map((decision) => decision.file);
   const reviewOne = async (decision: SelectedFile): Promise<ReviewedFile | null> =>
     reviewChangedFile(decision, {
@@ -117,9 +92,6 @@ export async function* iterBranchReview(
       readContent: (path) => git.readFile(path, options.settings.maxFileChars),
       codeContext: options.codeContext ?? null,
       changeSet,
-      // The same number `capPerFile` applies below, told to the model first:
-      // what the report would cut is not worth generating. The cut after
-      // the call stays, so `capped` counts how often the model overran.
       maxFindingsPerFile: options.maxFindingsPerFile ?? 0,
       ...(options.logger && { logger: options.logger }),
     });
@@ -130,21 +102,12 @@ export async function* iterBranchReview(
   let refuted = 0;
   let capped = 0;
   let mislabelled = 0;
-  // A file selected for review that produced neither findings nor a refusal:
-  // its review threw. Counted rather than merely logged, so the summary's
-  // arithmetic still adds up (see `SummaryRecord.failed`).
   let failed = 0;
-  // A credential the per-file step refused although the selection had passed
-  // it (only reachable for a hand-built decision). It is the same refusal
-  // `selection.ts` makes, so it is counted with those rather than invented as
-  // a reason of its own.
+  // A credential the per-file step refused although selection passed it; counted under `secret`.
   let guarded = 0;
   const anchors = new Map<string, number>();
   const filesWithFindings = new Set<string>();
 
-  // Completion order lets each file's findings emit the moment it finishes
-  // rather than waiting for the whole batch; the limit still bounds how many
-  // run at once, and every promise is held so a failure cannot go unobserved.
   const outcomes = asCompleted(selected.map((decision) => reviewOne(decision)));
   for await (const outcome of outcomes) {
     if (!outcome.ok) {
@@ -162,11 +125,7 @@ export async function* iterBranchReview(
     refuted += result.refuted;
     const volume = capPerFile(result.findings, options.maxFindingsPerFile ?? 0);
     capped += volume.capped;
-    // Every per-finding tally is taken over the findings that are actually
-    // reported, so `anchors`, `unanchored`, `mislabelled` and `findings`
-    // describe one population and can be checked against each other. What
-    // the cap withheld is not silent for it: `capped` says how many, and a
-    // number that mixed two populations would make both unreadable.
+    // Per-finding tallies are taken over reported findings only, so they describe one population.
     for (const [name, n] of countAnchors(volume.kept)) {
       anchors.set(name, (anchors.get(name) ?? 0) + n);
     }
@@ -200,31 +159,15 @@ export async function* iterBranchReview(
     branch,
     files_changed: files.length,
     files_reviewed: filesReviewed,
-    // A file whose review threw, and how many diffs were shown in part only.
-    // Both are knowledge the run has and the findings cannot carry.
     failed,
     truncated: selected.filter((decision) => decision.truncated).length,
     findings: totalFindings,
     files_with_findings: filesWithFindings.size,
-    // How each finding's line was decided, and how many got none at all.
-    // Without these the anchoring is invisible: a repaired line looks exactly
-    // like one the model got right.
     anchors: Object.fromEntries([...anchors].toSorted(([a], [b]) => compareCodePoints(a, b))),
     unanchored,
-    // How many findings the verification pass removed before they were ever
-    // reported. Zero also means "no verification ran"; the two are the same
-    // thing to a consumer, which is told what it was told either way.
     refuted,
-    // How many the volume policy withheld. Reported for the same reason as
-    // `refuted`: a finding that vanishes without a number behind it is a
-    // finding nobody can ask about.
     capped,
-    // How many reported findings arrived under a severity the vocabulary has
-    // not got, and were reported under the mildest one instead.
     mislabelled,
-    // What happened to the files that were not reviewed, by reason. Without
-    // it `files_changed` minus `files_reviewed` is a number nobody can act
-    // on; with it, a rule that quietly ate half the change set is visible.
     skipped: Object.fromEntries(
       [...withGuarded(skipCounts(decisions), guarded)].toSorted(([a], [b]) =>
         compareCodePoints(a, b),
@@ -233,13 +176,7 @@ export async function* iterBranchReview(
   };
 }
 
-/**
- * The skip counts with the per-file step's own credential refusals folded in.
- *
- * Two guards answer the same question (`guards.ts` is asked by the selection
- * and again where the prompt is built), so they report as one reason: a
- * withheld credential is a withheld credential whichever of them caught it.
- */
+/** The skip counts with the per-file step's credential refusals folded into `secret`. */
 function withGuarded(
   counts: ReadonlyMap<string, number>,
   guarded: number,
@@ -250,38 +187,28 @@ function withGuarded(
   return merged;
 }
 
-/** What the summary is asked to compare, as a review names the two sides. */
+/** The two sides a review names. */
 type ReviewScope = Pick<BranchReviewOptions, "base" | "branch" | "uncommitted">;
 
-/** What the working tree is reviewed against, and what it is called. */
+/** What the working tree is reviewed against. */
 export const WORKTREE_BASE = "HEAD";
+/** How the summary names the working tree. */
 export const WORKING_TREE = "working tree";
 
-/**
- * The two sides a run actually compared.
- *
- * An uncommitted review has no branch and no base: it compares what is on
- * disk against `HEAD`, whatever `--base` and `--branch` happen to hold. They
- * are reported as what they are, so the summary, the text header and the
- * preview title all describe the diff that was taken.
- */
+/** The two sides a run actually compared; an uncommitted review reports `HEAD` and `working tree`. */
 function reviewedReferences(options: ReviewScope): { base: string; branch: string } {
   return options.uncommitted === true
     ? { base: WORKTREE_BASE, branch: WORKING_TREE }
     : { base: options.base, branch: options.branch };
 }
 
-/** How a report names the scope it covered, for a person reading it. */
+/** How a report titles the scope it covered. */
 function scopeTitle(options: ReviewScope): string {
   const { base, branch } = reviewedReferences(options);
   return options.uncommitted === true ? `${branch} vs ${base}` : `branch ${branch} vs ${base}`;
 }
 
-/**
- * The changed files of the run's scope: the three-dot diff of a branch, or
- * everything the working tree has not committed. Shared by the review and
- * the preview, so the two cannot disagree about what they compared.
- */
+/** The changed files of the run's scope: the three-dot diff, or the uncommitted change set. */
 async function changedFilesOf(
   options: ReviewScope & Pick<BranchReviewOptions, "git">,
   log: Logger,
@@ -303,7 +230,7 @@ async function changedFilesOf(
   return files;
 }
 
-/** What a branch preview needs: local git and the settings, nothing else. */
+/** Options for {@link previewBranch}: local git and the settings, no model. */
 export interface BranchPreviewOptions {
   readonly base: string;
   readonly branch: string;
@@ -315,12 +242,9 @@ export interface BranchPreviewOptions {
 }
 
 /**
- * What a branch review would review, without calling a model.
+ * What a review would review, without calling a model or needing a credential.
  *
- * The cheapest honest answer this tool can give: local git, the project's
- * own exclusions, and no credentials of any kind -- not even a model key.
- * Returns the decisions and the report text, so a caller can print it or
- * inspect it.
+ * @returns The decisions and the report text.
  */
 export async function previewBranch(
   options: BranchPreviewOptions,
@@ -334,27 +258,27 @@ export async function previewBranch(
   };
 }
 
-/** A branch review collected into one result (for text output and tests). */
+/** A review collected into one result. */
 export interface BranchReviewResult {
   readonly findings: readonly Omit<FindingRecord, "type">[];
   readonly files_changed: number;
   readonly files_reviewed: number;
   /** Files selected for review whose review did not finish. */
   readonly failed: number;
-  /** Files whose diff was shown in part only (`max-file-chars`). */
+  /** Files whose diff was shown in part only. */
   readonly truncated: number;
   readonly anchors: Readonly<Record<string, number>>;
   readonly unanchored: number;
   readonly refuted: number;
   /** Findings `max-findings-per-file` withheld. */
   readonly capped: number;
-  /** Reported findings whose severity the model spelled outside the vocabulary. */
+  /** Reported findings re-rated from an unknown severity. */
   readonly mislabelled: number;
-  /** How many files each skip reason accounted for. */
+  /** Files not reviewed, by reason. */
   readonly skipped: Readonly<Record<string, number>>;
 }
 
-/** Run `iterBranchReview` to completion and collect it into a result. */
+/** Runs {@link iterBranchReview} to completion and collects the result. */
 export async function reviewBranch(options: BranchReviewOptions): Promise<BranchReviewResult> {
   const findings: Omit<FindingRecord, "type">[] = [];
   let summary: SummaryRecord | null = null;
@@ -369,7 +293,7 @@ export async function reviewBranch(options: BranchReviewOptions): Promise<Branch
   return collect(findings, summary);
 }
 
-/** The findings and the closing record as one result; the summary may be absent. */
+/** The findings and the summary as one result; every tally is `0` without a summary. */
 function collect(
   findings: readonly Omit<FindingRecord, "type">[],
   summary: SummaryRecord | null,
@@ -390,13 +314,9 @@ function collect(
 }
 
 /**
- * Feed every record of a branch review to a reporter as it is produced, and
- * return the same result `reviewBranch` would have collected.
+ * Feeds every record to a reporter as it is produced and returns the collected result.
  *
- * Streaming and summarising are not alternatives: the reporter gets each
- * record the moment it exists, and the caller still gets the whole run back
- * so it can answer questions about it (`--fail-on`) without re-reading its
- * own output.
+ * @returns The same result {@link reviewBranch} would give, so the caller can answer `--fail-on`.
  */
 export async function streamBranchReview(
   options: BranchReviewOptions,
@@ -416,24 +336,17 @@ export async function streamBranchReview(
   return collect(findings, summary);
 }
 
-/** A finding as the text report needs it; every tally may be absent. */
+/** What the text report needs; every tally may be absent. */
 export interface TextReportInput {
   readonly findings: readonly Omit<FindingRecord, "type">[];
   readonly anchors?: Readonly<Record<string, number>>;
   /** Files selected for review whose review did not finish. */
   readonly failed?: number;
-  /** Files whose diff was shown in part only (`max-file-chars`). */
+  /** Files whose diff was shown in part only. */
   readonly truncated?: number;
 }
 
-/**
- * What a reader must know before believing the findings above.
- *
- * Printed in both branches, and that is the point of it being its own
- * function: "No issues found." is a claim about the code, and on a run where
- * two files never came back it is the wrong one. A silence has to say which
- * kind of silence it is.
- */
+/** What a reader must know before believing the findings: failed and truncated files. */
 function caveats(result: TextReportInput): string[] {
   const notes: string[] = [];
   const failed = result.failed ?? 0;
@@ -449,7 +362,11 @@ function caveats(result: TextReportInput): string[] {
   return notes;
 }
 
-/** The human-readable report, as lines to print (interactive use). */
+/**
+ * The human-readable report, as lines to print.
+ *
+ * @returns Header, count, notable anchor tallies, caveats, then findings by path and line (unanchored first).
+ */
 export function branchReviewText(base: string, branch: string, result: TextReportInput): string[] {
   const lines = [`\n=== Branch review: ${branch} vs ${base} ===`];
   const { findings } = result;
@@ -459,7 +376,6 @@ export function branchReviewText(base: string, branch: string, result: TextRepor
   }
   const files = new Set(findings.map((f) => f.path)).size;
   lines.push(`${findings.length} finding(s) across ${files} file(s).`);
-  // Only worth a line when something other than a clean hit happened.
   const notable = Object.entries(result.anchors ?? {})
     .filter(([name, n]) => name !== "exact" && n > 0)
     .toSorted(([a], [b]) => compareCodePoints(a, b));
@@ -467,8 +383,6 @@ export function branchReviewText(base: string, branch: string, result: TextRepor
     lines.push(`anchors: ${notable.map(([name, n]) => `${n} ${name}`).join(", ")}`);
   }
   lines.push(...caveats(result), "");
-  // An unanchored finding sorts first: it has no line, and -1 keeps the key
-  // comparable.
   const ordered = findings.toSorted(
     (a, b) => compareCodePoints(a.path, b.path) || (a.line ?? -1) - (b.line ?? -1),
   );

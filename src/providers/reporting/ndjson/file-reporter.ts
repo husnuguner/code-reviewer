@@ -1,19 +1,7 @@
 /**
- * NDJSON into the file `--out` names, owned by the run from end to end.
- *
- * The stream is only ever reached through this class, so the two ways writing
- * to a file goes wrong are answered in one place:
- *
- * - **Before the run.** `open` fails loudly at construction (see
- *   `openRecordFile`), which is what makes a bad `--out` cost nothing.
- * - **During it.** A disk that fills mid-run can only fail asynchronously, so
- *   the first such reason is kept and stated by `close`. The listener is the
- *   point: an `error` event nobody is listening for is an uncaught exception,
- *   whatever else is true.
- *
- * `close` also waits for the flush rather than trusting the process to exit
- * at a convenient moment -- a record still in a buffer is a record the CI bot
- * downstream never reads.
+ * NDJSON into the `--out` file, owned end to end: opened eagerly so a bad path fails before any model
+ * call, flushed on `close` so no record is left in a buffer.
+ * @packageDocumentation
  */
 
 import { createWriteStream, openSync } from "node:fs";
@@ -27,18 +15,9 @@ import { lineWriter } from "../line-writer";
 import { NdjsonReporter } from "./reporter";
 
 /**
- * The file `--out` names, open and truncated, or the operator's error.
+ * Opens and truncates the `--out` file synchronously.
  *
- * Synchronous and eager on purpose. A write stream reports a path it cannot
- * open as an asynchronous `error` event, which -- with no listener -- takes
- * the process down with a stack trace from Node's internals, and does so only
- * once records begin to flow: after every model call has been paid for, so the
- * run's findings are lost along with it. Opening here turns the same mistake
- * into a throw the caller can make before the review starts.
- *
- * Truncating rather than appending: a run's output is the whole answer for
- * that run, and a file that accumulated two runs would describe a change set
- * that never existed.
+ * @throws {@link ReportFileError} when the path cannot be written.
  */
 function openRecordFile(path: string): number {
   try {
@@ -50,18 +29,17 @@ function openRecordFile(path: string): number {
   }
 }
 
+/** Writes NDJSON records to a file stream and reports the first write failure on `close`. */
 export class NdjsonFileReporter implements ClosableReporter {
   private readonly records: NdjsonReporter;
   private readonly stream: Writable;
-  /** How the file is named in an error; the path, or a test's stand-in. */
+  /** How the file is named in an error. */
   private readonly name: string;
-  /** The first asynchronous write failure, kept for `close` to report. */
+  /** The first asynchronous write failure, kept for `close`. */
   private failure: Error | null = null;
 
   /**
-   * Takes the stream rather than opening one, so a test can drive the failure
-   * paths (a write that fails, a stream that is already gone) without a full
-   * disk to hand. `open` is how a run gets one.
+   * @param stream - Taken rather than opened, so a test can drive the failure paths. Use {@link NdjsonFileReporter.open} for a run.
    */
   constructor(stream: Writable, name: string) {
     this.stream = stream;
@@ -72,7 +50,11 @@ export class NdjsonFileReporter implements ClosableReporter {
     });
   }
 
-  /** The records into `path`, truncating whatever was there. */
+  /**
+   * A reporter writing into `path`, truncating whatever was there.
+   *
+   * @throws {@link ReportFileError} when the path cannot be opened.
+   */
   static open(path: string): NdjsonFileReporter {
     return new NdjsonFileReporter(createWriteStream(path, { fd: openRecordFile(path) }), path);
   }
@@ -81,6 +63,11 @@ export class NdjsonFileReporter implements ClosableReporter {
     this.records.report(record);
   }
 
+  /**
+   * Flushes and closes the file.
+   *
+   * @throws {@link ReportFileError} when any write failed during the run.
+   */
   async close(): Promise<void> {
     await this.flush();
     const failure = this.failure;
@@ -91,14 +78,7 @@ export class NdjsonFileReporter implements ClosableReporter {
     }
   }
 
-  /**
-   * Wait for the stream to finish with the lines it was given.
-   *
-   * `finish` is the ordinary end and `close` the one a failed stream reaches
-   * instead, so both are awaited: waiting for `finish` alone would hang a run
-   * whose stream had already been destroyed by an error, which is precisely
-   * the case this whole class exists for.
-   */
+  /** Waits for `finish` or `close`, whichever the stream reaches; a destroyed stream never emits `finish`. */
   private async flush(): Promise<void> {
     if (this.stream.destroyed) return;
     await new Promise<void>((resolve) => {

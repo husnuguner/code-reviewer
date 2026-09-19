@@ -1,6 +1,6 @@
 /**
- * `--config`: the flag every command that opens the catalogue shares, and
- * what a command that reviews nothing asks the container for.
+ * `--config` and the container request of a command that reviews nothing.
+ * @packageDocumentation
  */
 
 import { type Command } from "commander";
@@ -11,13 +11,13 @@ import { type RunCradle, type RunRequest, buildContainer } from "../container";
 import { DEFAULT_FORMAT } from "./format";
 import { type LoggingArguments, logSettingsFrom, loggingArguments } from "./logging";
 
-/** What every command that opens the catalogue takes: where it is, and how loud to be. */
+/** What every command that opens the catalogue takes. */
 export interface CatalogArguments extends LoggingArguments {
-  /** `--config`: the catalogue's path, or `null` for the usual lookup. */
+  /** `--config`, or `null` for the usual lookup. */
   readonly config: string | null;
 }
 
-/** `--config`, the flag every command that opens the catalogue shares. */
+/** Adds `--config`. */
 export function catalogOptions(command: Command): Command {
   return command.option(
     "--config <path>",
@@ -25,17 +25,12 @@ export function catalogOptions(command: Command): Command {
   );
 }
 
-/** The catalogue arguments out of parsed options; a command's own come on top. */
+/** The catalogue arguments out of parsed options. */
 export function catalogArguments(options: ParsedOptions<CatalogArguments>): CatalogArguments {
   return { ...loggingArguments(options), config: options.config ?? null };
 }
 
-/**
- * The container request of a command that reviews nothing -- `init`,
- * `projects`, `add`. Resolution is lazy, so a container built from this only
- * ever yields the console, the paths and the logger; the format and the
- * model it names are never asked for.
- */
+/** The container request of `init`, `projects`, `add`: no model, and lazily only the console, paths and logger. */
 export function catalogRequest(arguments_: CatalogArguments): RunRequest {
   return {
     project: null,
@@ -48,12 +43,13 @@ export function catalogRequest(arguments_: CatalogArguments): RunRequest {
   };
 }
 
-/** The console, the paths and the logger, from the same root every command builds through. */
+/** The slice of the cradle a catalogue command uses. */
 export type CatalogCradle = Pick<
   RunCradle,
   "console" | "catalogPath" | "configHomePath" | "logger"
 >;
 
+/** Builds the container for a catalogue command. */
 export function catalogCradle(arguments_: CatalogArguments): CatalogCradle {
   return buildContainer(catalogRequest(arguments_)).cradle;
 }

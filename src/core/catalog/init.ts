@@ -1,30 +1,23 @@
 /**
- * `init`: write a starter catalogue where it belongs, and the files beside it.
- *
- * Exists so the first run is "run it, then edit it" rather than "copy YAML
- * out of a README". Refuses to overwrite: this file holds the operator's own
- * project definitions, and no scaffold is worth the chance of rewriting them.
+ * `reviewer init`: writes a starter catalogue and the files beside it. Never overwrites.
+ * @packageDocumentation
  */
 
 import { type CatalogFiles } from "../ports/catalog-files";
 import { type ConsoleOutput } from "../ports/console";
 
-/** What `init` installs: a starter catalogue and a skills README. */
+/** What `init` installs. */
 export interface StarterFiles {
+  /** The starter `config.yaml`. */
   readonly catalog: string;
-  /** Explains, to whoever opens the skills folder, what a skill is. */
+  /** The README written into the skills folder. */
   readonly skillsReadme: string;
 }
 
 /**
- * Write the starter catalogue and, in a repository, the files beside it.
+ * Writes the starter catalogue and, in a repository, `prompts/prompts.md`, `skills/README.md` and `.gitignore`.
  *
- * No review policy is written: the policy is the reviewer's own and is not
- * replaceable. What an operator owns from day one is the catalogue, an
- * empty `prompts/prompts.md` for standing instructions, and the skills
- * folder for the rules that belong to particular paths. The two folders are
- * conventions rather than settings, so what `init` writes is what the run
- * reads -- no key says so twice.
+ * @returns `0` on success; `1` when the catalogue already exists.
  */
 export function initCatalog(
   files: CatalogFiles,
@@ -42,19 +35,7 @@ export function initCatalog(
     : finishMachineInit(files, out);
 }
 
-/**
- * A repository's own `.review/`: everything the team and CI need, committed.
- *
- * The skills directory is created now, with a README, so the folder exists
- * to be found and the first person who opens it learns what goes there. So
- * is `prompts/prompts.md`, and it is written *empty*: every `*.md` in that
- * folder is read on every reviewed file, so whoever has something to say to
- * the reviewer about this repository types it into a file that is already
- * read -- and one nobody fills in adds nothing to any prompt. The
- * `.gitignore` is not optional:
- * `.review/.env` is where a project-specific key may live, and a committed
- * key is the one mistake `init` must make impossible by default.
- */
+/** Writes the sidecar files of a repository's `.review/` and prints the next steps. */
 function finishRepoInit(files: CatalogFiles, out: ConsoleOutput, starter: StarterFiles): number {
   if (!files.sidecarExists("prompts/prompts.md")) {
     files.writeSidecar("prompts/prompts.md", "");
@@ -92,7 +73,7 @@ function finishRepoInit(files: CatalogFiles, out: ConsoleOutput, starter: Starte
   return 0;
 }
 
-/** The machine-wide catalogue: one person's projects, none of them committed. */
+/** Prints the next steps for a machine-wide catalogue. */
 function finishMachineInit(files: CatalogFiles, out: ConsoleOutput): number {
   out.line();
   out.line("Next:");

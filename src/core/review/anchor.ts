@@ -1,88 +1,55 @@
 /**
- * Anchor a finding to a commentable line using the model's own code quote.
- *
- * Each finding arrives with two independent signals: a `line` the model read
- * off the `[L<n>]` markers in the annotated diff, and `existing_code` -- a
- * verbatim quote of the lines it is talking about. Neither is reliable alone.
- * A line number is easy to mis-copy, and when it lands outside the commentable
- * set the whole finding would be lost. A quote cannot say *which* occurrence
- * it meant when the same code appears twice.
- *
- * Together they resolve. The quote is matched against the diff's new side with
- * a sliding window over non-blank lines; the line number confirms or replaces
- * the result. Four outcomes:
- *
- * - `exact`     the line is commentable and the quote agrees (or is unusable);
- * - `repaired`  the line was missing or not commentable, and the quote matched
- *               exactly one place -- the finding is saved instead of dropped;
- * - `conflict`  the line is commentable but the quote points somewhere else.
- *               The line is kept and the disagreement counted (see below);
- * - `failed`    neither signal yields a commentable line. The caller surfaces
- *               the finding without one rather than discarding it.
- *
- * Why the line wins a conflict: it is copied from a marker printed beside the
- * code, not computed, so a commentable value is usually right -- whereas a
- * quote can match a repeated idiom in one *other* place by luck and look unique
- * while being wrong. Relocating a correct comment is the worse error, so the
- * tie-break favours the marker and the conflict counter records how often the
- * question actually arises.
+ * Anchors a finding to a commentable line from two signals: the model's `line` and its `existing_code` quote.
+ * @packageDocumentation
  */
 
 import { type NewSideEntry } from "../diff/patch-view";
 import { isInteger } from "../util/json";
 import { splitLines } from "../util/text";
 
+/** The line is commentable and the quote agrees or is unusable. */
 export const EXACT = "exact";
+/** The line was unusable; the quote matched exactly one place. */
 export const REPAIRED = "repaired";
+/** The line is commentable but the quote points elsewhere; the line is kept. */
 export const CONFLICT = "conflict";
+/** Neither signal yields a line. */
 export const FAILED = "failed";
 
+/** How a finding's line was decided. */
 export type AnchorOutcome = typeof EXACT | typeof REPAIRED | typeof CONFLICT | typeof FAILED;
 
-/**
- * Where a finding may be posted, and how that was decided.
- *
- * `line` is `null` exactly when `outcome` is `failed`. `startLine` is set only
- * for a multi-line anchor, where it is the first line of the span and `line`
- * the last (GitHub's own convention).
- */
+/** Where a finding may be posted. `line` is `null` exactly when `outcome` is `failed`. */
 export interface Anchor {
   readonly line: number | null;
+  /** First line of a multi-line anchor; `null` for a single line. */
   readonly startLine: number | null;
   readonly outcome: AnchorOutcome;
 }
 
+/** Input to {@link resolveAnchor}. */
 export interface ResolveInput {
-  /** The model's claimed line, untyped straight from its JSON. */
+  /** The model's claimed line, untyped from its JSON. */
   readonly line: unknown;
-  /** The model's verbatim quote of the code it is talking about. */
+  /** The model's verbatim quote. */
   readonly existingCode: string;
-  /** The diff's new side; empty means the quote cannot be used. */
+  /** The diff's new side; empty disables the quote. */
   readonly index: readonly NewSideEntry[];
-  /** The commentable (added) line numbers. */
+  /** The commentable line numbers. */
   readonly allowed: ReadonlySet<number>;
 }
 
-// The annotated diff prefixes added lines with `[L<n>] `; a quote copied
-// straight out of the prompt carries it, so the tag and the run of space
-// after it are removed before a quoted line is compared to a diff line.
+/** A `[L<n>] ` prefix copied out of the prompt. */
 const LINE_TAG = /^\[L\d+\]\s*/u;
 
 type Span = readonly [start: number, end: number];
 
-/** One line reduced to its comparable core: no indent, no diff marker. */
+/** A line's comparable core: trimmed, no line tag. */
 function core(text: string): string {
   return text.trim().replace(LINE_TAG, "").trim();
 }
 
-/**
- * The forms a quoted line may legitimately take.
- *
- * A quote may or may not carry the `+`/`-` marker of the diff line it was
- * copied from, so both readings are accepted. Stripping the marker
- * unconditionally instead would corrupt real code: `--count;` would become
- * `-count;` on one side of the comparison only.
- */
+/** The forms a quoted line may take: with or without a leading `+`/`-` marker. */
 function quoteForms(text: string): ReadonlySet<string> {
   const stripped = core(text);
   const first = stripped.slice(0, 1);
@@ -90,12 +57,7 @@ function quoteForms(text: string): ReadonlySet<string> {
   return new Set(hasMarker ? [stripped, stripped.slice(1).trim()] : [stripped]);
 }
 
-/**
- * Split a quote into per-line accepted forms, dropping blank lines.
- *
- * Blanks are dropped on both sides of the match so that an empty line inside
- * the quote -- or inside the diff -- cannot break an otherwise good run.
- */
+/** The quote as per-line accepted forms, blank lines dropped. */
 function quoteLines(existingCode: string): ReadonlySet<string>[] {
   const out: ReadonlySet<string>[] = [];
   for (const raw of splitLines(existingCode)) {
@@ -105,12 +67,7 @@ function quoteLines(existingCode: string): ReadonlySet<string>[] {
   return out;
 }
 
-/**
- * Every run in `index` matching all of `lines` consecutively.
- *
- * All matches are collected, not just the first: a quote matching two places
- * is ambiguous and must not be used to move a comment.
- */
+/** Every run in `index` matching all of `lines` consecutively (blank rows skipped). */
 function spans(index: readonly NewSideEntry[], lines: readonly ReadonlySet<string>[]): Span[] {
   const rows = index
     .map(([no, text]) => [no, core(text)] as const)
@@ -125,14 +82,7 @@ function spans(index: readonly NewSideEntry[], lines: readonly ReadonlySet<strin
   return hits;
 }
 
-/**
- * Reduce a matched span to the commentable lines inside it.
- *
- * Only added lines are commentable, so a span that caught context lines is
- * narrowed to the added ones it contains. The result stays multi-line only
- * when those added lines form an unbroken run; otherwise it collapses to the
- * first, which keeps a comment from spanning a gap of context.
- */
+/** Narrows a span to the commentable lines inside it; multi-line only when they form an unbroken run. */
 function postable(span: Span, allowed: ReadonlySet<number>): Span | null {
   const [start, end] = span;
   const inside = [...allowed].filter((n) => start <= n && n <= end).toSorted((a, b) => a - b);
@@ -149,7 +99,12 @@ function spanAnchor(span: Span, outcome: AnchorOutcome): Anchor {
   return { line: end, startLine: end > start ? start : null, outcome };
 }
 
-/** Decide where one finding may be posted. Never throws. */
+/**
+ * Decides where one finding may be posted. Never throws.
+ *
+ * @returns The anchor and its outcome. A commentable `line` wins a conflict with the quote; a quote
+ * repairs a missing or uncommentable line only when it matches exactly one place.
+ */
 export function resolveAnchor({ line, existingCode, index, allowed }: ResolveInput): Anchor {
   const claimed = isInteger(line) && allowed.has(line) ? line : null;
   const candidates = spans(index, quoteLines(existingCode))
@@ -159,9 +114,7 @@ export function resolveAnchor({ line, existingCode, index, allowed }: ResolveInp
   const unique = distinct.size === 1 ? candidates[0] : undefined;
 
   if (claimed !== null) {
-    // No usable quote, or an ambiguous one: the marker stands on its own.
     if (unique === undefined) return { line: claimed, startLine: null, outcome: EXACT };
-    // The quote agrees; widen to the whole span it actually named.
     return unique[0] <= claimed && claimed <= unique[1]
       ? spanAnchor(unique, EXACT)
       : { line: claimed, startLine: null, outcome: CONFLICT };

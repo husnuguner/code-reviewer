@@ -1,26 +1,7 @@
 /**
- * The verification pass: a second model call that removes the findings the
- * diff itself refutes.
- *
- * The reviewer is asked for problems and answers with problems; some of them
- * are about code that is not there. Those cost the author's trust far more
- * than they cost attention, and no amount of prompt tuning removes them all.
- * So a finding faces one more question before it can be posted -- *does this
- * diff prove you wrong?* -- asked of a model that is shown the diff and the
- * findings, and nothing else.
- *
- * The two errors available here are not symmetric, and the design says so at
- * every level. Keeping a wrong finding wastes seconds; removing a right one
- * destroys a real finding silently. So the policy (`prompts/verify.md`)
- * admits exactly two grounds for removal, vetoes the subjects where a wrong
- * removal is most expensive, and answers "keep" whenever the evidence falls
- * short -- and this module **fails open** to match: a failed call, an
- * unparseable reply, an out-of-range index or a malformed entry all leave the
- * finding standing. Nothing here can turn into a silent deletion.
- *
- * The verifier may only *remove*. It never edits a finding's text, its
- * severity or its anchor, so verification cannot introduce a claim the
- * reviewer did not make.
+ * The verification pass: a second model call that removes findings the diff itself refutes. It may
+ * only remove, never edit, and fails open.
+ * @packageDocumentation
  */
 
 import { type Finding } from "../domain/finding";
@@ -33,20 +14,20 @@ import { type Clock, SYSTEM_CLOCK, describeUsage, seconds, stopwatch } from "../
 
 import { extractJson } from "./file-reviewer";
 
-/** One file's findings, with the diff they were written from. */
+/** One file's findings with the diff they came from. */
 export interface VerifyInput {
   readonly path: string;
-  /** The same annotated diff the reviewer saw, as `[L<n>]`-prefixed text. */
+  /** The same annotated diff the reviewer saw. */
   readonly annotatedPatch: string;
   readonly findings: readonly Finding[];
 }
 
-/** One removed finding, with the ground the verifier gave for removing it. */
+/** One removed finding and the ground given. */
 export interface Refutation {
   readonly finding: Finding;
   /** `"A"` (not in the diff), `"B"` (contradicted), or `""` when none was given. */
   readonly ground: string;
-  /** The verifier's one-sentence evidence; `""` when it gave none. */
+  /** The verifier's one-sentence evidence, or `""`. */
   readonly reason: string;
 }
 
@@ -56,12 +37,12 @@ export interface Verdict {
   readonly refuted: readonly Refutation[];
 }
 
-/** The verdict that removes nothing -- the answer to every failure here. */
+/** The verdict that removes nothing; the answer to every failure. */
 export function keepAll(findings: readonly Finding[]): Verdict {
   return { kept: [...findings], refuted: [] };
 }
 
-/** One entry of the model's `remove` list, validated. */
+/** One validated entry of the model's `remove` list. */
 export interface Removal {
   /** 1-based position in the list the prompt showed. */
   readonly index: number;
@@ -69,18 +50,15 @@ export interface Removal {
   readonly reason: string;
 }
 
-/** The grounds the policy admits; anything else is recorded as none. */
+/** The grounds the policy admits. */
 const GROUNDS: ReadonlySet<string> = new Set(["A", "B"]);
 
-/** One line of text with its whitespace collapsed, as the prompt lists it. */
 function oneLine(text: string): string {
   return collapseWhitespace(text);
 }
 
-/** One removal entry, or `null` when it is not usable. */
+/** One removal entry, or `null` when unusable. A bare integer is a removal without a ground. */
 function removalFrom(item: JsonValue): Removal | null {
-  // A model that answers `{"remove": [2]}` means the same thing as the full
-  // entry, minus the evidence; that is a removal without a stated ground.
   if (isInteger(item)) return { index: item, ground: "", reason: "" };
   if (!isJsonObject(item)) return null;
   const index = item["index"];
@@ -91,11 +69,10 @@ function removalFrom(item: JsonValue): Removal | null {
 }
 
 /**
- * The removals a reply asks for, by index, out of `count` findings.
+ * The removals a reply asks for, by index.
  *
- * Every way an entry can be wrong -- a missing list, a non-integer index, an
- * index naming no finding, a repeat -- drops that entry and keeps the
- * finding. A reply that is entirely malformed therefore removes nothing.
+ * @param count - How many findings the prompt listed.
+ * @returns Valid removals keyed by 1-based index. Every malformed entry is dropped, keeping its finding.
  */
 export function removalsFrom(payload: JsonValue, count: number): Map<number, Removal> {
   const removals = new Map<number, Removal>();
@@ -118,7 +95,7 @@ function whereOf(finding: Finding): string {
     : `lines ${finding.start_line}-${finding.line}`;
 }
 
-/** One finding as the numbered list shows it: what it says and what it quotes. */
+/** One finding as the numbered list shows it. */
 function entryOf(index: number, finding: Finding): string {
   const lines = [
     `${index}. [${finding.severity}] ${whereOf(finding)}`,
@@ -132,7 +109,7 @@ function entryOf(index: number, finding: Finding): string {
   return lines.join("\n");
 }
 
-/** Compose the verification call's user prompt. */
+/** Composes the verification call's user prompt. */
 export function buildVerifyPrompt({ path, annotatedPatch, findings }: VerifyInput): string {
   return [
     `File: ${path}`,
@@ -150,16 +127,16 @@ export function buildVerifyPrompt({ path, annotatedPatch, findings }: VerifyInpu
   ].join("\n");
 }
 
-/** What the per-file verifier needs from the model-backed implementation. */
+/** Options for {@link FindingVerifier}. */
 export interface FindingVerifierOptions {
   /** The verification policy (`prompts/verify.md`). */
   readonly systemPrompt: string;
   readonly logger?: Logger;
-  /** The clock the call's duration is read from; injected so a test can pin it. */
+  /** The clock the call's duration is read from; injectable for tests. */
   readonly now?: Clock;
 }
 
-/** Wraps the chat model to answer which of a file's findings the diff refutes. */
+/** Wraps a chat model to answer which of a file's findings the diff refutes. */
 export class FindingVerifier {
   private readonly log: Logger;
   private readonly systemPrompt: string;
@@ -174,16 +151,16 @@ export class FindingVerifier {
     this.now = options.now ?? SYSTEM_CLOCK;
   }
 
-  /** The findings that survive, and the ones the diff refuted. Never throws. */
+  /**
+   * Verifies one file's findings. Never throws.
+   *
+   * @returns The verdict. No findings costs no call; a failed call or unparseable reply keeps everything.
+   */
   async verify(input: VerifyInput): Promise<Verdict> {
     const { findings } = input;
-    // Nothing to check is the common case: a clean file costs no second call.
     if (findings.length === 0) return keepAll(findings);
 
     const messages: ChatMessage[] = [
-      // The policy is the same on every verification of the run; the file
-      // and its findings are not. Marked so a vendor that keeps prefixes
-      // keeps the one worth keeping.
       { role: "system", content: this.systemPrompt, stable: true },
       { role: "user", content: buildVerifyPrompt(input) },
     ];
@@ -203,14 +180,12 @@ export class FindingVerifier {
     try {
       payload = extractJson(response.text);
     } catch (error) {
-      // Not retried, unlike the review itself: there a bad reply costs the
-      // file's findings, here it costs nothing but a finding the author reads.
       return this.failOpen(input, `the reply was not JSON (${errorMessage(error)})`);
     }
     return this.verdictOf(input, removalsFrom(payload, findings.length));
   }
 
-  /** Split the findings on the removals, recording each removal as it goes. */
+  /** Splits the findings on the removals, logging each. */
   private verdictOf(input: VerifyInput, removals: ReadonlyMap<number, Removal>): Verdict {
     if (removals.size === 0) return keepAll(input.findings);
     const kept: Finding[] = [];
@@ -229,7 +204,7 @@ export class FindingVerifier {
     return { kept, refuted };
   }
 
-  /** Keep everything, and say why the question went unanswered. */
+  /** Keeps everything and says why the question went unanswered. */
   private failOpen(input: VerifyInput, detail: string): Verdict {
     this.log.warn(
       `Could not verify ${input.path}: ${detail}; keeping all ${input.findings.length} finding(s).`,

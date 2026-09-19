@@ -1,19 +1,6 @@
 /**
- * `claude`: Anthropic Claude models.
- *
- * Set `LLM_PROVIDER=claude` and `LLM_API_KEY` to an Anthropic key. Optionally
- * set `LLM_BASE_URL` for a proxy/gateway. Name the model with `LLM_MODEL`
- * (the default `claude-sonnet-4-6` is fast and strong for code review).
- *
- * A vendor class is its differences and nothing else; the shared adapter,
- * the one-call guarantee and the `ChatModel` port come from `AiSdkProvider`.
- *
- * The one difference beyond the client is prompt caching. Anthropic keeps a
- * prompt prefix only when asked, block by block, and the reviewer has two
- * prefixes worth asking about: the standing prompt every call of a run
- * shares, and a skills block every file with the same skills shares. The
- * core marks them (`ChatMessage.stable`); this class says what the mark
- * means here.
+ * `claude`: Anthropic models. `LLM_API_KEY` is an Anthropic key; `LLM_BASE_URL` optionally a proxy.
+ * @packageDocumentation
  */
 
 import { createAnthropic } from "@ai-sdk/anthropic";
@@ -24,21 +11,16 @@ import { AiSdkProvider } from "../ai-sdk-provider";
 import { type ModelRequest } from "../model-provider";
 
 /**
- * "Keep this block": Anthropic's cache marker, at the default five-minute
- * life, which a run of any length keeps refreshing with every hit.
+ * Anthropic's cache marker for a stable prefix (five-minute life, refreshed on every hit).
  *
- * The arithmetic that makes it worth asking: a kept block costs a quarter
- * more the first time and nine-tenths less every time after, so it pays
- * from the second file on. A run of one file pays the quarter and gets
- * nothing back -- the price of the common case being the pull request. The
- * vendor also declines to keep a block under its minimum (about a thousand
- * tokens for the larger models), silently; the standing prompt and any
- * skills block worth having are both well past it.
+ * @remarks A cached block costs a quarter more to write and a tenth to read, so it pays from the second
+ * file on. Blocks under the vendor's minimum (~1k tokens) are silently not kept.
  */
 export const ANTHROPIC_STABLE_PREFIX: ProviderOptions = {
   anthropic: { cacheControl: { type: "ephemeral" } },
 };
 
+/** The Anthropic vendor. */
 export class ClaudeProvider extends AiSdkProvider {
   readonly name = "claude";
   readonly description = "Anthropic Claude; LLM_API_KEY is an Anthropic key";

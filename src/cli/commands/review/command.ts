@@ -1,13 +1,6 @@
 /**
- * `reviewer review` (the default): what it takes.
- *
- * The flags, the shape they parse into, and the command's registration. What
- * the command *does* with them is `run.ts`, so the flags can be tested
- * without a container and the flow without Commander.
- *
- * Nothing is posted and no hosting credential is read -- turning a finding
- * into a pull-request comment is `reviewer comment`'s job, downstream of the
- * NDJSON this prints.
+ * `reviewer review` (the default): its flags and their parsed shape. What it does is `run.ts`.
+ * @packageDocumentation
  */
 
 import { type Command, Option } from "commander";
@@ -23,37 +16,31 @@ import { severityList } from "../../options/severity";
 
 import { runReview } from "./run";
 
-/**
- * What `--branch` means when it is not given: the checkout as it is.
- *
- * `HEAD` rather than a branch name, because the common CI case is a detached
- * commit: a pull-request build sits on a detached commit, and a flag that
- * insisted on a branch name would make the common case the awkward one.
- */
+/** What `--branch` means when not given: `HEAD`, since a CI build sits on a detached commit. */
 export const DEFAULT_BRANCH = "HEAD";
 
-/** The parsed `review` command line, one field per flag. */
+/** The parsed `review` command line. */
 export interface ReviewArguments extends CatalogArguments {
   readonly project: string | null;
   readonly branch: string;
   readonly base: string;
-  /** Review what is not committed yet; `--branch` and `--base` then say nothing. */
+  /** Review the working tree; `--branch` and `--base` are then not used. */
   readonly uncommitted: boolean;
   readonly format: ReportFormat;
-  /** Where a machine-readable copy of the records also goes, or `null`. */
+  /** `--out`, or `null`. */
   readonly out: string | null;
-  /** Print what would be reviewed and stop, calling no model. */
+  /** Print what would be reviewed and stop. */
   readonly preview: boolean;
   readonly lang: string | null;
   readonly skillsPath: string | null;
   readonly exclude: readonly string[];
-  /** Severities that make the run exit non-zero; empty never fails. */
+  /** Severities that make the run exit `3`; empty never fails. */
   readonly failOn: readonly Severity[];
-  /** False only when `--no-verify` was passed; otherwise the config decides. */
+  /** `false` only when `--no-verify` was passed. */
   readonly verify: boolean;
 }
 
-/** The `review` subcommand's flags, on top of the catalogue's. */
+/** The `review` flags, on top of the catalogue's. */
 function reviewOptions(command: Command): Command {
   return (
     catalogOptions(command)
@@ -67,17 +54,11 @@ function reviewOptions(command: Command): Command {
         DEFAULT_BRANCH,
       )
       .option("--base <name>", "Base branch to compare against.", "main")
-      // The pre-commit check, next to the pre-pull-request one: the work a
-      // branch diff cannot see is the work still on disk, and that is exactly
-      // what a reviewer is most useful on -- before it is history.
       .option(
         "--uncommitted",
         "Review the working tree against HEAD instead of a branch: staged and unstaged changes to tracked files, plus untracked files git is not ignoring. --base and --branch are not used.",
         false,
       )
-      // Both the accepted values and the help text come from the registry, so a
-      // newly registered format is selectable and documented without an edit
-      // here (see providers/reporting/builtin.ts).
       .option(
         "--format <format>",
         `How findings are reported: ${REPORT_FORMATS.describe()}. Logs always stay on stderr.`,
@@ -101,8 +82,7 @@ function reviewOptions(command: Command): Command {
         "--skills-path <path>",
         "Directory of review skills inside the reviewed repository (overrides the project's skills_path). Empty disables skills.",
       )
-      // `Option` rather than `.option()` where the default is a list: Commander
-      // would print it as `[]`, and "none" is what the flag actually takes.
+      // `Option` where the default is a list, so help prints "none" rather than `[]`.
       .addOption(
         new Option(
           "--exclude <glob>",
@@ -126,17 +106,10 @@ function reviewOptions(command: Command): Command {
   );
 }
 
-/**
- * Which of a review's failures are the operator's to fix.
- *
- * Configuration and working-tree problems are theirs, so they get one plain
- * `error:` line rather than a stack trace pointing into our code. An `--out`
- * path the filesystem refuses is the same kind of problem, which is why
- * `ReportFileError` is named here alongside the rest.
- */
+/** Configuration, working-tree and `--out` problems: one `error:` line, exit 2. */
 const isReviewOperatorError = instanceOfAny(CatalogError, GitError, ConfigError, ReportFileError);
 
-/** `reviewer review`, as the root command registers it. */
+/** `reviewer review`, as the root registers it. */
 export const REVIEW = defineCommand<ReviewArguments>({
   name: "review",
   description:
@@ -145,7 +118,6 @@ export const REVIEW = defineCommand<ReviewArguments>({
     "the findings go to stdout as text, NDJSON or GitHub Actions annotations, and " +
     "`reviewer comment` reads them from there.",
   options: reviewOptions,
-  // Only the strings that may be absent need a word: Commander says `undefined`, the run says `null`.
   arguments: (options) => ({
     ...options,
     ...catalogArguments(options),

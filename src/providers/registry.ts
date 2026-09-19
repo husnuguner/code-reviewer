@@ -1,16 +1,7 @@
 /**
- * The one registry every kind of provider is kept in, and the one refusal a
- * wrong name meets.
- *
- * Selection, listing, the default, generated help and "select by name, then
- * build" are the same for a vendor, a host and a format; only what is built
- * differs, and that is the type arguments. Keeping the lookup in one place is
- * worth more than the lines it saves: the refusal ("Unknown X 'y'; available:
- * [...]") is then one sentence with one spelling rather than three kept in
- * step by hand.
- *
- * `label` is the noun that refusal uses ("report format", "LLM provider"), so
- * the message reads like the flag it came from rather than like this class.
+ * The registry every provider kind is kept in: selection by name, listing, the default, help text, and
+ * one refusal for a wrong name.
+ * @packageDocumentation
  */
 
 import { ValueError } from "../core/util/errors";
@@ -18,28 +9,38 @@ import { show, sortedByCodePoint } from "../core/util/text";
 
 import { type Provider } from "./provider";
 
+/**
+ * Providers of one kind, by name.
+ *
+ * @typeParam P - The kind held.
+ */
 export class ProviderRegistry<In, Out, P extends Provider<In, Out> = Provider<In, Out>> {
   private readonly providers = new Map<string, P>();
   private readonly label: string;
 
+  /**
+   * @param label - The noun refusals use: `"report format"`, `"LLM provider"`.
+   * @param providers - Initial registrations, in order.
+   */
   constructor(label: string, providers: readonly P[] = []) {
     this.label = label;
     for (const provider of providers) this.register(provider);
   }
 
-  /** Later registration of a name replaces the earlier one, keeping its position. */
+  /** Registers a provider; a repeated name replaces the earlier one, keeping its position. */
   register(provider: P): void {
     this.providers.set(provider.name, provider);
   }
 
-  /** Registration order: the order `--help` lists them in, and whose first is the default. */
+  /** Names in registration order; the first is the default. */
   names(): string[] {
     return this.providers.keys().toArray();
   }
 
   /**
-   * The first registered name: what a flag left unset means. A registry with
-   * nothing in it has no default, and that is a wiring error, not a value.
+   * The first registered name: what a flag left unset means.
+   *
+   * @throws {@link ValueError} when nothing is registered.
    */
   defaultName(): string {
     const first = this.names()[0];
@@ -47,7 +48,7 @@ export class ProviderRegistry<In, Out, P extends Provider<In, Out> = Provider<In
     return first;
   }
 
-  /** Sorted names, for an error message that should read the same every time. */
+  /** Names in code-point order, for messages. */
   sortedNames(): string[] {
     return sortedByCodePoint(this.providers.keys());
   }
@@ -56,7 +57,11 @@ export class ProviderRegistry<In, Out, P extends Provider<In, Out> = Provider<In
     return this.providers.has(name);
   }
 
-  /** The provider `name` denotes, or a `ValueError` naming the ones that exist. */
+  /**
+   * The provider `name` denotes.
+   *
+   * @throws {@link ValueError} naming the available providers when `name` is unknown.
+   */
   get(name: string): P {
     const provider = this.providers.get(name);
     if (provider === undefined) {
@@ -67,14 +72,18 @@ export class ProviderRegistry<In, Out, P extends Provider<In, Out> = Provider<In
     return provider;
   }
 
-  /** `'name' description` for every provider, for generated help text. */
+  /** `'name' description` for every provider, for help text. */
   describe(): string {
     return this.all()
       .map((provider) => `'${provider.name}' ${provider.description}`)
       .join("; ");
   }
 
-  /** What `name` builds from `input`, or a `ValueError` naming the alternatives. */
+  /**
+   * Builds what `name` provides from `input`.
+   *
+   * @throws {@link ValueError} when `name` is unknown.
+   */
   create(name: string, input: In): Out {
     return this.get(name).create(input);
   }

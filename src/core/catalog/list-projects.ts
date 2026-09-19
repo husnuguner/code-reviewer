@@ -1,5 +1,6 @@
 /**
- * `projects`: print the defined projects, so a name never has to be guessed.
+ * `reviewer projects`: prints the defined projects.
+ * @packageDocumentation
  */
 
 import { type ConsoleOutput } from "../ports/console";
@@ -7,6 +8,12 @@ import { countCodePoints, sortedByCodePoint } from "../util/text";
 
 import { type Catalog } from "./catalog";
 
+/**
+ * Lists each project and the checkout it reviews.
+ *
+ * @param expectedPath - Where the catalogue was looked for, for the message when there is none.
+ * @returns `0` when projects were listed; `1` when there is no catalogue or no project.
+ */
 export function listProjects(
   catalog: Catalog | null,
   expectedPath: string,
@@ -27,9 +34,6 @@ export function listProjects(
   for (const name of names) {
     const project = catalog.projects.get(name);
     if (project === undefined) continue;
-    // What a project *is* now: a checkout to read. An unset `local-path` is
-    // not a fault -- the run reads the current directory -- so it is spelled
-    // out rather than reported as missing.
     const path = catalog.settingsFor(project)["local-path"];
     const where = typeof path === "string" && path !== "" ? path : "(current directory)";
     out.line(`  ${name.padEnd(width)}  ${where}`);

@@ -1,14 +1,7 @@
 /**
- * Model-backed per-file reviewer: annotated diff in, anchored findings out.
- *
- * This is the ONLY place the language model is consulted. It returns
- * structured findings; the flow decides what to report.
- *
- * No finding leaves this module with a line the caller cannot report on. A line
- * the model got wrong is first re-derived from the code it quoted (see
- * `anchor.ts`); only when that fails too does the finding come back with
- * `line: null`, which asks the caller to report it without a line rather than
- * to discard it.
+ * The model-backed per-file reviewer: annotated diff in, anchored findings out. The only place the
+ * model is asked for findings.
+ * @packageDocumentation
  */
 
 import { type NewSideEntry } from "../diff/patch-view";
@@ -24,12 +17,7 @@ import { type Anchor, CONFLICT, EXACT, FAILED, REPAIRED, resolveAnchor } from ".
 import { RETRY_PROMPT, buildUserPrompt, reviewMessages } from "./prompts";
 import { isKnownSeverity, parseSeverity, severityPromptVocabulary } from "./severity";
 
-/**
- * The severity a finding keeps when the model named one the vocabulary has
- * not got: the mildest, so that a substitution cannot inflate a finding's
- * standing. What was claimed is recorded on the finding (`severity_claimed`)
- * and counted by the run.
- */
+/** The severity a finding keeps when the model named an unknown one: the mildest. */
 const FALLBACK_SEVERITY = "readability";
 
 /** Model text that does not contain a findings object. */
@@ -39,12 +27,7 @@ export class JsonDecodeError extends Error {
 
 const FENCE = /^```(?:json)?\s*([^]*?)\s*```$/u;
 
-/**
- * The span from the first `{` to the last `}`, or `null`.
- *
- * A missing brace makes `indexOf` answer -1, which the ordering check rejects
- * along with a `}` that precedes the `{`.
- */
+/** The span from the first `{` to the last `}`, or `null`. */
 function outermostObject(text: string): string | null {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
@@ -55,7 +38,11 @@ function parseJson(text: string): JsonValue {
   return decodeJson(text, (detail) => new JsonDecodeError(detail));
 }
 
-/** Parse a findings payload from model text, tolerating stray fences/prose. */
+/**
+ * Parses a findings payload from model text, tolerating a code fence or surrounding prose.
+ *
+ * @throws {@link JsonDecodeError} when no JSON object can be found.
+ */
 export function extractJson(raw: string): JsonValue {
   let text = raw.trim();
   const fenced = FENCE.exec(text);
@@ -63,42 +50,39 @@ export function extractJson(raw: string): JsonValue {
   try {
     return parseJson(text);
   } catch (error) {
-    // Fall back to the outermost {...} span, tolerating prose around it.
     const span = outermostObject(text);
     if (span === null) throw error;
     return parseJson(span);
   }
 }
 
+/** Input to {@link FileReviewer.reviewFile}. */
 export interface ReviewFileInput {
   readonly path: string;
   readonly annotatedPatch: string;
   readonly allowedLines: ReadonlySet<number>;
   readonly content: string | null;
-  /** Human language for each finding's `body` (default English). */
+  /** Language for each finding's `body`; default English. */
   readonly language?: string;
   readonly skillsText?: string;
   /** The rendered pre-context block, if any. */
   readonly contextText?: string;
-  /**
-   * The diff's new side from `newSideIndex`, used to place a finding from the
-   * code it quoted; omitting it leaves the model's line number as the only
-   * anchor.
-   */
+  /** The shown diff's new side, for placing a finding from its quote; omitted leaves the model's line alone. */
   readonly anchorIndex?: readonly NewSideEntry[];
-  /** How many findings the run will report for this file; `0` asks for no limit. */
+  /** The per-file cap told to the model; `0` asks for no limit. */
   readonly maxFindings?: number;
 }
 
+/** Options for {@link FileReviewer}. */
 export interface FileReviewerOptions {
-  /** The composed system prompt (`systemPrompt(policy, contract)`). */
+  /** The composed system prompt. */
   readonly systemPrompt: string;
   readonly logger?: Logger;
-  /** The clock each call's duration is read from; injected so a test can pin it. */
+  /** The clock call durations are read from; injectable for tests. */
   readonly now?: Clock;
 }
 
-/** Wraps the chat model to produce validated findings for one file. */
+/** Wraps a chat model to produce validated, anchored findings for one file. */
 export class FileReviewer {
   private readonly log: Logger;
   private readonly systemPrompt: string;
@@ -113,7 +97,11 @@ export class FileReviewer {
     this.now = options.now ?? SYSTEM_CLOCK;
   }
 
-  /** Anchored findings for one file (`[]` on any failure). */
+  /**
+   * Reviews one file.
+   *
+   * @returns Anchored findings; `[]` on any failure or when there is nothing commentable.
+   */
   async reviewFile(input: ReviewFileInput): Promise<Finding[]> {
     if (input.allowedLines.size === 0) return [];
 
@@ -126,8 +114,6 @@ export class FileReviewer {
       contextText: input.contextText ?? "",
       maxFindings: input.maxFindings ?? 0,
     });
-    // Stable prefix first (standing prompt, then this file's skills), the
-    // file itself last: see `reviewMessages` for why the order matters.
     const messages = reviewMessages(this.systemPrompt, input.skillsText ?? "", userPrompt);
 
     const payload = await this.askForFindings(input.path, messages);
@@ -137,12 +123,7 @@ export class FileReviewer {
     return isJsonArray(items) ? items.flatMap((item) => this.toFinding(input, item)) : [];
   }
 
-  /**
-   * The model's parsed payload, or `undefined` when it could not be had.
-   *
-   * A malformed payload costs the whole file, so it is retried once (asking
-   * for JSON only) before giving up on it.
-   */
+  /** The model's parsed payload, retried once on malformed JSON; `undefined` when it could not be had. */
   private async askForFindings(
     path: string,
     initial: readonly ChatMessage[],
@@ -150,9 +131,6 @@ export class FileReviewer {
     let messages = initial;
     for (const attempt of [1, 2] as const) {
       let response: ChatResponse;
-      // Timed per attempt, so that a retried file shows as two waits rather
-      // than one long one -- the one line that tells a slow model from a
-      // malformed answer paid for twice.
       const elapsed = stopwatch(this.now);
       try {
         response = await this.model.generate(messages);
@@ -184,21 +162,14 @@ export class FileReviewer {
     return undefined;
   }
 
-  /** One raw finding item as a validated, anchored `Finding` -- or nothing. */
+  /** One raw item as a validated, anchored finding, or nothing when it has no body. */
   private toFinding(input: ReviewFileInput, item: JsonValue): Finding[] {
     if (!isJsonObject(item)) return [];
     const body = asText(item["body"] ?? "").trim();
     if (body === "") return [];
-    // An unrecognised severity keeps the finding under the mildest one rather
-    // than losing it: the text is the model's, the problem it describes may
-    // still be real. What it claimed is kept and said out loud, because
-    // re-rating a finding in silence is still re-rating it.
     const named = item["severity"];
     const severity = parseSeverity(named, FALLBACK_SEVERITY);
-    // A claim the vocabulary has not got was *overruled*, and that travels
-    // with the finding so a run can count it. A claim never made was not
-    // overruled -- there was nothing to overrule -- so it is said out loud
-    // and left out of the tally.
+    // A claim outside the vocabulary was overruled and is recorded; a claim never made is not.
     const claimedSeverity =
       hasContent(named) && !isKnownSeverity(named) ? collapseWhitespace(asText(named)) : "";
     if (!isKnownSeverity(named)) {
@@ -229,13 +200,7 @@ export class FileReviewer {
     ];
   }
 
-  /**
-   * Record how a finding's line was decided, when it was not simply right.
-   *
-   * These are INFO, not WARNING: a repair is the mechanism working, and a
-   * conflict is data being gathered. Only a finding that could not be placed
-   * at all rises to WARNING, since that is the one a reader may need to chase.
-   */
+  /** Logs how a line was decided: repairs and conflicts at INFO, a failure at WARN. */
   private logAnchor(path: string, claimed: unknown, quote: string, spot: Anchor): void {
     const line = spot.line ?? 0;
     switch (spot.outcome) {

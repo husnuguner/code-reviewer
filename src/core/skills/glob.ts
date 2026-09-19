@@ -1,33 +1,26 @@
 /**
- * Path-glob matching with `pathlib.PurePosixPath.full_match` semantics.
- *
- * The rules a skill mapping's globs follow are a behavioural contract
- * (frozen in `tests/fixtures/skills.json`), so they are implemented here rather
- * than delegated to a glob library whose dialect differs in the corners:
- *
- * - `**` alone in a segment matches zero or more segments; joined to other
- *   text (`a/**c.ts`) it is just `*`;
- * - `*` matches within a segment (never `/`); `?` one non-`/` character;
- * - `[...]` is a character class with `!` negation, `]` first as a literal,
- *   and ranges; an unterminated `[` is a literal;
- * - hidden segments (`.git`) are matched by wildcards like any other;
- * - both path and pattern are normalised the way `PurePosixPath` normalises
- *   them: `./a` is `a`, `a//b` is `a/b`, a trailing `/` is dropped;
- * - matching is case-sensitive and covers the whole path.
+ * Path-glob matching with `PurePosixPath.full_match` semantics: `**` spans segments, `*` and `?` stay
+ * within one, `[...]` classes with `!` negation, case-sensitive, whole path.
+ * @packageDocumentation
  */
 
 const NOT_SEP = String.raw`[^/]`;
 const ONE_SEGMENT = `${NOT_SEP}+/`;
 const ANY_SEGMENTS = `(?:.+/)?`;
 
-/** True if the POSIX `path` matches the glob `pattern` in full. */
+/**
+ * Whether a POSIX path matches a glob in full.
+ *
+ * @param path - The repository-relative path.
+ * @param pattern - The glob.
+ */
 export function isGlobMatch(path: string, pattern: string): boolean {
   return compileGlob(pattern).test(normalizePath(path));
 }
 
 const cache = new Map<string, RegExp>();
 
-/** The full-match regular expression for a glob, cached per pattern. */
+/** The full-match regex for a glob, cached per pattern. */
 function compileGlob(pattern: string): RegExp {
   const normalized = normalizePath(pattern);
   const cached = cache.get(normalized);
@@ -37,11 +30,7 @@ function compileGlob(pattern: string): RegExp {
   return regex;
 }
 
-/**
- * `str(PurePosixPath(text))`: collapse repeated separators, drop `.` segments
- * and a trailing separator. The empty path is `""`, not `"."`, so that empty
- * paths never match wildcards.
- */
+/** Collapses repeated `/`, drops `.` segments and a trailing `/`; the empty path stays `""`. */
 function normalizePath(text: string): string {
   const segments = text.split("/").filter((segment) => segment !== "" && segment !== ".");
   const joined = segments.join("/");
@@ -68,7 +57,7 @@ function translate(pattern: string): string {
   return out.join("");
 }
 
-/** One segment's wildcards (`*`, `?`, `[...]`) as regex; everything else escaped. */
+/** One segment's wildcards as regex; everything else escaped. */
 function translateSegment(segment: string): string {
   const out: string[] = [];
   let index = 0;
@@ -80,7 +69,7 @@ function translateSegment(segment: string): string {
   return out.join("");
 }
 
-/** The regex for the wildcard or literal starting at `index`, and where the next one starts. */
+/** The regex for the wildcard or literal at `index`, and where the next one starts. */
 function translateAt(segment: string, index: number): [piece: string, next: number] {
   const char = segment[index] ?? "";
   switch (char) {
@@ -104,11 +93,7 @@ function translateAt(segment: string, index: number): [piece: string, next: numb
   }
 }
 
-/**
- * Index of the `]` closing a class that opened just before `start`, or -1.
- * A leading `!` and a `]` right after it (or after the `[`) are part of the
- * class, not its end.
- */
+/** Index of the `]` closing a class opened before `start`, or `-1`; a leading `!` or `]` is part of the class. */
 function findClassEnd(segment: string, start: number): number {
   let index = start;
   if (segment[index] === "!") index++;
@@ -117,18 +102,12 @@ function findClassEnd(segment: string, start: number): number {
   return index < segment.length ? index : -1;
 }
 
-/**
- * A bracket expression's body as a regex class. `!` negates; a leading `^`
- * or `[` is literal; ranges are kept when ordered and dropped when inverted;
- * an empty body never matches and a lone `!` matches anything.
- */
+/** A bracket body as a regex class: `!` negates, an empty body never matches, inverted ranges are dropped. */
 function translateClass(body: string): string {
   const isNegated = body.startsWith("!");
   const inner = isNegated ? body.slice(1) : body;
   if (inner === "") return isNegated ? "." : "(?!)";
   const chunks = splitRanges(inner);
-  // A `]` can only be the class's first character (the `]`-first rule); a
-  // JavaScript class needs it escaped where Python's `re` reads it literally.
   const escaped = chunks
     .map((chunk) =>
       chunk
@@ -142,11 +121,7 @@ function translateClass(body: string): string {
   return `[${prefix}${escaped}]`;
 }
 
-/**
- * Split a class body on the `-` characters that form ranges, dropping any
- * range whose end precedes its start (invalid in a regex). Mirrors the way
- * `fnmatch` normalises `[a-c]`, `[a-]` and `[b-a]`.
- */
+/** Splits a class body on range dashes, dropping ranges whose end precedes their start. */
 function splitRanges(inner: string): string[] {
   if (!inner.includes("-")) return [inner];
   const chunks: string[] = [];
@@ -178,12 +153,7 @@ function splitRanges(inner: string): string[] {
   return chunks;
 }
 
-/**
- * A literal character as regex source. Python's `re.escape` also escapes `-`,
- * which its engine tolerates anywhere; a JavaScript regex with the `u` flag
- * rejects `\-` outside a character class, so `-` stays as it is (it is only
- * special inside `[...]`, which builds its own escaping).
- */
+/** A literal character as regex source. `-` is not escaped: with `u`, `\-` is invalid outside a class. */
 function escapeRegex(char: string): string {
   return /[\\^$.*+?()[\]{}|/]/u.test(char) ? `\\${char}` : char;
 }

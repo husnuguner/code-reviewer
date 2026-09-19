@@ -1,17 +1,7 @@
 /**
- * The text files this package ships -- prose belongs in files, not in code.
- *
- * All three prompt files are the reviewer's own and none is replaceable.
- * `prompts/system.md` is the review policy -- the lenses and the hard rules;
- * `prompts/output-contract.md` is the JSON contract, so a prompt can never
- * break the parser; `prompts/verify.md` is the verification policy, whose
- * asymmetry rule and vetoes keep a second pass from deleting real findings.
- * What a project needs on top of the policy goes in `skills/`, which reach
- * the model as data rather than as instructions.
- * `templates/config.yaml` is the catalogue `reviewer init` writes. All are
- * located from this module's own position, walking up to the `package.json`
- * that names this package, so a global install and a checkout find the same
- * files.
+ * The text files this package ships: the three prompt files (not replaceable) and the templates `init`
+ * writes. Located from the package's own `package.json`, so a global install and a checkout agree.
+ * @packageDocumentation
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -22,7 +12,11 @@ import { ConfigError } from "../../core/config/config";
 
 const PACKAGE_NAME = "code-reviewer";
 
-/** The directory holding this package's `package.json`. */
+/**
+ * The directory holding this package's `package.json`.
+ *
+ * @throws {@link ConfigError} when it cannot be found by walking up.
+ */
 function packageRoot(): string {
   let directory = dirname(fileURLToPath(import.meta.url));
   for (;;) {
@@ -47,19 +41,22 @@ function isThisPackage(manifest: string): boolean {
   }
 }
 
+/** A shipped file, by package-relative path. */
 export type ShippedFile =
-  /** The review policy: the lenses and the hard rules. Not replaceable. */
+  /** The review policy. */
   | "prompts/system.md"
+  /** The JSON output contract. */
   | "prompts/output-contract.md"
+  /** The verification policy. */
   | "prompts/verify.md"
-  /** The machine-wide catalogue `reviewer init` writes outside a repository. */
+  /** The machine-wide catalogue `init` writes outside a repository. */
   | "templates/config.yaml"
-  /** The repository's own `.review/config.yaml`, written by `init` inside one. */
+  /** The `.review/config.yaml` `init` writes inside one. */
   | "templates/repo-config.yaml"
-  /** What a skill is, for whoever opens `.review/skills/` first. */
+  /** The README written into `.review/skills/`. */
   | "templates/skills-README.md";
 
-/** One shipped text file, by its package-relative path. */
+/** Reads one shipped text file. */
 export function shippedFile(name: ShippedFile): string {
   return readFileSync(join(packageRoot(), name), "utf8");
 }

@@ -1,9 +1,7 @@
 /**
- * `reviewer review`: what it does.
- *
- * Parsed arguments in, an exit code out. Builds the container from the
- * arguments, then either previews the selection (no model) or streams the
- * review through the reporter the format chose.
+ * `reviewer review`: builds the container, then previews the selection (no model) or streams the review
+ * through the chosen reporter.
+ * @packageDocumentation
  */
 
 import { type ConfigField } from "../../../core/config/config";
@@ -25,31 +23,22 @@ import { type ReviewArguments } from "./command";
 export const FINDINGS_EXIT_CODE = 3;
 
 /**
- * The settings the command line states, which outrank every other layer.
- *
- * Only what was actually passed: an argument left at its default must not
- * shadow a project or environment value with it.
+ * The settings the command line states; only what was actually passed, so a default cannot shadow a
+ * project or environment value.
  */
 export function cliOverrides(arguments_: ReviewArguments): Partial<Record<ConfigField, unknown>> {
   return {
     ...(arguments_.lang !== null && arguments_.lang !== "" && { reviewLang: arguments_.lang }),
     ...(arguments_.skillsPath !== null && { skillsPath: arguments_.skillsPath }),
-    // Only the refusal is a command-line statement: there is no `--verify`,
-    // so a run that did not say no leaves the question to the layers below.
+    // Only the refusal is a statement: there is no `--verify`.
     ...(!arguments_.verify && { verifyFindings: false }),
   };
 }
 
 /**
- * Whether the run found something `--fail-on` named.
+ * Whether a reported finding has one of the gated severities.
  *
- * Asked of the reported findings, not of everything the model said: a finding
- * verification refuted or the volume policy withheld is not a reason to fail
- * a build the reviewer never showed it to.
- *
- * The comparison goes through `severityGate` rather than being spelled here,
- * so this gate and `--request-changes-on`'s cannot drift in how they read a
- * severity -- which is exactly how they drifted before.
+ * @remarks Asked of reported findings only; goes through `severityGate` so this and `--request-changes-on` cannot drift.
  */
 export function hasFailingFinding(
   result: Pick<BranchReviewResult, "findings">,
@@ -59,41 +48,32 @@ export function hasFailingFinding(
   return result.findings.some((finding) => isGated(finding.severity));
 }
 
-/**
- * The ref the pre-context is read at.
- *
- * `HEAD` for an uncommitted review, because `--branch` describes a comparison
- * that run did not make. The changed files themselves are read from disk
- * either way (`git.readFile`), so what this ref decides is only how the
- * *other* files are quoted -- and for a working-tree review those are the
- * files nobody touched, which is precisely where `HEAD` and the disk agree.
- */
+/** The ref pre-context is read at: `HEAD` for an uncommitted review, else `--branch`. */
 function contextReference(arguments_: ReviewArguments): string {
   return arguments_.uncommitted ? WORKTREE_BASE : arguments_.branch;
 }
 
-/** What the container needs to know, straight from the parsed arguments. */
+/** The container request from the parsed arguments; a preview needs no model. */
 function requestFrom(arguments_: ReviewArguments): RunRequest {
   return {
     project: arguments_.project,
     configFile: arguments_.config,
     logging: logSettingsFrom(arguments_),
     overrides: cliOverrides(arguments_),
-    // A preview calls no model, so it must not be stopped by a credential it
-    // will never send.
     requiresModel: !arguments_.preview,
     format: arguments_.format,
     outFile: arguments_.out,
   };
 }
 
-/** Branch review: local git in, a reporter out. */
+/**
+ * Streams the review through the reporter and returns the exit code.
+ *
+ * @remarks The reporter is resolved first, so a bad `--out` path fails before any model call; it is closed
+ * in `finally` so no record is left in a buffer.
+ */
 async function runBranchReview(arguments_: ReviewArguments, cradle: RunCradle): Promise<number> {
   const { config, logger, checkoutRoot, gitReader } = cradle;
-  // Resolved first, before anything expensive: the container is lazy, so this
-  // line is where `--out` actually opens its file. A path the filesystem
-  // refuses must cost nothing, and after the first model call it would cost
-  // the whole run.
   const reporter = cradle.branchReporter;
   const options = {
     base: arguments_.base,
@@ -106,37 +86,21 @@ async function runBranchReview(arguments_: ReviewArguments, cradle: RunCradle): 
     skills: await cradle.skills,
     maxConcurrentFiles: config.concurrency().files,
     maxFindingsPerFile: config.reportPolicy().maxFindingsPerFile,
-    // The one collaborator built here rather than in the container: it is
-    // bound to the branch under review, which only the arguments know.
+    // Built here rather than in the container: bound to the ref only the arguments know.
     codeContext: new GitCodeContext(checkoutRoot, contextReference(arguments_), undefined, logger),
     logger,
   };
 
-  // Every run streams through the reporter, whatever the format: rendering is
-  // the format's business, not this function's. That is also what makes
-  // `--out` orthogonal, so a human-readable run still leaves behind the
-  // machine-readable copy `reviewer comment` reads.
   let result: BranchReviewResult;
   try {
     result = await streamBranchReview(options, reporter);
   } finally {
-    // The record file is handed back here rather than left to process exit: a
-    // line still in its buffer is a line the poster downstream never reads,
-    // and a write that failed late is only knowable once the last one has
-    // been flushed.
     await closeReporter(reporter);
   }
   return hasFailingFinding(result, arguments_.failOn) ? FINDINGS_EXIT_CODE : 0;
 }
 
-/**
- * `--preview`: what would be reviewed, and nothing else.
- *
- * Kept off the review path on purpose. It never touches `cradle.fileReviewer`
- * or `cradle.verifier`, so the container never builds a language model and a
- * preview runs on a machine that has no LLM credential at all -- which is the
- * whole point of a free pre-flight.
- */
+/** `--preview`: prints the selection. Never touches the model or the verifier, so no credential is needed. */
 async function runPreview(arguments_: ReviewArguments, cradle: RunCradle): Promise<void> {
   const { config, logger, gitReader } = cradle;
   const { report } = await previewBranch({
@@ -150,10 +114,13 @@ async function runPreview(arguments_: ReviewArguments, cradle: RunCradle): Promi
   cradle.console.line(report);
 }
 
-/** Run one review (or its preview) from parsed arguments; returns the exit code. */
+/**
+ * Runs `review` (or its preview).
+ *
+ * @returns The exit code.
+ */
 export async function runReview(arguments_: ReviewArguments): Promise<number> {
   const { cradle } = buildContainer(requestFrom(arguments_));
-  // A preview calls no model, so it is answered before anything resolves one.
   if (arguments_.preview) {
     await runPreview(arguments_, cradle);
     return 0;

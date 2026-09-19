@@ -1,19 +1,6 @@
 /**
- * Validating a decoded `config.yaml` into a `Catalog`.
- *
- * A key the schema does not recognise is **rejected**, not ignored: a misspelt
- * `exlude` that silently does nothing would leave a run looking configured
- * when it is not. The error names the key and the accepted set. The root
- * object stays open so that notes can live beside the data.
- *
- * The value types stay `unknown` on purpose: the file is read the way an
- * operator wrote it and the run's settings schema does the typing, so a wrong
- * value is reported once, where it is interpreted. What is enforced here is
- * the *shape* -- which keys may exist -- because that is the mistake nothing
- * later would notice.
- *
- * This module only validates. Reading the file is the providers layer's;
- * what a project's settings mean is the resolver's.
+ * Validates a decoded `config.yaml` into a `Catalog`. Unknown keys are rejected; value types are left to the settings schema.
+ * @packageDocumentation
  */
 
 import { z } from "zod";
@@ -40,17 +27,16 @@ function shapeOf(keys: readonly string[]): Record<string, z.ZodOptional<z.ZodUnk
 const DefaultsSchema = z.strictObject(shapeOf(PROJECT_SETTING_KEYS));
 const ProjectSchema = z.strictObject(shapeOf(PROJECT_SETTING_KEYS));
 const SkillsSchema = z.strictObject(shapeOf(SKILLS_SECTION_KEYS));
-// `defaults.skills` names the directory only: which files a skill reviews
-// depends on a project's layout, so the mappings live on the project.
+/** `defaults.skills` names the directory only; mappings are per project. */
 const DefaultsSkillsSchema = z.strictObject(shapeOf(["path"]));
 const LlmSchema = z.strictObject(shapeOf(LLM_SECTION_KEYS));
 
-/** One strict section of the catalogue: what it accepts, and how its error reads. */
+/** One strict section: what it accepts and how its error reads. */
 interface CatalogSection {
   readonly schema: z.ZodObject;
-  /** How a key is called in this section's error message. */
+  /** How a key is called in this section's error. */
   readonly noun: "setting" | "key";
-  /** The keys named as "known" in that message; defaults to the schema's own. */
+  /** The keys named as known in that error; defaults to the schema's own. */
   readonly known?: readonly string[];
 }
 
@@ -66,7 +52,7 @@ const LLM_SECTION: CatalogSection = { schema: LlmSchema, noun: "key" };
 
 // -- reading ------------------------------------------------------------------
 
-/** `_require_mapping`: the value as an object, or the error the file deserves. */
+/** The value as an object, or a `CatalogError` naming what it should have been. */
 function requireObject(value: unknown, what: string): Record<string, unknown> {
   if (!isPlainObject(value)) {
     throw new CatalogError(`${what} must be an object, got ${typeNameOf(value)}`);
@@ -74,20 +60,23 @@ function requireObject(value: unknown, what: string): Record<string, unknown> {
   return value;
 }
 
-/**
- * The value as a section object, or the error the file deserves. A falsy
- * value (`null`, `[]`, `""`) reads as an empty section, like Python's `or {}`.
- */
+/** The value as a section object; an empty value (`null`, `[]`, `""`) reads as `{}`. */
 function requireSection(value: unknown, what: string): Record<string, unknown> {
   return hasContent(value) ? requireObject(value, what) : {};
 }
 
-/** Validate a decoded catalogue body into a `Catalog`. */
+/**
+ * Validates a decoded catalogue body.
+ *
+ * @param payload - The decoded YAML.
+ * @param source - The file's path, for messages.
+ * @returns The catalogue.
+ * @throws {@link CatalogError} on a wrong shape, an unknown key, or a newer schema version.
+ */
 export function parseCatalog(payload: unknown, source: string): Catalog {
   const root = requireObject(payload, "config.yaml");
 
   const version = Object.hasOwn(root, "version") ? root["version"] : SCHEMA_VERSION;
-  // Python's `bool` is an `int`, so `true` reads as 1 here as it does there.
   const versionNumber = typeof version === "boolean" ? Number(version) : version;
   if (!isInteger(versionNumber) || versionNumber > SCHEMA_VERSION) {
     throw new CatalogError(
@@ -117,7 +106,7 @@ function settingsOf(entry: Record<string, unknown>): ProjectSettings {
   return settings;
 }
 
-/** The `skills` and `llm` sections of `defaults` or a project, where present. */
+/** Validates the `skills` and `llm` sections of `defaults` or a project, where present. */
 function validateSections(
   entry: Record<string, unknown>,
   where: string,
@@ -143,11 +132,7 @@ function parseProject(name: string, entry: Record<string, unknown>): ProjectSpec
   return { name, settings: settingsOf(entry) };
 }
 
-/**
- * Refuse keys the section does not declare, naming them and the accepted set.
- * The schema decides what is unknown, so the message can never drift from
- * what the parser accepts.
- */
+/** Throws a `CatalogError` naming any key the section does not declare, and the accepted set. */
 function rejectUnknownKeys(
   section: CatalogSection,
   entry: Record<string, unknown>,

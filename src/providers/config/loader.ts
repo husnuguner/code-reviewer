@@ -1,10 +1,6 @@
 /**
- * One run's configuration, assembled from everything that may speak.
- *
- * This is I/O glue and nothing else: the catalogue is read by
- * `providers/catalog`, the `.env` files by `environment-files`, and what any of it
- * *means* -- precedence, typing, validation -- is the core's
- * (`core/config/resolver`), which receives the contents as parameters.
+ * One run's configuration from disk and environment. I/O glue only; meaning is the core resolver's.
+ * @packageDocumentation
  */
 
 import { homedir } from "node:os";
@@ -18,13 +14,14 @@ import { loadCatalog } from "../catalog/reader";
 
 import { environmentFilePaths, readEnvironmentFile } from "./environment-files";
 
+/** Options for {@link loadRunConfig}. */
 export interface LoadRunConfigOptions {
   readonly project?: string | null;
   readonly configFile?: string | null;
   readonly overrides?: Readonly<Partial<Record<ConfigField, unknown>>>;
-  /** False for a flow that builds no language model (`--preview`). */
+  /** `false` for a flow that builds no model (`--preview`). */
   readonly requiresModel?: boolean;
-  /** The LLM providers registered for this run; `LLM_PROVIDER` must name one. */
+  /** `LLM_PROVIDER` must name one of these. */
   readonly providers: RegisteredProviders;
   readonly cpuCount: number | null;
   readonly environment?: Environment;
@@ -34,9 +31,9 @@ export interface LoadRunConfigOptions {
 }
 
 /**
- * Resolve one run's configuration from the disk and the environment: the
- * command line, the environment (real and `.env`), the catalogue project, and
- * the defaults, in that order of precedence.
+ * Resolves one run's configuration: command line › environment and `.env` › catalogue project › defaults.
+ *
+ * @returns The validated `Config`.
  */
 export function loadRunConfig(options: LoadRunConfigOptions): Config {
   const environment = options.environment ?? process.env;
@@ -50,8 +47,6 @@ export function loadRunConfig(options: LoadRunConfigOptions): Config {
   const catalog = loadCatalog(options.configFile, environment, logger, home, cwd);
   return resolveConfig({
     catalog,
-    // Where the catalogue actually is -- a repository's `.review/` or the
-    // machine's home -- so every relative path it names is taken from there.
     ...(catalog !== null && { catalogDirectory: dirname(catalog.source) }),
     project: options.project ?? null,
     ...(options.overrides && { overrides: options.overrides }),

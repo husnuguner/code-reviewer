@@ -1,10 +1,6 @@
 /**
- * Skill parsing strategies.
- *
- * A `SkillParser` turns one raw skill document into a `Skill` (or `null` when
- * invalid). Sources hold a parser instance, so a different document format can
- * be plugged in without touching the sources. The default reads Markdown with
- * a leading YAML frontmatter block.
+ * Skill document parsing. The default reads Markdown with a YAML frontmatter block.
+ * @packageDocumentation
  */
 
 import { parse as parseYaml } from "yaml";
@@ -15,24 +11,20 @@ import { errorMessage } from "../util/errors";
 import { isPlainObject } from "../util/json";
 import { asText } from "../util/text";
 
+/** Turns one raw document into a skill. */
 export interface SkillParser {
   /** A skill, or `null` when `text` is not a valid skill document. */
   parse(text: string, source: string): Skill | null;
 }
 
-// Leading YAML frontmatter block: ---\n ... \n---\n
+/** A leading `---\n…\n---\n` block. */
 const FRONTMATTER = /^---\s*\n([^]*?)\n---\s*\n?([^]*)$/u;
 
 /**
- * Parse Markdown with a leading YAML frontmatter block (the default strategy).
+ * Parses Markdown with a leading YAML frontmatter block.
  *
- * Frontmatter must declare `name`; `description` is optional. Which files a
- * skill reviews is *not* the document's to say: that is the project's
- * `skills.mappings` in the catalogue, so a skill leaves the parser
- * with no globs of its own and any other frontmatter key is ignored. Returns
- * `null` (logging a warning) when frontmatter is missing, the YAML is invalid,
- * or `name` is absent. YAML is read with 1.1 semantics (`yes` is a boolean,
- * `1_000` a number), the dialect skill authors have been writing against.
+ * @remarks Frontmatter must declare `name`; `description` is optional; other keys are ignored. The
+ * document never sets its own globs. YAML is read with 1.1 semantics.
  */
 export class FrontmatterSkillParser implements SkillParser {
   private readonly log: Logger;
@@ -41,6 +33,13 @@ export class FrontmatterSkillParser implements SkillParser {
     this.log = logger.child("skills.parser");
   }
 
+  /**
+   * Parses one document.
+   *
+   * @param text - The document.
+   * @param source - The source name recorded on the skill.
+   * @returns The skill, or `null` (with a warning) when frontmatter is missing, invalid, or has no `name`.
+   */
   parse(text: string, source: string): Skill | null {
     const split = this.split(text, source);
     if (split === null) return null;
@@ -55,8 +54,6 @@ export class FrontmatterSkillParser implements SkillParser {
 
     return {
       name,
-      // The document has no say over its own scope; the catalogue's mapping
-      // fills this in, and an unmapped skill never matches.
       globs: [],
       body: body.trim(),
       source,
@@ -64,12 +61,11 @@ export class FrontmatterSkillParser implements SkillParser {
     };
   }
 
-  /** Frontmatter -> `[metadata, body]`; `null` if absent, invalid, or not a mapping. */
+  /** Frontmatter → `[metadata, body]`, or `null` if absent, invalid, or not a mapping. */
   private split(text: string, source: string): [Record<string, unknown>, string] | null {
     const match = FRONTMATTER.exec(text);
     if (match?.[1] === undefined || match[2] === undefined) return null;
-    // YAML treats a bare `\r` as a line break; a CRLF document leaves one on
-    // the last frontmatter line, so line endings are normalised first.
+    // YAML reads a bare `\r` as a line break; normalise CRLF first.
     const yamlText = match[1].replaceAll(/\r\n?/gu, "\n");
     let meta: unknown;
     try {
@@ -84,10 +80,12 @@ export class FrontmatterSkillParser implements SkillParser {
 }
 
 /**
- * Parse `[label, text]` documents, skipping what does not parse.
+ * Parses `[label, text]` documents, skipping those that do not parse.
  *
- * A file without valid frontmatter is not an error -- a README sitting in a
- * skills directory is the ordinary case -- so it is skipped quietly.
+ * @param parser - The strategy.
+ * @param documents - Each document with a label for the log.
+ * @param sourceName - Recorded on every skill.
+ * @returns The skills that parsed. A non-skill file (a README) is skipped at DEBUG.
  */
 export function parseSkillDocuments(
   parser: SkillParser,

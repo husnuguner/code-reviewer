@@ -1,25 +1,7 @@
 /**
- * Deterministic pre-context: what the reviewer fetches for the model *before*
- * asking it to judge a file, so that fewer findings rest on assumptions.
- *
- * Three kinds, in the order they are worth their characters:
- *
- * 1. **Definitions** -- for each local module the added lines import, the
- *    exported signatures of that module. Answers "what does the thing I am
- *    calling actually do / take / return".
- * 2. **Usages** -- for each exported symbol the patch adds, removes or changes,
- *    where else in the repository it appears. Answers "is this signature change
- *    breaking anyone" without sending those files.
- * 3. **Related changes** -- the diffs of the other changed files beside this
- *    one (same directory, or the same stem: `foo.ts` / `foo.test.ts`). Answers
- *    "was the counterpart updated too".
- *
- * The model asks no questions; this module guesses what it would have asked.
- * That keeps the review a single call and the output contract untouched: the
- * context is one more block in the user prompt, capped by `maxChars`, and the
- * finding's `existing_code` must still quote the diff. Everything here is pure
- * except the two port calls; the heuristics are regex-level and tuned for
- * TypeScript/JavaScript first.
+ * Deterministic pre-context fetched before the model is asked: imported modules' signatures, users of
+ * changed exports, and related diffs. The model asks nothing; the review stays one call.
+ * @packageDocumentation
  */
 
 import pLimit from "p-limit";
@@ -32,15 +14,11 @@ import { cutToLength, sortedByCodePoint } from "../util/text";
 
 /** How much context one file review may gather. */
 export interface ContextLimits {
-  /** Cap on the rendered block; `0` switches context gathering off. */
+  /** Cap on the rendered block; `0` switches gathering off. */
   readonly maxChars: number;
   /** Local imports resolved per file. */
   readonly maxDefinitions: number;
-  /**
-   * Changed exports searched for per file -- one repository search each, so
-   * this is what keeps a file that rewrites thirty exports from spending
-   * thirty searches on a section the char cap may drop whole.
-   */
+  /** Changed exports searched for per file; one repository search each. */
   readonly maxSymbols: number;
   /** Paths listed per changed export. */
   readonly maxUsagesPerSymbol: number;
@@ -48,6 +26,7 @@ export interface ContextLimits {
   readonly maxRelated: number;
 }
 
+/** The built-in limits. */
 export const DEFAULT_CONTEXT_LIMITS: ContextLimits = {
   maxChars: 6000,
   maxDefinitions: 4,
@@ -56,47 +35,45 @@ export const DEFAULT_CONTEXT_LIMITS: ContextLimits = {
   maxRelated: 3,
 };
 
-/**
- * Port calls in flight for one file's gathering. The file loop above is
- * already concurrent (`maxConcurrentFiles`), so the two multiply: a small
- * pool overlaps a file's reads and searches without letting one review fan
- * out into dozens of git subprocesses at once -- and each of those is itself
- * a parallel, CPU-bound search, which oversubscription makes slower rather
- * than faster.
- */
+/** Port calls in flight per file; multiplies with `maxConcurrentFiles`. */
 const MAX_CONCURRENT_LOOKUPS = 4;
 
+/** One imported module's exported surface. */
 export interface DefinitionContext {
   /** The import specifier as written (`./service`). */
   readonly specifier: string;
-  /** The repo-relative path it resolved to. */
+  /** The repository-relative path it resolved to. */
   readonly path: string;
   /** The module's exported signatures, trimmed. */
   readonly signatures: string;
 }
 
+/** Where else a changed export is mentioned. */
 export interface UsageContext {
   readonly symbol: string;
   /** Other files mentioning the symbol, in code-point order. */
   readonly paths: readonly string[];
 }
 
+/** Another changed file's diff. */
 export interface RelatedChange {
   readonly path: string;
   readonly patch: string;
 }
 
+/** Everything gathered for one file. */
 export interface ReviewContext {
   readonly definitions: readonly DefinitionContext[];
   readonly usages: readonly UsageContext[];
   readonly related: readonly RelatedChange[];
 }
 
+/** Nothing gathered. */
 export const EMPTY_CONTEXT: ReviewContext = { definitions: [], usages: [], related: [] };
 
 // -- what the patch says ------------------------------------------------------
 
-/** The added and removed lines of a unified diff, without their markers. */
+/** The added and removed lines of a diff, markers stripped. */
 function changedLines(patch: string): { added: string[]; removed: string[] } {
   const added: string[] = [];
   const removed: string[] = [];
@@ -112,8 +89,9 @@ const IMPORT_SPECIFIER =
   /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["']((?:\.{1,2}\/)[^"']+)["']/gu;
 
 /**
- * Relative module specifiers the added lines import (`./x`, `../y/z`), each
- * once, in first-seen order. Package imports are not local and are skipped.
+ * Relative module specifiers the added lines import, each once, in first-seen order.
+ *
+ * @remarks Package imports are not local and are skipped.
  */
 export function localImports(patch: string): string[] {
   const seen = new Set<string>();
@@ -140,15 +118,9 @@ function exportedNames(lines: readonly string[]): Set<string> {
 }
 
 /**
- * Names the patch adds, removes or edits an `export` declaration of, **most
- * worth asking about first**. A symbol on both sides is an edited signature --
- * the case that breaks callers -- so it outranks one that appears on a single
- * side, which is a new or deleted export. Within a rank the order is
- * alphabetical, so the answer is the same on every run.
+ * Names whose `export` declaration the patch adds, removes or edits, most worth asking about first.
  *
- * The rank is what makes `maxSymbols` safe to apply: a cap over an
- * alphabetical list would drop the breaking change because its name starts
- * with a `t`.
+ * @returns Edited signatures (on both sides) first, then new or deleted exports; alphabetical within a rank.
  */
 export function changedExports(patch: string): string[] {
   const { added, removed } = changedLines(patch);
@@ -175,7 +147,11 @@ const MODULE_SUFFIXES = [
   "/index.js",
 ];
 
-/** `./x` from `src/a/b.ts` is `src/a/x`; `..` climbs; the result never leaves the root. */
+/**
+ * Resolves a relative specifier against the importing file's directory.
+ *
+ * @returns e.g. `./x` from `src/a/b.ts` → `src/a/x`; never leaves the root.
+ */
 export function resolveSpecifier(fromPath: string, specifier: string): string {
   const base = fromPath.split("/").slice(0, -1);
   for (const segment of specifier.split("/")) {
@@ -189,16 +165,12 @@ export function resolveSpecifier(fromPath: string, specifier: string): string {
   return base.join("/");
 }
 
-/** Strip a `.js`/`.ts`-style extension a specifier may carry (`./x.js` -> `./x`). */
+/** Strips a `.js`/`.ts`-style extension. */
 function withoutExtension(path: string): string {
   return path.replace(/\.(?:[cm]?[jt]sx?)$/u, "");
 }
 
-/**
- * The first candidate file the module resolves to at the ref, with its text;
- * `null` when none exists. Tries the bare path first (a specifier with an
- * extension), then the usual suffixes.
- */
+/** The first candidate file the module resolves to at the ref, with its text, or `null`. */
 async function resolveModule(
   fromPath: string,
   specifier: string,
@@ -219,9 +191,10 @@ async function resolveModule(
 const JSDOC_LINES_KEPT = 6;
 
 /**
- * The exported surface of a module: each `export` line with the JSDoc block
- * above it (trimmed to a few lines), or -- for a module that exports nothing
- * recognisable -- its first lines. Capped by `maxChars`.
+ * A module's exported surface: each `export` line with the doc block above it, or the first lines of
+ * a module exporting nothing recognisable.
+ *
+ * @param maxChars - The code-point cap.
  */
 export function exportSignatures(text: string, maxChars: number): string {
   const lines = text.split("\n");
@@ -234,7 +207,7 @@ export function exportSignatures(text: string, maxChars: number): string {
   return cutToLength(body, maxChars);
 }
 
-/** The lines that finish a signature the `export` line left open, at most four. */
+/** Up to four lines finishing a signature the `export` line left open. */
 function continuationOf(lines: readonly string[], index: number): string[] {
   const line = lines[index] ?? "";
   if (/[;{})=]\s*$/u.test(line) || /\bfrom\b/u.test(line)) return [];
@@ -260,7 +233,7 @@ function documentBlockAbove(lines: readonly string[], index: number): string[] {
 
 // -- related changes ------------------------------------------------------------
 
-/** `src/a/foo.test.ts` -> `foo`; the part of the file name before its first dot. */
+/** The file name before its first dot: `src/a/foo.test.ts` → `foo`. */
 function stemOf(path: string): string {
   const name = path.split("/").at(-1) ?? path;
   return name.split(".", 1)[0] ?? name;
@@ -271,9 +244,9 @@ function directoryOf(path: string): string {
 }
 
 /**
- * The other changed files that belong with this one: the same directory, or
- * the same stem anywhere (`foo.ts` beside `foo.test.ts`, `foo.types.ts`).
- * Ordered same-stem first, then by path.
+ * The other changed files that belong with this one: same directory, or same stem anywhere.
+ *
+ * @returns Same-stem files first, then by path.
  */
 export function relatedChanges(file: ChangedFile, all: readonly ChangedFile[]): ChangedFile[] {
   const stem = stemOf(file.path);
@@ -292,6 +265,7 @@ export function relatedChanges(file: ChangedFile, all: readonly ChangedFile[]): 
 
 // -- gathering ------------------------------------------------------------------
 
+/** Input to {@link gatherContext}. */
 export interface GatherContextOptions {
   readonly file: ChangedFile;
   /** Every changed file of the change set, this one included. */
@@ -302,14 +276,10 @@ export interface GatherContextOptions {
 }
 
 /**
- * Everything the review can say about a file's surroundings, within the
- * limits. A port call that fails costs that one item, never the review: the
- * model then judges with less context, as it does today.
+ * Gathers a file's surroundings within the limits.
  *
- * The two kinds that need the repository are fetched through one bounded
- * pool, so a file's gathering overlaps instead of running one subprocess at a
- * time -- and the results are read back in request order, so what the model
- * sees does not depend on which call happened to answer first.
+ * @returns The context. A port call that fails costs that one item, never the review. Results are read
+ * back in request order, so the prompt does not depend on which call answered first.
  */
 export async function gatherContext(options: GatherContextOptions): Promise<ReviewContext> {
   const limits = options.limits ?? DEFAULT_CONTEXT_LIMITS;
@@ -360,8 +330,7 @@ export async function gatherContext(options: GatherContextOptions): Promise<Revi
       }),
     );
 
-  // Definitions are queued first, so when the pool is the binding constraint
-  // the more valuable kind is the one that gets fetched.
+  // Definitions are queued first: when the pool binds, the more valuable kind is fetched.
   const [definitions, usages] = await Promise.all([Promise.all(defined), Promise.all(used)]);
 
   const related = relatedChanges(file, options.changeSet)
@@ -378,8 +347,10 @@ export async function gatherContext(options: GatherContextOptions): Promise<Revi
 // -- rendering ------------------------------------------------------------------
 
 /**
- * The context as one prompt block, most valuable first, cut at `maxChars` on a
- * section boundary where possible. `""` when there is nothing to say.
+ * Renders the context as one prompt block, most valuable first.
+ *
+ * @param maxChars - Cut on a section boundary where possible.
+ * @returns The block, or `""` when there is nothing to say.
  */
 export function renderContext(context: ReviewContext, maxChars: number): string {
   const sections = [

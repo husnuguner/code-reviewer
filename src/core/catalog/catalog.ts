@@ -1,22 +1,6 @@
 /**
- * The catalogue as a value: what `config.yaml` says once it has been read.
- *
- * The catalogue names two things. **`defaults`** are the settings every
- * project starts from -- the model, the review policy, the skills directory,
- * what is excluded, how much one file may report; and **`projects`** are
- * reviewable targets, each a local checkout plus the defaults it overrides.
- * `--project <name>` selects one, and exactly one is in scope for a run.
- *
- * A project is not a repository on a hosting system. This reviewer reads
- * local git and reports; nothing here describes a connection, a credential
- * or a place to post to, because there is no longer anything to connect to
- * (see README, "Why the reviewer cannot post").
- *
- * This module is the model and the two questions asked of it: a project's
- * settings with the defaults underneath, and which project a name (or no
- * name) means. Validating the file into one is `parse.ts`; merging with the
- * environment and the command line is the resolver's, so the precedence rule
- * lives in exactly one place.
+ * The catalogue as a value: `defaults` plus the `projects` that override them.
+ * @packageDocumentation
  */
 
 import { CatalogError } from "../util/errors";
@@ -25,17 +9,17 @@ import { show, sortedByCodePoint } from "../util/text";
 
 import { type ProjectSettingKey } from "./schema";
 
-/** Raw setting values as written; the run's settings schema types them later. */
+/** Setting values as written; the settings schema types them later. */
 export type ProjectSettings = Readonly<Partial<Record<ProjectSettingKey, unknown>>>;
 
-/** One reviewable target: a local checkout plus the rules that apply to it. */
+/** One reviewable target: a checkout plus the rules that apply to it. */
 export interface ProjectSpec {
   readonly name: string;
-  /** The project's own settings, as written -- not yet merged with `defaults`. */
+  /** The project's own settings, not yet merged with `defaults`. */
   readonly settings: ProjectSettings;
 }
 
-/** The value as an object section, or nothing. */
+/** The value as an object section, or `undefined`. */
 function sectionOf(value: unknown): Record<string, unknown> | undefined {
   return isPlainObject(value) ? value : undefined;
 }
@@ -45,16 +29,14 @@ export class Catalog {
   constructor(
     readonly source: string,
     readonly projects: ReadonlyMap<string, ProjectSpec>,
-    /** The root `defaults` section: what every project starts from. */
+    /** The root `defaults` section. */
     readonly defaults: ProjectSettings = {},
   ) {}
 
   /**
-   * A project's settings with the catalogue's `defaults` underneath: a key
-   * the project sets wins, one it leaves out falls through. Two sections
-   * merge one level deeper -- `llm` key by key, and `skills`, where the
-   * directory (`path`) may come from the defaults while the `mappings` are
-   * always the project's own.
+   * A project's settings with `defaults` underneath.
+   *
+   * @remarks `llm` merges key by key; `skills.path` may come from the defaults, `skills.mappings` never does.
    */
   settingsFor(project: ProjectSpec): ProjectSettings {
     const merged: Partial<Record<ProjectSettingKey, unknown>> = {
@@ -78,7 +60,11 @@ export class Catalog {
     return merged;
   }
 
-  /** The named project, or the only one when a name is not given. */
+  /**
+   * The named project, or the only one when no name is given.
+   *
+   * @throws {@link CatalogError} when the name is unknown, or none is given and there is not exactly one.
+   */
   project(name: string | null | undefined): ProjectSpec {
     if (typeof name === "string" && name !== "") {
       const found = this.projects.get(name);

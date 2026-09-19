@@ -1,13 +1,6 @@
 /**
- * The public surface of the providers layer, for an embedder that composes
- * the core with its own choices.
- *
- * The core (`code-reviewer/core`) asks for ports and knows nothing else. This
- * module is where the choices live: the mechanism (`Provider`,
- * `ProviderRegistry`), the three kinds this program declares with it, and the
- * built-in instances. An embedder adds a vendor, a host or a rendering the
- * same way the built-ins are added -- extend the kind, hand an instance to
- * the registry -- and never edits the core to do it.
+ * The public surface of the providers layer: the mechanism, the three kinds, and the built-in instances.
+ * @packageDocumentation
  */
 
 export { Provider } from "./provider";

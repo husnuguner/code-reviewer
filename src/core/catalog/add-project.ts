@@ -1,11 +1,6 @@
 /**
- * `add`: define a project in the catalogue.
- *
- * Refusing an existing name rather than merging: a project entry holds rules
- * someone wrote, and no scaffold is worth the chance of rewriting them. The
- * skills directory is created only for a machine-local project, because a
- * relative `skills.path` names a directory inside the reviewed repository,
- * which is that repository's to create and commit.
+ * `reviewer add`: defines a project in the catalogue.
+ * @packageDocumentation
  */
 
 import { type CatalogFiles } from "../ports/catalog-files";
@@ -13,19 +8,21 @@ import { type ConsoleOutput } from "../ports/console";
 
 import { type Catalog } from "./catalog";
 
-/** A project to define: a name, a checkout, and where its skills are read from. */
+/** A project to define. */
 export interface NewProject {
   readonly name: string;
   /** The checkout to review. */
   readonly localPath: string;
-  /**
-   * Where this project's skills come from: a path inside the reviewed
-   * repository (relative, which is what CI wants), or `null` to use the
-   * catalogue's shared per-project directory on this machine.
-   */
+  /** A skills path inside the reviewed repository, or `null` for the machine's per-project directory. */
   readonly skillsPath: string | null;
 }
 
+/**
+ * Adds a project to the catalogue and prints what to do next.
+ *
+ * @returns `0` on success; `1` when there is no catalogue or the name is taken.
+ * @remarks An existing name is refused, never merged.
+ */
 export function addProject(
   catalog: Catalog | null,
   files: CatalogFiles,
@@ -43,8 +40,6 @@ export function addProject(
     return 1;
   }
 
-  // Bound once so the two homes below are distinguished by a narrowed value
-  // rather than by a flag the type system cannot follow.
   const inRepo = project.skillsPath;
   files.addProject(project.name, {
     "local-path": project.localPath,
@@ -67,16 +62,13 @@ export function addProject(
   return 0;
 }
 
-/**
- * The project's skills inside the reviewed repository: versioned with the
- * code, and the only home a CI runner can read.
- */
+/** Reports a skills path inside the reviewed repository. */
 function repoSkills(path: string, out: ConsoleOutput): string {
   out.line(`  skills : ${path} (inside the reviewed repository, versioned with its code)`);
   return path;
 }
 
-/** The project's skills on this machine, for rules not committed anywhere. */
+/** Creates and reports the machine's per-project skills directory. */
 function machineSkills(files: CatalogFiles, project: string, out: ConsoleOutput): string {
   const directory = files.skillsDirectory(project);
   const wasCreated = files.createSkillsDirectory(project);

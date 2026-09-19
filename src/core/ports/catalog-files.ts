@@ -1,51 +1,33 @@
 /**
  * The catalogue-files port: what `init` and `add` need from the disk.
- *
- * The two commands that write the catalogue decide *what* to write; where a
- * file goes and how YAML is edited in place is behind this interface, so the
- * decisions stay testable without a disk and a UI can plug in its own store.
+ * @packageDocumentation
  */
 
-/**
- * Which home a catalogue is: a repository's own, or this machine's.
- *
- * The distinction decides what `init` writes and what it says. A repository's
- * `.review/` is committed and shared, so it gets a `.gitignore` for its
- * secret and a README for the team; the machine's `~/.config/reviewer` is
- * one person's, and gets neither.
- */
+/** Which home a catalogue is: a repository's `.review/`, or this machine's `~/.config/reviewer`. */
 export type CatalogHome = "repo" | "machine";
 
 /** Where the catalogue and its sibling files are written. */
 export interface CatalogFiles {
-  /** Where the catalogue goes (already resolved from `--config`/env/default). */
+  /** The catalogue's resolved path. */
   readonly path: string;
+  /** Which home this is. */
   readonly home: CatalogHome;
-  /** The directory holding the catalogue, for files that sit beside it. */
+  /** The directory holding the catalogue. */
   readonly directory: string;
-  /** The config home, for the hint about where the `.env` belongs. */
+  /** The machine's config home, for the hint about where `.env` belongs. */
   readonly configHome: string;
+  /** Whether the catalogue already exists. */
   exists(): boolean;
-  /** Write the catalogue, creating parent directories. */
+  /** Writes the catalogue, creating parent directories. */
   write(text: string): void;
-
-  /**
-   * Add one project to the catalogue, leaving every comment in place.
-   *
-   * Comment preservation is the requirement, not a nicety: this file is
-   * hand-written and annotated, and a command that reformatted it on every
-   * use would be a command nobody runs twice.
-   */
+  /** Adds one project to the catalogue, preserving every comment in the file. */
   addProject(name: string, entry: Readonly<Record<string, unknown>>): void;
-
-  /** Where a project's skills live on this machine, absolute. */
+  /** The absolute directory of a project's skills. */
   skillsDirectory(project: string): string;
-
-  /** Create that directory; `true` when it was not already there. */
+  /** Creates that directory; `true` when it was not already there. */
   createSkillsDirectory(project: string): boolean;
-
-  /** Write a file beside the catalogue (`relative` to its directory), creating parents. */
+  /** Writes a file beside the catalogue, creating parents. */
   writeSidecar(relative: string, text: string): void;
-
+  /** Whether a file beside the catalogue exists. */
   sidecarExists(relative: string): boolean;
 }

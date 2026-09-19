@@ -1,15 +1,7 @@
 /**
- * The composition root: where ports meet adapters.
- *
- * Nothing in `core/` knows which adapter it runs against; this is the one
- * place that decides. The container is built per run from the parsed command
- * line, and the flow receives fully constructed collaborators. A UI or a
- * server builds its own root with different reporters and the same core.
- *
- * Note what is *not* wired here: nothing that talks to a hosting system. The
- * reviewer reads local git and writes to a stream, so the only credential in
- * the graph is the model's, and a run that cannot reach the network can still
- * be a complete run.
+ * The composition root: where ports meet adapters, built per run from the parsed command line. Nothing
+ * here talks to a hosting system; the only credential in the graph is the model's.
+ * @packageDocumentation
  */
 
 import { appendFileSync, existsSync } from "node:fs";
@@ -68,31 +60,21 @@ import {
   isLocalSkillsPath,
 } from "../providers/skills/sources";
 
-/**
- * Where a run's findings go, as the command line spells it.
- *
- * A plain string, validated against the registry rather than against a union:
- * a format is registered, not declared in three places.
- */
+/** A format name, validated against the registry rather than a union. */
 export type ReportFormat = string;
 
 /** What the command line asked for, already parsed. */
 export interface RunRequest {
   readonly project: string | null;
   readonly configFile: string | null;
-  /**
-   * How much the run says, in what shape, in colour or not -- already
-   * settled by the command line (see `commands/shared`). The container takes
-   * a decision rather than the flags behind it, so building a logger reads
-   * no environment variable and asks no question of the terminal.
-   */
+  /** Logging, already settled by the command line. */
   readonly logging: LogSettings;
   /** Command-line settings that outrank every other layer. */
   readonly overrides: Readonly<Partial<Record<ConfigField, unknown>>>;
-  /** Whether the flow builds a language model and therefore needs its key. */
+  /** Whether the flow builds a model and therefore needs its key. */
   readonly requiresModel: boolean;
   readonly format: ReportFormat;
-  /** `--out`: a file every record is also written to as NDJSON, or `null`. */
+  /** `--out`, or `null`. */
   readonly outFile: string | null;
 }
 
@@ -106,42 +88,29 @@ export interface RunCradle {
   readonly formatProviders: FormatProviderRegistry;
   readonly config: Config;
   readonly chatModel: ChatModel;
-  /** The composed system prompt: the policy in force over the output contract. */
+  /** The composed system prompt. */
   readonly systemPrompt: string;
   readonly fileReviewer: FileReviewer;
-  /** The verification pass, or `null` when the run turned it off. */
+  /** The verification pass, or `null` when turned off. */
   readonly verifier: PerFileVerifier | null;
   readonly console: ConsoleOutput;
-  /** Where `--preview` prints the file selection. */
+  /** Where `--preview` prints. */
   readonly previewReporter: PreviewReporter;
   /** Where the run's records go, as `--format` chose. */
   readonly branchReporter: BranchReviewReporter;
   readonly configHomePath: string;
   readonly catalogPath: string;
-  /**
-   * Where this run's standing instructions are read from: `prompts/` beside
-   * the catalogue. A convention, not a setting -- see `project-prompts`.
-   */
+  /** `prompts/` beside the catalogue. */
   readonly promptsPath: string;
-  /**
-   * The checkout the run reviews. A project's `local-path` wins; without one,
-   * a repository's own catalogue names its repository, so `reviewer` run from
-   * any subdirectory reviews that checkout -- the way `git` finds its
-   * repository. Only a machine-wide catalogue falls back to the current
-   * directory.
-   */
+  /** The checkout reviewed: `local-path`, else the repository owning a `.review/` catalogue, else cwd. */
   readonly checkoutRoot: string;
-  /** Local git over that checkout: the diff source and the file reader. */
+  /** Local git over that checkout. */
   readonly gitReader: GitReader;
-  /**
-   * The project's skills, loaded and scoped by its mappings. Resolved once
-   * per run; the source is a directory on this machine or one inside the
-   * checkout, decided by the shape of `skills.path`.
-   */
+  /** The project's skills, loaded and scoped by its mappings; resolved once per run. */
   readonly skills: Promise<SkillMatcher>;
 }
 
-/** Skills from a directory on this machine, `~` expanded. */
+/** A skill source for the path: a directory on this machine (`~` expanded), or one inside the checkout. */
 function skillSource(root: string, path: string, logger: Logger): DirectorySkillSource {
   return isLocalSkillsPath(path)
     ? new DirectorySkillSource(expandUser(path.trim()), { logger })
@@ -149,23 +118,14 @@ function skillSource(root: string, path: string, logger: Logger): DirectorySkill
 }
 
 /**
- * The reporter the requested format asks for.
+ * The reporter for the requested format, teed into the `--out` file when one is named.
  *
- * `--out` is orthogonal to the format on purpose: CI wants findings *on the
- * diff* (annotations) and a machine-readable copy for whatever posts the
- * comments afterwards, and making those two the same choice would force one
- * run per consumer -- which means paying the model twice for one answer.
- *
- * Building this opens the `--out` file, so a path the filesystem refuses is
- * refused here -- which is why the review flow resolves the reporter before
- * it asks a model anything.
+ * @remarks Opens the `--out` file, so the flow resolves this before asking a model anything.
  */
 function buildBranchReporter(
   request: RunRequest,
   formats: FormatProviderRegistry,
 ): BranchReviewReporter {
-  // The format is *looked up*, never branched on: adding a rendering is
-  // registering a strategy, not editing this function.
   const primary = formats.create(request.format, {
     write: lineWriter(process.stdout),
     summary: summarySink(),
@@ -175,13 +135,7 @@ function buildBranchReporter(
     : new TeeReporter([primary, NdjsonFileReporter.open(request.outFile)]);
 }
 
-/**
- * Appends to the job summary GitHub names, or nothing outside a runner.
- *
- * Absent `GITHUB_STEP_SUMMARY` this is not an error: the same command is
- * meant to be runnable on a laptop, where there is simply no summary to
- * write to.
- */
+/** Appends to `$GITHUB_STEP_SUMMARY`, or `null` outside a runner. */
 function summarySink(): SummaryWriter | null {
   const path = process.env["GITHUB_STEP_SUMMARY"];
   return path === undefined || path === ""
@@ -191,7 +145,7 @@ function summarySink(): SummaryWriter | null {
       };
 }
 
-/** Build the run's dependency graph. Resolution is lazy: nothing is opened until asked for. */
+/** Builds the run's dependency graph. Resolution is lazy: nothing is opened until asked for. */
 export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> {
   const container = createContainer<RunCradle>({
     injectionMode: InjectionMode.PROXY,
@@ -210,28 +164,18 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
         configFile: r.configFile,
         overrides: r.overrides,
         requiresModel: r.requiresModel,
-        // Which vendors exist and which is meant when none is named are the
-        // registry's facts; the configuration is told them, it does not hold them.
         providers: { names: modelProviders.names(), default: modelProviders.defaultName() },
         cpuCount: availableParallelism(),
         logger,
       }),
     ).singleton(),
-    // The registry builds the vendor's adapter; the decorator decides what a
-    // failed call means. Wrapping here rather than inside each provider is
-    // what keeps "try again, and say so" one policy instead of one per vendor
-    // -- and what lets a test build the bare model.
+    // The retry decorator wraps here, so "try again, and say so" is one policy for every vendor.
     chatModel: asFunction(
       ({ config, modelProviders, logger }: RunCradle) =>
         new RetryingChatModel(modelProviders.create(config.provider, config.llmSettings()), {
           logger,
         }),
     ).singleton(),
-    // Two of the three parts are the reviewer's own and are not replaceable:
-    // the policy states the lenses and the hard rules, the contract states
-    // the JSON that comes back. Between them go the project's own standing
-    // instructions: every Markdown file in the `prompts/` directory beside
-    // the catalogue, each under its own heading.
     systemPrompt: asFunction(({ promptsPath, logger }: RunCradle) =>
       systemPrompt(
         shippedFile("prompts/system.md"),
@@ -243,8 +187,6 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
       ({ chatModel, systemPrompt: prompt, logger }: RunCradle) =>
         new FileReviewer(chatModel, { systemPrompt: prompt, logger }),
     ).singleton(),
-    // Verification is a policy the core owns, so it is not composed from the
-    // operator's prompts: `null` here is the whole of turning it off.
     verifier: asFunction(({ config, chatModel, logger }: RunCradle) =>
       config.verifyFindings
         ? new FindingVerifier(chatModel, {
@@ -254,7 +196,6 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
         : null,
     ).singleton(),
     console: asFunction(() => new StreamConsole(process.stdout)).singleton(),
-    // A preview's selection is ordinary console output.
     previewReporter: aliasTo("console"),
     branchReporter: asFunction(({ request: r, formatProviders }: RunCradle) =>
       buildBranchReporter(r, formatProviders),
@@ -268,19 +209,12 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
     ).singleton(),
     skills: asFunction(({ config, checkoutRoot, logger }: RunCradle) => {
       const { path, mappings } = config.skillSettings();
-      // An empty path yields an empty registry; the source handles it.
       return SkillRegistry.build([skillSource(checkoutRoot, path, logger)], logger, mappings);
     }).singleton(),
     configHomePath: asFunction(() => configHome()).singleton(),
-    // `existsSync` makes the lookup real: a repository's own `.review/` is
-    // found from the working directory upwards, and only its absence falls
-    // through to the machine-wide catalogue.
     catalogPath: asFunction(({ request: r }: RunCradle) =>
       configPath(r.configFile, process.env, undefined, existsSync),
     ).singleton(),
-    // Beside the catalogue, wherever that turned out to be: a repository's
-    // own `.review/prompts/`, or the machine's `~/.config/reviewer/prompts/`
-    // for a checkout that carries no rules of its own.
     promptsPath: asFunction(({ catalogPath }: RunCradle) =>
       promptsDirectory(catalogPath),
     ).singleton(),

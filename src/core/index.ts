@@ -1,8 +1,6 @@
 /**
- * The public surface of the review core, for embedding the reviewer in a
- * larger application (a UI, a server) without going through the CLI.
- *
- * Everything here is free of I/O adapters: callers provide the ports.
+ * The public surface of the review core, for embedding. Callers provide the ports.
+ * @packageDocumentation
  */
 
 export type { ChangedFileEntry, ChangedFileRecord } from "./domain/changed-file";
@@ -50,9 +48,6 @@ export type {
 } from "./config/settings";
 export { DEFAULT_FILE_REVIEW_SETTINGS, DEFAULT_REPORT_POLICY } from "./config/settings";
 export { resolveConfig } from "./config/resolver";
-// Nothing about providers is exported here, because nothing about providers
-// is *in* here: the core asks for the ports above and is handed them. Which
-// vendor, host or rendering answers is `code-reviewer/providers`' business.
 export {
   branchReviewText,
   iterBranchReview,
@@ -67,8 +62,6 @@ export type {
 } from "./review/branch-review";
 export { FileReviewer } from "./review/file-reviewer";
 export { capPerFile } from "./review/volume";
-// The scope decision, for a caller that wants to show or audit it without
-// running a review.
 export {
   decideFile,
   isSelected,

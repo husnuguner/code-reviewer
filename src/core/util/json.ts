@@ -1,27 +1,27 @@
 /**
- * JSON as a type: what a decoded document can be, and nothing else.
- *
- * Payloads from a hosting provider or a model arrive untyped; naming the shape
- * they *can* take lets the adapters that decode them say so honestly, and the
- * narrowing helpers here turn one into a record or a list at the point where
- * the code knows what it expects.
- *
- * The predicates at the foot of this module answer the questions a caller has
- * about such a value before trusting it -- is it an object, is it a whole
- * number, did the source supply anything at all, and what should a message
- * call it. They live together because they share one subject: a decoded
- * document nobody has validated yet.
+ * JSON as a type, and the predicates that narrow an unvalidated decoded value.
+ * @packageDocumentation
  */
 
 import { errorMessage } from "./errors";
 
+/** A JSON scalar. */
 export type JsonPrimitive = string | number | boolean | null;
+/** Any decoded JSON value. */
 export type JsonValue = JsonPrimitive | JsonValue[] | JsonObject;
+/** A decoded JSON object. */
 export interface JsonObject {
   readonly [key: string]: JsonValue;
 }
 
-/** Decode text as JSON, or throw the given error when it is not JSON. */
+/**
+ * Decodes text as JSON.
+ *
+ * @param text - The document.
+ * @param onError - Builds the error to throw from the parser's message.
+ * @returns The decoded value.
+ * @throws Whatever `onError` returns when `text` is not JSON.
+ */
 export function decodeJson(text: string, onError: (detail: string) => Error): JsonValue {
   try {
     return JSON.parse(text) as JsonValue;
@@ -30,45 +30,34 @@ export function decodeJson(text: string, onError: (detail: string) => Error): Js
   }
 }
 
+/** Whether a JSON value is an object (not an array, not `null`). */
 export function isJsonObject(value: JsonValue | undefined): value is JsonObject {
   return isPlainObject(value);
 }
 
+/** Whether a JSON value is an array. */
 export function isJsonArray(value: JsonValue | undefined): value is JsonValue[] {
   return Array.isArray(value);
 }
 
-/**
- * A key/value object, not an array and not `null`.
- *
- * `typeof` answers `"object"` for all three, so every caller that wants a
- * mapping has to exclude the other two; doing it here means none of them has
- * to remember. `isJsonObject` above is this same question asked of a value
- * already typed as JSON.
- */
+/** Whether a value is a key/value object: not an array, not `null`. */
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 /**
- * A whole number safe to use as a count, an index or a line number.
+ * Whether a value is a safe whole number.
  *
- * `Number.isSafeInteger` refuses non-numbers without coercing them, which is
- * the point: a model answering `"line": true` or `"line": "7"` was not
- * naming a line, and a predicate that accepted either would place a finding
- * somewhere nobody asked for.
+ * @remarks Does not coerce: `true` and `"7"` are not integers.
  */
 export function isInteger(value: unknown): value is number {
   return Number.isSafeInteger(value);
 }
 
 /**
- * Whether the source actually supplied something here.
+ * Whether the source supplied something here.
  *
- * `Boolean()` will not do: it calls an empty array and an empty object true,
- * and those are exactly the shapes a half-written config or a terse model
- * reply produces where a caller expects content. An empty container is
- * nothing supplied, and so is `""`, `0`, `null` and an absent key.
+ * @remarks Unlike `Boolean()`, an empty array or object counts as nothing supplied.
  */
 export function hasContent(value: unknown): boolean {
   if (value === null || value === undefined) return false;
@@ -80,14 +69,7 @@ export function hasContent(value: unknown): boolean {
   return typeof value === "object" ? Object.keys(value).length > 0 : true;
 }
 
-/**
- * What a message should call this value's type.
- *
- * JavaScript's own words, not the JSON specification's and not Python's: the
- * operator reading "must be an object, got null" is looking at a YAML file
- * through a Node tool, and `NoneType` would name a language they are not
- * using.
- */
+/** The value's type name as a message should spell it: `null`, `array`, or `typeof`. */
 export function typeNameOf(value: unknown): string {
   if (value === null) return "null";
   return Array.isArray(value) ? "array" : typeof value;

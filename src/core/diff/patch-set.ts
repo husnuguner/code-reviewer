@@ -1,10 +1,6 @@
 /**
- * Splitting a multi-file `git diff` into per-file provider-shaped entries.
- *
- * Output deliberately mirrors what a repo provider's `changedFiles` returns
- * (`filename` / `status` / `patch`), so the per-file review loop cannot tell
- * the two sources apart. Reading the diff out of git is an infrastructure
- * concern (`providers/git`); the splitting is pure and lives here.
+ * Splits a multi-file `git diff` into per-file changed-file entries.
+ * @packageDocumentation
  */
 
 import { type ChangedFileEntry } from "../domain/changed-file";
@@ -12,11 +8,10 @@ import { type ChangedFileEntry } from "../domain/changed-file";
 import { type PatchedFile, parseUnifiedDiff, renderPatchedFile } from "./unified-diff";
 
 /**
- * Split a multi-file unified diff into per-file entries.
+ * Splits a multi-file unified diff into per-file entries.
  *
- * A removed file is dropped, and so is a file git reports with no textual
- * hunks (a pure rename, a mode change, a binary blob): there are no added
- * lines to anchor a finding to, so a review of it could only be noise.
+ * @param raw - The whole `git diff` output.
+ * @returns One entry per file; removed files and files without textual hunks are dropped.
  */
 export function splitPatches(raw: string): ChangedFileEntry[] {
   return raw.trim() === ""
@@ -30,7 +25,7 @@ export function splitPatches(raw: string): ChangedFileEntry[] {
         }));
 }
 
-/** The provider-shaped status word for one changed file. */
+/** The status word for one changed file: `added`, `renamed` or `modified`. */
 function statusOf(file: PatchedFile): string {
   if (file.isAddedFile) return "added";
   return file.isRename ? "renamed" : "modified";

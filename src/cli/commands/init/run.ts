@@ -1,12 +1,6 @@
 /**
- * `reviewer init`: what it does.
- *
- * Decide which home the catalogue gets, hand the core use-case a file store
- * and the shipped starter files, and let it write. The two homes get
- * different starters: a repository holds one project and already knows where
- * it is; a machine holds many and has to be told. No review policy is among
- * the starters: that file is the reviewer's own (see `prompts/system.md`),
- * and a project's own rules go in `skills/`.
+ * `reviewer init`: decides which home the catalogue gets and hands the core use-case the shipped starters.
+ * @packageDocumentation
  */
 
 import { initCatalog } from "../../../core/catalog/init";
@@ -15,6 +9,11 @@ import { FsCatalogFiles } from "../../../providers/catalog/files";
 import { findGitRoot, repoConfigPath } from "../../../providers/catalog/paths";
 import { type CatalogArguments, catalogCradle } from "../../options/catalog";
 
+/**
+ * Runs `init`.
+ *
+ * @returns The exit code. Inside a checkout (and without `--config`) the target is its `.review/`.
+ */
 export function runInit(arguments_: CatalogArguments): number {
   const { catalogPath, configHomePath, console: out } = catalogCradle(arguments_);
   const gitRoot = arguments_.config === null ? findGitRoot() : null;

@@ -1,16 +1,14 @@
 /**
- * The renderings `--format` may name.
- *
- * Built once, at module scope, because the command line is parsed before any
- * container exists: `--format` has to be validated against the same registry
- * the composition root later builds through, or the two could disagree about
- * what a valid format is.
+ * The renderings `--format` may name; built at module scope so parse-time validation and the
+ * composition root use one registry.
+ * @packageDocumentation
  */
 
 import { builtinFormatProviders } from "../../providers/reporting/builtin";
 import { type ReportFormat } from "../container";
 
+/** The format registry. */
 export const REPORT_FORMATS = builtinFormatProviders();
 
-/** The rendering a run takes when `--format` is not given: the first registered. */
+/** The rendering when `--format` is not given: the first registered. */
 export const DEFAULT_FORMAT: ReportFormat = REPORT_FORMATS.defaultName();

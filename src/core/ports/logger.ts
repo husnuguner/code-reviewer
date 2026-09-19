@@ -1,25 +1,21 @@
 /**
- * The logging port.
- *
- * The core reports what it decides -- which file it skipped and why, how a
- * finding's line was settled, where every finding ended up -- without knowing
- * where those lines go. The CLI routes them to stderr; a UI can route them to
- * a run log. Messages are plain, pre-formatted text so the port stays trivial
- * to implement.
+ * The logging port. Messages are pre-formatted text; the sink is the adapter's.
+ * @packageDocumentation
  */
 
+/** A leveled logger. */
 export interface Logger {
   debug(message: string): void;
   info(message: string): void;
   warn(message: string): void;
   error(message: string): void;
-  /** A logger for a sub-component, named like Python's `logging.getLogger(__name__)`. */
+  /** A logger for a sub-component, named `parent.name`. */
   child(name: string): Logger;
 }
 
 const discard = (_message: string): void => undefined;
 
-/** A logger that discards everything; the default where none is injected. */
+/** Discards everything; the default where none is injected. */
 export const NULL_LOGGER: Logger = {
   debug: discard,
   info: discard,

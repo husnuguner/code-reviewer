@@ -1,15 +1,7 @@
 /**
- * The `.env` files a run reads, and the order that decides which wins.
- *
- * Three homes for secrets. The working directory's `.env` is the weakest: it
- * is whatever the checkout happens to carry. The machine's
- * `~/.config/reviewer/.env` is where a key normally lives -- one place,
- * `chmod 600`, reachable from every repository. The repository's own
- * `.review/.env` (gitignored by `init`) is strongest, so a key meant for one
- * project beats the machine's default for that project.
- *
- * Read here, never exported: the values go to the resolver as a layer, so the
- * process environment is left as the operator set it.
+ * The `.env` files a run reads. Strongest first: the repository's `.review/.env`, the machine's
+ * `~/.config/reviewer/.env`, the working directory's `.env`. Read as a layer, never exported.
+ * @packageDocumentation
  */
 
 import { readFileSync } from "node:fs";
@@ -20,7 +12,7 @@ import { parseEnv } from "node:util";
 import { type EnvironmentValues } from "../../core/config/resolver";
 import { ENV_FILENAME, type Environment, configHome, findRepoConfig } from "../catalog/paths";
 
-/** One `.env` file's name/value pairs, or nothing when it cannot be read. */
+/** One `.env` file's pairs, or `{}` when it cannot be read. */
 export function readEnvironmentFile(path: string): EnvironmentValues {
   try {
     return parseEnv(readFileSync(path, "utf8"));
@@ -29,7 +21,7 @@ export function readEnvironmentFile(path: string): EnvironmentValues {
   }
 }
 
-/** The `.env` files the run reads, lowest precedence first. */
+/** The `.env` paths the run reads, lowest precedence first. */
 export function environmentFilePaths(
   environment: Environment = process.env,
   cwd: string = process.cwd(),

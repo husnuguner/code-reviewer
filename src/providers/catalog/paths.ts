@@ -1,18 +1,7 @@
 /**
- * Where configuration lives: inside the reviewed repository, or on this machine.
- *
- * Two homes, and the repository's own comes first. A project's rules -- its
- * skills, its review policy, which skill applies to which paths -- belong
- * with the code they govern: versioned with it, reviewed like it, and
- * readable by a CI runner that has no home directory worth speaking of. So
- * `reviewer` run inside a checkout looks for `.review/config.yaml` there
- * before it looks anywhere else. The machine-wide catalogue under
- * `~/.config/reviewer` remains for reviewing repositories that carry no rules
- * of their own, or for one person's rules that are not the team's.
- *
- * Deliberately not derived from the package's own location: the reviewer is
- * invoked from inside whichever repository is being reviewed, so anything
- * relative to the installation would be unreachable from there.
+ * Where configuration lives: the repository's `.review/`, found like `git` finds `.git`, else the
+ * machine's `~/.config/reviewer`.
+ * @packageDocumentation
  */
 
 import { existsSync } from "node:fs";
@@ -21,25 +10,25 @@ import { basename, dirname, join, resolve } from "node:path";
 
 const ENV_OVERRIDE = "REVIEWER_CONFIG";
 const APP_DIR = "reviewer";
-/** The directory a repository keeps its own review configuration in. */
+/** The directory a repository keeps its review configuration in. */
 export const REPO_CONFIG_DIR = ".review";
+/** The catalogue's file name. */
 export const CONFIG_FILENAME = "config.yaml";
-/** The name the file had before it was YAML; still read when the YAML one is absent. */
+/** The pre-YAML name; still read when the YAML one is absent. */
 const LEGACY_CONFIG_FILENAME = "config.json";
+/** The secrets file beside a catalogue. */
 export const ENV_FILENAME = ".env";
 
+/** An environment map. */
 export type Environment = Readonly<Record<string, string | undefined>>;
 
-/** `~` and `~/x` expand to the home directory, as `Path.expanduser()` does. */
+/** Expands `~` and `~/x` to the home directory. */
 export function expandUser(path: string, home: string = homedir()): string {
   if (path === "~") return home;
   return path.startsWith("~/") ? join(home, path.slice(2)) : path;
 }
 
-/**
- * The directory holding `config.yaml` and its sibling `.env`. Honours
- * `XDG_CONFIG_HOME` and falls back to `~/.config`.
- */
+/** The machine's config home: `$XDG_CONFIG_HOME/reviewer`, else `~/.config/reviewer`. */
 export function configHome(
   environment: Environment = process.env,
   home: string = homedir(),
@@ -50,13 +39,9 @@ export function configHome(
 }
 
 /**
- * The nearest `.review/config.yaml` at or above `cwd`, or `null`.
+ * The nearest `.review/config.yaml` at or above `cwd`.
  *
- * Walks up like `git` finds `.git`, so the reviewer works from any
- * subdirectory of a checkout. It stops at the filesystem root and does not
- * consult the home directory: the machine-wide catalogue is a different home
- * with a different meaning, and finding it by accident here would blur the
- * two.
+ * @returns The path, or `null`. Stops at the filesystem root; never consults the home directory.
  */
 export function findRepoConfig(
   cwd: string = process.cwd(),
@@ -72,13 +57,7 @@ export function findRepoConfig(
   }
 }
 
-/**
- * The root of the git repository containing `cwd`, or `null` outside one.
- *
- * What `init` asks before deciding where to write: inside a checkout the
- * setup belongs to the checkout, and only outside one does it belong to the
- * machine.
- */
+/** The root of the git repository containing `cwd`, or `null` outside one. */
 export function findGitRoot(
   cwd: string = process.cwd(),
   isPresent: (path: string) => boolean = existsSync,
@@ -92,12 +71,12 @@ export function findGitRoot(
   }
 }
 
-/** `<repo>/.review/config.yaml`: where a repository's own catalogue goes. */
+/** `<repo>/.review/config.yaml`. */
 export function repoConfigPath(repoRoot: string): string {
   return join(repoRoot, REPO_CONFIG_DIR, CONFIG_FILENAME);
 }
 
-/** Whether a catalogue path is a repository's own (`<repo>/.review/config.yaml`). */
+/** Whether a catalogue path is a repository's own. */
 export function isRepoConfig(path: string): boolean {
   return basename(dirname(path)) === REPO_CONFIG_DIR;
 }
@@ -108,18 +87,11 @@ export function repoRootOf(configFile: string): string {
 }
 
 /**
- * Where the catalogue is expected, in precedence order: `--config` beats
- * `REVIEWER_CONFIG` beats the repository's own `.review/config.yaml` (found
- * from `cwd` upwards) beats `config.yaml` in the config home.
+ * Where the catalogue is expected.
  *
- * The two explicit forms come first because they are the operator saying
- * "this one"; the repository's own comes before the machine's because the
- * rules that travel with the code are the rules that apply to it. A short,
- * fixed chain on purpose: a longer search would make "which file did this
- * setting come from?" a question nobody can answer from the outside. The one
- * concession is `isPresent`: when the YAML file is absent and a `config.json`
- * from before the format change is there, that one is named instead (YAML
- * reads JSON), so an upgrade does not silently lose the catalogue.
+ * @param explicit - `--config`.
+ * @param isPresent - Existence check; when the YAML file is absent and a legacy `config.json` exists, that is named.
+ * @returns `--config` › `REVIEWER_CONFIG` › the repository's `.review/config.yaml` › the config home's.
  */
 export function configPath(
   explicit: string | null | undefined,

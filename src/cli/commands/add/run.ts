@@ -1,4 +1,7 @@
-/** `reviewer add <name>`: what it does -- check the inputs, hand the core use-case a file store. */
+/**
+ * `reviewer add <name>`: checks the inputs and hands the core use-case a file store.
+ * @packageDocumentation
+ */
 
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -15,6 +18,12 @@ import { catalogCradle } from "../../options/catalog";
 
 import { type AddArguments } from "./command";
 
+/**
+ * Runs `add`.
+ *
+ * @returns The exit code.
+ * @throws {@link UsageError} without a name; {@link CatalogError} when `--path` does not exist.
+ */
 export function runAdd(arguments_: AddArguments): number {
   const { catalogPath, configHomePath, console: out, logger } = catalogCradle(arguments_);
   const files: CatalogFiles = new FsCatalogFiles(catalogPath, configHomePath);
@@ -30,8 +39,7 @@ export function runAdd(arguments_: AddArguments): number {
   return addProject(loadCatalog(arguments_.config, process.env, logger), files, out, {
     name,
     localPath,
-    // An absolute or ~ path is a directory on this machine; anything else is
-    // read from inside the reviewed repository. Empty disables skills.
+    // A local (absolute or `~`) path means the machine's per-project directory; empty disables skills.
     skillsPath: skills === "" || isLocalSkillsPath(skills) ? null : skills,
   });
 }

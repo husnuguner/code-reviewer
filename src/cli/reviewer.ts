@@ -1,20 +1,7 @@
 /**
- * The `reviewer` command: one executable, five subcommands.
- *
- *   reviewer [review] --base X [--branch Y] ...   review a change set (default)
- *   reviewer init | projects | add <name>         the catalogue
- *   reviewer comment --findings F --repo R --pr N post a run's findings
- *
- * `review` and `comment` are two commands of one executable, never one run:
- * the review reads untrusted diff text into a model and holds no hosting
- * token; `comment` holds the token and builds no model. Each has its own
- * composition root, and the workflow that uses them gives each its own job
- * and permissions (see README, "Why the reviewer cannot post").
- *
- * The commands are registered, not named: this module knows the list and
- * nothing of what any entry does. A parse yields an `Invocation` -- a command
- * already bound to its arguments -- and running the command line is running
- * that. Adding a command is writing its module and adding it to `COMMANDS`.
+ * The `reviewer` root command: a registry of subcommands (`review` default, `init`, `projects`, `add`,
+ * `comment`). `review` holds no hosting token; `comment` builds no model.
+ * @packageDocumentation
  */
 
 import { type Command } from "commander";
@@ -38,20 +25,13 @@ import { REVIEW } from "./commands/review/command";
 
 export { type Invocation, UsageError, isInvocationOf } from "./command-line";
 
-/** What a command line that names no command means: `reviewer --base main` reviews. */
+/** What a command line that names no command means. */
 const DEFAULT_COMMAND: CliCommand<unknown> = REVIEW;
 
-/**
- * Every command, in the order `--help` lists them.
- *
- * The list holds them as `CliCommand<unknown>`: what each one's arguments are
- * is its own business, settled between its `build` and its `run` when the
- * invocation is bound. A caller that needs the arguments back asks the
- * command itself (`invokes`).
- */
+/** Every command, in `--help` order. */
 const COMMANDS: readonly CliCommand<unknown>[] = [REVIEW, INIT, PROJECTS, ADD, COMMENT];
 
-/** Attach one command to the root, so that its parse hands back a bound invocation. */
+/** Attaches one command to the root so its parse hands back a bound invocation. */
 function register(
   program: Command,
   command: CliCommand<unknown>,
@@ -66,12 +46,10 @@ function register(
 }
 
 /**
- * The command line as a `Command`; exposed so `--help` output can be tested.
+ * Builds the command line as a Commander `Command`.
  *
- * `onParsed` is called once, by whichever subcommand the arguments named.
- * The logging flags live here on the root, so every command takes them in
- * the same place and reads them through its globals: how loud a run is has
- * nothing to do with which command it runs.
+ * @param onParsed - Called once, by whichever subcommand the arguments named.
+ * @remarks Exposed so `--help` output can be tested. The logging flags live on the root.
  */
 export function buildProgram(onParsed: (invocation: Invocation) => void): Command {
   const program = loggingOptions(
@@ -85,16 +63,7 @@ export function buildProgram(onParsed: (invocation: Invocation) => void): Comman
   return program;
 }
 
-/**
- * The flags that decide what reaches stderr.
- *
- * Spelled the way the rest of a user's toolbox spells them, so none of it
- * has to be learned: `-v`/`-q` for the two directions, `--log-level` when
- * neither shorthand is exact enough, `--no-color` alongside the `NO_COLOR`
- * every other tool already honours. Logs never touch stdout, so none of
- * these can affect what a pipe downstream reads -- `--format` is that
- * decision, and it is deliberately a different knob.
- */
+/** The root logging flags: `-v`, `-q`, `--log-level`, `--log-format`, `--no-color`. */
 function loggingOptions(program: Command): Command {
   return program
     .option(
@@ -121,31 +90,26 @@ function loggingOptions(program: Command): Command {
     .option("--no-color", "Never colour log lines. NO_COLOR in the environment does the same.");
 }
 
-/** Parse `argv` (without the executable and script) into a command bound to its arguments. */
+/**
+ * Parses `argv` (without executable and script) into a command bound to its arguments.
+ *
+ * @throws {@link UsageError} on a bad command line.
+ */
 export function parseArguments(argv: readonly string[]): Invocation {
-  // A holder rather than a `let`: the assignment happens inside a callback,
-  // which the type checker's flow analysis does not follow.
+  // A holder rather than a `let`: the assignment happens inside a callback flow analysis does not follow.
   const result: { invocation: Invocation | null } = { invocation: null };
   const program = buildProgram((invocation) => {
     result.invocation = invocation;
   });
   parseCommandLine(program, argv);
-  // A parse that neither threw nor ran a subcommand's action cannot happen:
-  // every path through Commander ends in one or the other.
   if (result.invocation === null) throw new Error("the command line parsed but named no command");
   return result.invocation;
 }
 
 /**
- * The process entry: parse, run what was parsed, and turn operator errors
- * into plain messages.
+ * The process entry: parses, runs, and turns operator errors into plain messages and exit codes.
  *
- * Both halves run inside one `runCommand`, so the exit-code contract is
- * stated once (`command-line.ts`): a usage error from the parse and one from
- * `add` are the same kind of failure and must not be told apart by which
- * line raised them. Every command's notion of an operator error applies,
- * because a catalogue that cannot be read is the operator's problem whichever
- * command tripped over it.
+ * @returns The exit code.
  */
 export async function main(argv: readonly string[]): Promise<number> {
   return runCommand(() => parseArguments(argv).run(), {

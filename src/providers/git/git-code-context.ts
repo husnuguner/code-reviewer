@@ -1,22 +1,7 @@
 /**
- * The reviewed repository beyond the diff, read from local git at one ref.
- *
- * `git show <ref>:<path>` and `git grep` pin every answer to the ref (the
- * branch under review), not to whatever the working tree happens to have
- * checked out -- so branch review reads the code it is judging.
- *
- * Because the ref is fixed for the run, every answer is immutable, and this
- * adapter is built once for the whole review: it therefore answers twice from
- * memory rather than twice from git. Two memos, for the two ways the
- * per-file gathering repeats itself:
- *
- * - **The ref's path list**, read once. Module resolution probes a dozen
- *   candidate paths per import (`./x` -> `./x.ts`, `./x/index.ts`, ...), and
- *   all but one miss; a miss answered from the list costs no subprocess at
- *   all, which is where most of the probing went.
- * - **What was already read or searched.** A change set's files import the
- *   same modules and touch the same symbols, so the same `show` and the same
- *   `grep` would otherwise run once per changed file.
+ * The `CodeContext` port over local git at one ref (`git show`, `git grep`). Built once per run and
+ * memoised: the ref's path list, and every read and search.
+ * @packageDocumentation
  */
 
 import { type CodeContext, type CodeSearchHit } from "../../core/ports/code-context";
@@ -28,26 +13,13 @@ import { type GitRunner, runGit } from "./local-git";
 /** Files whose text is memoised; past this the memo stops growing. */
 const MEMOISED_FILES = 256;
 
-/** Hits memoised per needle; a request for more than this bypasses the memo. */
+/** Hits memoised per needle; a request for more bypasses the memo. */
 const MEMOISED_HITS = 256;
 
-/**
- * Matches `git grep` reports per file.
- *
- * A cap on the subprocess's output, not on the answer. `-m` bounds how many
- * lines each file contributes but never which files are reported, and the
- * one thing asked of this search -- which other files mention a changed
- * export -- reduces the hits to a set of paths anyway. So the reported paths
- * are identical with it and without it, while a common identifier stops
- * pushing its every occurrence through a pipe: in this repository `const`
- * falls from 1318 rows to 528 across the same 91 files.
- *
- * Not `1`, though that would serve today's only caller: the port promises a
- * line and a text per hit, and a reader that wanted a couple of examples per
- * file should get them.
- */
+/** Matches `git grep` reports per file: caps the pipe, not which files are reported. */
 const MAX_MATCHES_PER_FILE = 8;
 
+/** Reads and searches the repository at a fixed ref. */
 export class GitCodeContext implements CodeContext {
   private readonly log: Logger;
   /** The ref's paths, read on first use; `null` when `ls-tree` failed. */
@@ -74,8 +46,6 @@ export class GitCodeContext implements CodeContext {
 
   async search(needle: string, limit: number): Promise<CodeSearchHit[]> {
     if (needle.trim() === "" || limit <= 0) return [];
-    // A limit past what the memo keeps has to ask git, or it would be served
-    // a truncated answer.
     if (limit > MEMOISED_HITS) {
       const fresh = await this.grep(needle);
       return fresh.slice(0, limit);
@@ -86,24 +56,19 @@ export class GitCodeContext implements CodeContext {
     return hits.slice(0, limit);
   }
 
-  /** The file at the ref, skipping git entirely for a path the ref does not have. */
+  /** The file at the ref; a path the ref does not have skips git entirely. */
   private async read(path: string): Promise<string | null> {
     const paths = await this.paths();
     if (paths !== null && !paths.has(path)) return null;
     try {
       return await this.run(this.root, ["show", `${this.reference}:${path}`]);
     } catch (error) {
-      // A missing path is the common case (module resolution probes several).
       this.log.debug(`no ${path} at ${this.reference}: ${errorMessage(error)}`);
       return null;
     }
   }
 
-  /**
-   * Every path the ref tracks, read once. `null` when the listing failed --
-   * the caller then probes git as it did before, so a repository this cannot
-   * list is slower, never wrong.
-   */
+  /** Every path the ref tracks, read once; `null` when listing failed (then git is probed directly). */
   private paths(): Promise<ReadonlySet<string> | null> {
     this.trackedPaths ??= this.listPaths();
     return this.trackedPaths;
@@ -111,8 +76,6 @@ export class GitCodeContext implements CodeContext {
 
   private async listPaths(): Promise<ReadonlySet<string> | null> {
     try {
-      // -z: NUL-separated and unquoted, so a path with a space or a quote in
-      // it arrives as git stores it rather than as git would print it.
       const out = await this.run(this.root, ["ls-tree", "-r", "-z", "--name-only", this.reference]);
       const paths = new Set(out.split("\0").filter((path) => path !== ""));
       this.log.debug(`${paths.size} path(s) at ${this.reference}`);
@@ -128,14 +91,10 @@ export class GitCodeContext implements CodeContext {
     return hits.slice(0, MEMOISED_HITS);
   }
 
+  /** `git grep -nzFIw -m N -- needle ref`; exit 1 (no match) reads as `[]`. */
   private async grep(needle: string): Promise<CodeSearchHit[]> {
     let out: string;
     try {
-      // -F: literal; -n: line numbers; -I: skip binaries; -w: whole word so
-      // `id` does not match `identity`; -z: NUL after the path and the line
-      // number, so neither can be confused with a colon inside a path;
-      // -m: at most this many matches per file (see the constant).
-      // `--` ends the options, in case a needle starts with a dash.
       out = await this.run(this.root, [
         "grep",
         "-n",
@@ -150,7 +109,6 @@ export class GitCodeContext implements CodeContext {
         this.reference,
       ]);
     } catch (error) {
-      // git grep exits 1 for "no match"; the runner reports that as a failure.
       this.log.debug(`no match for ${needle} at ${this.reference}: ${errorMessage(error)}`);
       return [];
     }
@@ -159,18 +117,10 @@ export class GitCodeContext implements CodeContext {
 }
 
 /**
- * `<ref>:<path>\0<line>\0<text>` rows into hits -- the shape `git grep -z`
- * prints.
+ * Parses `git grep -z` rows (`<ref>:<path>\0<line>\0<text>`) into hits.
  *
- * The NUL is why `-z` is asked for. Without it the row is colon-separated
- * and the path has to be guessed at with a non-greedy match, which a path
- * containing `:<digits>:` defeats: `src/a:12:b.ts:5:code` reads as line 12
- * of `src/a`. Rare, but the failure is silent -- the model is handed a file
- * name that does not exist -- and a delimiter that cannot occur in a path
- * costs one flag.
- *
- * A ref cannot contain a colon (git refuses such a name), so splitting the
- * `<ref>:` prefix off by length stays exact.
+ * @remarks NUL-separated so a path containing `:<digits>:` cannot be misread; a ref cannot contain a
+ * colon, so the prefix is split off by length.
  */
 export function parseGrep(output: string, reference: string): CodeSearchHit[] {
   const prefix = `${reference}:`;
@@ -179,9 +129,6 @@ export function parseGrep(output: string, reference: string): CodeSearchHit[] {
     if (!row.startsWith(prefix)) continue;
     const [path, line, ...text] = row.slice(prefix.length).split("\0");
     if (path === undefined || path === "" || line === undefined || !/^\d+$/u.test(line)) continue;
-    // `-I` keeps binaries out, so the text holds no NUL of its own; joining
-    // the tail back is what makes that an assumption the parse survives
-    // rather than one it depends on.
     hits.push({ path, line: Number(line), text: text.join("\0") });
   }
   return hits;

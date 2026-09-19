@@ -1,13 +1,9 @@
 /**
- * The human language findings are written in, normalised once.
- *
- * A configuration concern, not a review one: `--lang tr`, `REVIEW_LANG=tur`
- * and a project's `"lang": "turkish"` must all mean the same thing before the
- * review layer ever sees them. It lives beside the settings schema so that the
- * schema never has to import the review package to normalise a value.
+ * Normalises the language findings are written in, once, before the review layer sees it.
+ * @packageDocumentation
  */
 
-/** Accepted `--lang` / `REVIEW_LANG` values -> language name used in the prompt. */
+/** Accepted `--lang` / `REVIEW_LANG` values → the language name used in the prompt. */
 const LANGUAGES: Readonly<Record<string, string>> = {
   tr: "Turkish",
   tur: "Turkish",
@@ -19,9 +15,15 @@ const LANGUAGES: Readonly<Record<string, string>> = {
   english: "English",
 };
 
+/** The language when none, or an unknown one, is given. */
 export const DEFAULT_LANGUAGE = "English";
 
-/** Normalise a language code/name to the prompt language (default English). */
+/**
+ * Normalises a language code or name to the prompt language.
+ *
+ * @param value - e.g. `tr`, `en`, `english`; case-insensitive.
+ * @returns The language name, or {@link DEFAULT_LANGUAGE} when unknown or empty.
+ */
 export function languageName(value: string | null | undefined): string {
   return value ? (LANGUAGES[value.trim().toLowerCase()] ?? DEFAULT_LANGUAGE) : DEFAULT_LANGUAGE;
 }

@@ -1,10 +1,6 @@
 /**
- * The catalogue file on disk, for the `init` and `add` commands.
- *
- * Adding a project edits the YAML through its document model rather than by
- * re-serialising a parsed object: the catalogue is hand-written and annotated,
- * and a command that stripped every comment the first time it ran would be a
- * command nobody runs twice.
+ * The `CatalogFiles` port on disk. Adding a project edits the YAML document model so every comment survives.
+ * @packageDocumentation
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -17,6 +13,7 @@ import { CatalogError, errorMessage } from "../../core/util/errors";
 
 import { isRepoConfig } from "./paths";
 
+/** The catalogue and its sibling files on the filesystem. */
 export class FsCatalogFiles implements CatalogFiles {
   readonly directory: string;
   /** Read off the path: a catalogue under `.review/` is a repository's own. */
@@ -38,12 +35,7 @@ export class FsCatalogFiles implements CatalogFiles {
     writeCreatingParents(this.path, text);
   }
 
-  /**
-   * Where a project's skills live beside this catalogue.
-   *
-   * A repository's `.review/` holds one project, so its skills sit directly
-   * in `skills/`; the machine's catalogue holds many, one folder each.
-   */
+  /** `skills/` for a repository's one project; `skills/<project>/` in the machine's catalogue. */
   skillsDirectory(project: string): string {
     return this.home === "repo"
       ? join(this.directory, "skills")
@@ -65,6 +57,11 @@ export class FsCatalogFiles implements CatalogFiles {
     return true;
   }
 
+  /**
+   * Adds a project through the YAML document model.
+   *
+   * @throws {@link CatalogError} when the file cannot be read or is not valid YAML.
+   */
   addProject(name: string, entry: Readonly<Record<string, unknown>>): void {
     let document_;
     try {
@@ -76,8 +73,6 @@ export class FsCatalogFiles implements CatalogFiles {
     if (failure !== undefined) {
       throw new CatalogError(`${this.path} is not valid YAML: ${failure.message}`);
     }
-    // A catalogue written by `init` always has `projects`; one edited by hand
-    // may not, and refusing it would be refusing a file that parses.
     if (!document_.has("projects")) document_.set("projects", {});
     document_.setIn(["projects", name], entry);
     writeFileSync(this.path, document_.toString(), "utf8");

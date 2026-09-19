@@ -1,14 +1,7 @@
 /**
- * Resolving one run's configuration from every layer that may speak.
- *
- * Four layers, highest precedence first: the command line, the environment
- * (real variables and the `.env` files alike), the `config.yaml` project
- * entry, and the field default. They collapse into one flat `Config`, so
- * nothing below this module knows a catalogue exists.
- *
- * This module is pure: the process environment, the `.env` files' contents
- * and the catalogue arrive as parameters, already read. That is what lets the
- * precedence rule be tested without touching a disk or the real environment.
+ * Resolves one run's configuration from every layer: command line › environment › catalogue project › default.
+ * Pure: the environment, `.env` contents and catalogue arrive as parameters.
+ * @packageDocumentation
  */
 
 import { type Catalog, type ProjectSettings } from "../catalog/catalog";
@@ -35,7 +28,7 @@ import {
 } from "./config";
 import { resolveSecret } from "./secret";
 
-/** Catalogue setting keys -> `Config` fields (the two sections are mapped below). */
+/** Scalar catalogue keys → `Config` fields. */
 export const PROJECT_FIELDS: Readonly<
   Record<Exclude<ProjectSettingKey, "skills" | "llm">, ConfigField>
 > = {
@@ -51,7 +44,7 @@ export const PROJECT_FIELDS: Readonly<
   "max-concurrent-files": "maxConcurrentFiles",
 };
 
-/** The `llm` section onto the model fields; `api-key` is a secret (see below). */
+/** The `llm` section → model fields. */
 const LLM_FIELDS: Readonly<Record<LlmSectionKey, ConfigField>> = {
   provider: "provider",
   model: "model",
@@ -62,26 +55,17 @@ const LLM_FIELDS: Readonly<Record<LlmSectionKey, ConfigField>> = {
 /** The placeholder a shared path may carry for the project's name. */
 const PROJECT_PLACEHOLDER = "{{project}}";
 
-/** A catalogue path with `{{project}}` spelled out. */
+/** Spells `{{project}}` out in a path. */
 function withProjectName(path: string, name: string): string {
   return path.replaceAll(PROJECT_PLACEHOLDER, () => name);
 }
 
-/** Whether a path already names a place on its own: absolute, or under `~`. */
+/** Whether a path names a place on its own: absolute, or under `~`. */
 function isAnchored(path: string): boolean {
   return path.startsWith("/") || path === "~" || path.startsWith("~/");
 }
 
-/**
- * A catalogue's relative path, anchored to the catalogue's own directory.
- *
- * One rule for every path the catalogue names: `skills/` and any other
- * relative path both mean "beside this file". A repository's `.review/config.yaml`
- * therefore says `skills: { path: skills }`, the machine's says
- * `skills/{{project}}`, and neither has to know where the reviewed checkout
- * is. Paths from the environment or the command line are not touched here:
- * they come from no file, so the checkout is their natural base.
- */
+/** Anchors a catalogue's relative path to the catalogue's own directory. */
 function besideCatalog(path: string, catalogDirectory: string): string {
   const trimmed = path.trim();
   return trimmed === "" || isAnchored(trimmed)
@@ -89,18 +73,19 @@ function besideCatalog(path: string, catalogDirectory: string): string {
     : `${catalogDirectory.replace(/\/+$/u, "")}/${trimmed.replace(/^\.\//u, "")}`;
 }
 
-/** The project's `skills` section: `{ path, mappings }` onto two fields. */
+/** The `skills` section → two fields. */
 const SKILLS_FIELDS: Readonly<Record<SkillsSectionKey, ConfigField>> = {
   path: "skillsPath",
   mappings: "skillMappings",
 };
 
-/** Fields the file may set as a list but the review layer reads as a CSV string. */
+/** Fields the file may set as a list but the schema reads as CSV. */
 const LIST_FIELDS: ReadonlySet<ConfigField> = new Set(["excludePaths"]);
 
 /** Name/value pairs from one source; names are matched case-insensitively. */
 export type EnvironmentValues = Readonly<Record<string, string | undefined>>;
 
+/** The environment layers. */
 export interface ConfigSources {
   /** The real process environment. */
   readonly processEnv: EnvironmentValues;
@@ -108,29 +93,23 @@ export interface ConfigSources {
   readonly envFiles: readonly EnvironmentValues[];
 }
 
+/** What {@link resolveConfig} needs. */
 export interface ResolveOptions extends ConfigOptions {
   /** The parsed catalogue, or `null` when there is no file. */
   readonly catalog: Catalog | null;
-  /** The catalogue file's directory; the base for every relative path it names. */
+  /** The catalogue's directory; the base for every relative path it names. Defaults to `configHome`. */
   readonly catalogDirectory?: string;
   /** `--project`, or `null` to pick the only project / run without one. */
   readonly project: string | null;
-  /** Command-line settings by field name; they outrank every other layer. */
+  /** Command-line settings by field; they outrank every other layer. */
   readonly overrides?: Readonly<Partial<Record<ConfigField, unknown>>>;
   readonly sources: ConfigSources;
-  /** Where `config.yaml` and its sibling `.env` live, for error messages. */
+  /** Where `config.yaml` and its sibling `.env` live, for messages. */
   readonly configHome: string;
   readonly logger?: Logger;
 }
 
-/**
- * Environment names the environment supplies, real vars and `.env` alike,
- * uppercased for comparison.
- *
- * Needed because the catalogue sits *below* the environment in precedence. A
- * project value must not shadow a variable the environment already sets, so
- * the aliases the environment covers are dropped from the project's values.
- */
+/** The uppercased aliases the environment supplies, so a project value cannot shadow them. */
 function suppliedAliases(sources: ConfigSources): Set<string> {
   const supplied = new Set<string>();
   for (const source of [sources.processEnv, ...sources.envFiles]) {
@@ -141,24 +120,12 @@ function suppliedAliases(sources: ConfigSources): Set<string> {
   return supplied;
 }
 
-/**
- * Whether an environment value counts as *said*.
- *
- * An empty variable does not. `REVIEW_SKILLS_PATH=` in a shell, or a CI
- * input left blank and exported anyway, is not an instruction to disable
- * skills -- it is the absence of one, and must fall through to the project
- * the way an unset variable does. The command line is different: a typed
- * `--skills-path ""` is a deliberate statement and is handled as one there.
- */
+/** Whether an environment value counts as said; `""` does not. */
 function isSet(value: string | undefined): value is string {
   return value !== undefined && value.trim() !== "";
 }
 
-/**
- * The environment as one alias-keyed map: `.env` files lowest first, then the
- * real environment on top. This is the order the settings loader reads them
- * in, and the order an `llm.api-key` lookup must honour as well.
- */
+/** The environment as one alias-keyed map: `.env` files lowest first, the process environment on top. */
 function mergedEnvironment(sources: ConfigSources): Record<string, string> {
   const merged: Record<string, string> = {};
   for (const source of [...sources.envFiles, sources.processEnv]) {
@@ -169,51 +136,28 @@ function mergedEnvironment(sources: ConfigSources): Record<string, string> {
   return merged;
 }
 
+/** What {@link projectValues} needs. */
 export interface ProjectValuesOptions {
   readonly catalog: Catalog;
   /** `--project`, or `null` to pick the only project. */
   readonly project: string | null;
-  /**
-   * The directory the catalogue file is in. Every relative path the
-   * catalogue names is taken from here, which is the same base the standing
-   * instructions are found under (`<this directory>/prompts`), so a reader
-   * can check either against the other.
-   */
+  /** The catalogue's directory; the base for every relative path it names. */
   readonly catalogDirectory: string;
-  /** The merged environment the settings loader also reads. */
+  /** The merged environment, for resolving a named secret. */
   readonly environment: Readonly<Record<string, string>>;
-  /** Where `config.yaml` and its sibling `.env` live, for error messages. */
+  /** Where `config.yaml` and its sibling `.env` live, for messages. */
   readonly configHome: string;
-  /**
-   * False for a flow that builds no model (`--preview`), so a key the
-   * catalogue *names* is not demanded of an environment that lacks it. The
-   * name is still carried through; only the lookup is deferred to the run
-   * that will actually send it.
-   */
+  /** `false` for a flow that builds no model, so a named key is not demanded. */
   readonly requiresModel?: boolean;
-  /**
-   * True when the environment already supplies `LLM_API_KEY`.
-   *
-   * That variable is the override layer above the catalogue, so a run that
-   * has it has its key: the catalogue's `llm.api-key` -- which *names* a
-   * different variable -- is answered and must not be demanded as well. This
-   * is how a CI job hands the key in under one name while a repository's
-   * committed config names another.
-   */
+  /** Whether the environment already supplies `LLM_API_KEY`, answering the catalogue's name. */
   readonly hasApiKey?: boolean;
   readonly logger?: Logger;
 }
 
-/** Field values as they accumulate through the steps below. */
+/** Field values as they accumulate. */
 type Values = Partial<Record<ConfigField, unknown>>;
 
-/**
- * The scalar settings of a project, over the catalogue's `defaults`.
- *
- * `skills` and `llm` are sections, read by their own functions below. A list
- * the file may spell as a YAML list is carried as CSV, which is what the
- * settings schema reads for those fields.
- */
+/** The scalar settings of a project; lists become CSV. */
 function flattenedSettings(settings: ProjectSettings): Values {
   const values: Values = {};
   for (const key of PROJECT_SETTING_KEYS) {
@@ -225,7 +169,7 @@ function flattenedSettings(settings: ProjectSettings): Values {
   return values;
 }
 
-/** The `skills` section: one section in the file, two settings in the run. */
+/** The `skills` section as field values. */
 function skillsValues(settings: ProjectSettings): Values {
   const skills = isPlainObject(settings.skills) ? settings.skills : {};
   const values: Values = {};
@@ -239,17 +183,13 @@ function skillsValues(settings: ProjectSettings): Values {
 interface SecretContext {
   readonly environment: Readonly<Record<string, string>>;
   readonly configHome: string;
-  /** Whether an unset named variable is an error: false for `--preview`. */
+  /** Whether an unset named variable is an error. */
   readonly requiresModel: boolean;
-  /** Whether `LLM_API_KEY` is already supplied, answering the catalogue's name. */
+  /** Whether `LLM_API_KEY` is already supplied. */
   readonly hasApiKey: boolean;
 }
 
-/**
- * The `llm` section. `api-key` is the one secret: it may be a variable's
- * name (read from the merged environment, so a key in the `.env` beside the
- * catalogue is found) or the value itself.
- */
+/** The `llm` section as field values; `api-key` is resolved as a secret. */
 function llmValues(settings: ProjectSettings, secret: SecretContext): Values {
   const llm = isPlainObject(settings.llm) ? settings.llm : {};
   const values: Values = {};
@@ -270,7 +210,7 @@ function llmValues(settings: ProjectSettings, secret: SecretContext): Values {
   return values;
 }
 
-/** `{{project}}` spelled out wherever a shared path may carry it. */
+/** Spells `{{project}}` out in the paths that may carry it. */
 function withProjectPlaceholders(values: Values, projectName: string): Values {
   const out: Values = { ...values };
   for (const field of ["skillsPath", "localPath"] as const) {
@@ -280,12 +220,7 @@ function withProjectPlaceholders(values: Values, projectName: string): Values {
   return out;
 }
 
-/**
- * The paths a catalogue names are beside the catalogue: each is anchored
- * here, once, and the flow that reads one never has to ask which base it
- * meant. Only `skills.path` is such a path now -- the standing instructions
- * are not named at all, they are found under that same base.
- */
+/** Anchors the catalogue's relative paths (today: `skills.path`) to its directory. */
 function withAnchoredPaths(values: Values, catalogDirectory: string): Values {
   const anchored: Values = { ...values };
   if (typeof anchored.skillsPath === "string") {
@@ -295,12 +230,10 @@ function withAnchoredPaths(values: Values, catalogDirectory: string): Values {
 }
 
 /**
- * One project flattened into `Config` field values.
+ * Flattens one project into `Config` field values.
  *
- * A pipeline of small, named steps -- settings, skills, model, placeholders,
- * path anchoring -- each of which answers one question about the file. The
- * order is the order the questions depend on each other: a placeholder is
- * spelled out before the path it is in is anchored.
+ * @returns Settings, skills and model values, with placeholders spelled out and paths anchored.
+ * @throws {@link CatalogError} when the project is unknown or a required named secret is unset.
  */
 export function projectValues({
   catalog,
@@ -327,10 +260,10 @@ export function projectValues({
 }
 
 /**
- * Resolve one run's configuration from every layer that may speak.
+ * Resolves one run's configuration from every layer.
  *
- * With no catalogue the run proceeds on the environment alone -- a single
- * implicit project -- which is how a catalogue-less setup works.
+ * @returns The validated `Config`. Without a catalogue, the environment alone describes the run.
+ * @throws {@link CatalogError} when `--project` is given without a catalogue.
  */
 export function resolveConfig(options: ResolveOptions): Config {
   const { catalog, project, sources } = options;
@@ -358,8 +291,6 @@ export function resolveConfig(options: ResolveOptions): Config {
     );
   }
 
-  // Alias-keyed values in precedence order: environment, then the project's
-  // values the environment did not cover, then the command line on top.
   const values: Record<string, unknown> = { ...environment };
   const layered = Object.entries({ ...fromProject, ...options.overrides });
   for (const [field, value] of layered) {

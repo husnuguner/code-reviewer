@@ -1,14 +1,7 @@
 /**
- * `github`: GitHub and GitHub Enterprise -- and the one place in this program
- * that hands a network transport to a poster.
- *
- * The client beside this file is handed the platform `fetch` here and
- * nowhere else: the client itself accepts only a `URL` it produced after its
- * origin allowlist, so this is the single seam where "the network" enters
- * the poster. Being the single seam is also what makes it the right place to
- * decide that the network is allowed to fail once -- `withRetry` wraps the
- * transport rather than the client, so the client's one endpoint, its origin
- * allowlist and its error handling are all untouched by the decision.
+ * `github`: GitHub and GitHub Enterprise. The one place a network transport is handed to a poster;
+ * `withRetry` wraps the transport so the client's allowlist and error handling stay untouched.
+ * @packageDocumentation
  */
 
 import { type ReviewPoster } from "../../../core/ports/review-poster";
@@ -21,16 +14,11 @@ import {
 
 import { GithubReviewClient } from "./client";
 
-/**
- * The platform's own `fetch`, named once.
- *
- * The one deliberate `globalThis.`: a bare `fetch` identifier is what an SSRF
- * scan keys on, and the client's URL-only signature is the real guard -- see
- * `FetchLike`.
- */
-// eslint-disable-next-line unicorn/no-unnecessary-global-this -- named on purpose, see above
+/** The platform's `fetch`, named once; the client's `URL`-only signature is the real guard. */
+// eslint-disable-next-line unicorn/no-unnecessary-global-this -- named on purpose
 const platformFetch: FetchLike = (input, init) => globalThis.fetch(input, init);
 
+/** The GitHub hosting system. */
 export class GithubProvider extends RepoProvider {
   readonly name = "github";
   readonly description = "GitHub and GitHub Enterprise (base-url https://host/api/v3)";

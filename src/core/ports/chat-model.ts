@@ -1,72 +1,56 @@
 /**
- * The LLM port: the one thing the review layer needs from a language model.
- *
- * A conversation goes in, text comes out. Which vendor answers, over which
- * SDK, with which retry policy, is an infrastructure concern behind this
- * interface; the review layer never imports a provider.
+ * The LLM port: a conversation in, text out. Vendor, SDK and retries live behind it.
+ * @packageDocumentation
  */
 
+/** Who a message is from. */
 export type ChatRole = "system" | "user" | "assistant";
 
+/** One message of a conversation. */
 export interface ChatMessage {
   readonly role: ChatRole;
   readonly content: string;
   /**
-   * This message is a prefix the run sends again and again, byte for byte:
-   * the reviewer's standing prompt, a file's skills block.
+   * Marks a prefix the run resends byte for byte (standing prompt, skills block).
    *
-   * A fact about the conversation, not an instruction to a vendor. One that
-   * can reuse a prompt prefix (Anthropic's prompt caching) is told which
-   * messages are worth reusing; one that cannot, or does so on its own,
-   * ignores the flag. The core therefore states what is stable and never
-   * how any vendor caches -- which is why this is a boolean and not options.
-   *
-   * Only a leading run of messages can be a prefix, so the flag means
-   * nothing on a message that follows an unmarked one.
+   * @remarks A fact, not a vendor instruction: an adapter with prompt caching uses it, others ignore it.
+   * Only a leading run of marked messages is a prefix.
    */
   readonly stable?: boolean;
 }
 
-/**
- * What one completion cost, as the vendor counted it.
- *
- * Carried so the log can say *why* a call was slow: a completion's wall time
- * is almost all output generation, so a file that took eighty seconds and a
- * file that took eight differ in this number before they differ in anything
- * else. `null` where the vendor did not say.
- */
+/** What one completion cost, as the vendor counted it; `null` where it did not say. */
 export interface ChatUsage {
-  /** Every input token, the reused ones included. */
+  /** Every input token, reused ones included. */
   readonly inputTokens: number | null;
+  /** Output tokens generated. */
   readonly outputTokens: number | null;
-  /** Input tokens served from a prompt prefix the vendor had kept (`stable`). */
+  /** Input tokens served from a kept prefix. */
   readonly cacheReadTokens?: number | null;
-  /** Input tokens the vendor kept for later calls, at a premium, this time. */
+  /** Input tokens written to the vendor's cache this call. */
   readonly cacheWriteTokens?: number | null;
 }
 
+/** One completion. */
 export interface ChatResponse {
-  /** The assistant's text, with any reasoning/thinking blocks dropped. */
+  /** The assistant's text, reasoning blocks dropped. */
   readonly text: string;
-  /** Token counts for the call; absent when the adapter has none to give. */
+  /** Token counts; absent when the adapter has none. */
   readonly usage?: ChatUsage;
 }
 
-/** What a caller may say about one call, beyond the conversation itself. */
+/** Per-call options beyond the conversation. */
 export interface ChatCallOptions {
-  /**
-   * Abandon the call when this aborts.
-   *
-   * The port carries it because a deadline that cannot cancel the work is not
-   * a deadline: without a signal reaching the vendor's client, a model that
-   * never answers would hold its concurrency slot for the length of the run.
-   * The review layer supplies none -- it is the adapter side that imposes
-   * limits -- which is why it is optional.
-   */
+  /** Abandons the call when it aborts. Supplied by the adapter side, not the review layer. */
   readonly signal?: AbortSignal;
 }
 
+/** A language model that answers one conversation with one completion. */
 export interface ChatModel {
-  /** One non-streaming completion. Rejects on transport or provider failure. */
+  /**
+   * Runs one non-streaming completion.
+   *
+   * @throws On transport or provider failure.
+   */
   generate(messages: readonly ChatMessage[], options?: ChatCallOptions): Promise<ChatResponse>;
 }

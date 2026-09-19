@@ -1,10 +1,6 @@
 /**
- * The logging flags: declared once on the root, read by every command.
- *
- * How loud a run is has nothing to do with which command it runs, so the
- * flags live on the root command and each subcommand reads them through its
- * globals. This module is the shape they come back in and how they become a
- * decision the container can take.
+ * The root logging flags as Commander returns them, and how they become settled settings.
+ * @packageDocumentation
  */
 
 import {
@@ -15,32 +11,24 @@ import {
 } from "../../providers/logging/log-settings";
 import { type ParsedOptions } from "../command-line";
 
-/**
- * The root command's logging flags, as Commander hands them back.
- *
- * `color` is Commander's shape for `--no-color`: `true` until the flag is
- * given.
- */
+/** The root command's logging flags. */
 export interface LoggingArguments {
-  /** `-v`: debug detail, with timestamps and component names. */
+  /** `-v`. */
   readonly verbose: boolean;
-  /** `-q`: warnings and errors only. */
+  /** `-q`. */
   readonly quiet: boolean;
-  /** `--log-level`, outranking both shorthands. */
+  /** `--log-level`; outranks both shorthands. */
   readonly logLevel: LogLevel | null;
   /** `--log-format`; `auto` reads the environment. */
   readonly logFormat: LogFormatChoice;
-  /** `--no-color` sets this to `false`. */
+  /** `true` until `--no-color` is given. */
   readonly color: boolean;
 }
 
 /**
- * The logging flags as settled settings.
+ * Settles the logging flags against the process environment and whether stderr is a terminal.
  *
- * Resolved here, at the edge, rather than in the container: the answer
- * depends on the process environment and on whether *stderr* is a terminal,
- * and a composition root that reached for those would be a composition root
- * no test could pin down. What the container receives is a decision.
+ * @remarks Resolved here, at the edge, so the container receives a decision and stays testable.
  */
 export function logSettingsFrom(arguments_: LoggingArguments): LogSettings {
   return resolveLogSettings(
@@ -49,8 +37,7 @@ export function logSettingsFrom(arguments_: LoggingArguments): LogSettings {
       quiet: arguments_.quiet,
       level: arguments_.logLevel,
       format: arguments_.logFormat,
-      // Commander cannot tell `--color` from the default, so only the
-      // negation is a statement; `true` leaves the decision to the terminal.
+      // Only the negation is a statement; `true` leaves colour to the terminal.
       color: arguments_.color ? null : false,
     },
     { environment: process.env, isTTY: process.stderr.isTTY },

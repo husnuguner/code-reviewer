@@ -1,18 +1,7 @@
 /**
- * Reviewing one changed file: the step every review is made of.
- *
- * What happens to one changed file -- match its skills, fetch its full text
- * and its surroundings for context, ask the model, check the answer -- lives
- * here once, so a second flow (another diff source, another sink) reuses the
- * judgement rather than restating it.
- *
- * Whether the file is reviewed at all is *not* decided here: this step takes
- * a `SelectedFile`, the decision `selection.ts` already made, carrying the
- * annotated diff and the lines a finding may anchor to. One function decides
- * scope so that `--preview` and the real run cannot disagree about it.
- *
- * How a file's full text is read stays the caller's to inject, as a
- * `ContentReader`; today the working tree is what answers it.
+ * Reviewing one selected file: skills, content, pre-context, model, verification. Scope is decided
+ * upstream in `selection.ts`.
+ * @packageDocumentation
  */
 
 import { type LimitFunction } from "p-limit";
@@ -26,8 +15,6 @@ import { type SkillMatcher } from "../ports/skill-matcher";
 import { show } from "../util/text";
 import { type Clock, SYSTEM_CLOCK, seconds, stopwatch } from "../util/timing";
 
-// The settings group lives with the other groups; re-exported here because
-// this is where callers of the per-file step look for it.
 export { DEFAULT_FILE_REVIEW_SETTINGS, type FileReviewSettings } from "../config/settings";
 
 import { EXACT } from "./anchor";
@@ -37,12 +24,7 @@ import { isSecretPath } from "./guards";
 import { type SelectedFile } from "./selection";
 import { type VerifyInput, type Verdict, keepAll } from "./verify";
 
-/**
- * Reads a file's full text for prompt context: `(path, status) -> text`.
- * `null` means "no context available", which costs the file nothing but the
- * extra context. Callers own the transport; branch review reads the working
- * tree.
- */
+/** Reads a file's full text for prompt context: `(path, status) → text`, or `null` when unavailable. */
 export type ContentReader = (path: string, status: string) => Promise<string | null>;
 
 /** What the per-file step needs from the model-backed reviewer. */
@@ -50,73 +32,50 @@ export interface PerFileReviewer {
   reviewFile(input: ReviewFileInput): Promise<Finding[]>;
 }
 
-/**
- * What the per-file step needs from the verification pass: the findings that
- * survive being checked against the diff. A flow given none reports every
- * finding the reviewer produced.
- */
+/** What the per-file step needs from the verification pass. */
 export interface PerFileVerifier {
   verify(input: VerifyInput): Promise<Verdict>;
 }
 
-/** The outcome for one file that was actually reviewed. */
+/** The outcome for one reviewed file. */
 export interface ReviewedFile {
   readonly path: string;
-  /** What survived verification; the only findings a flow reports. */
+  /** What survived verification. */
   readonly findings: readonly Finding[];
   readonly skillNames: readonly string[];
-  /** How many findings the verification pass removed (`0` without one). */
+  /** How many findings verification removed; `0` without a verifier. */
   readonly refuted: number;
 }
 
+/** Options for {@link reviewChangedFile}. */
 export interface ReviewChangedFileOptions {
   readonly reviewer: PerFileReviewer;
-  /** Checks the findings against the diff; `null`/absent reports them all. */
+  /** `null`/absent reports every finding. */
   readonly verifier?: PerFileVerifier | null;
   readonly settings: FileReviewSettings;
   readonly skills: SkillMatcher | null;
-  /** Bounds the expensive part (content read + model call) across files. */
+  /** Bounds content read + model calls across files. */
   readonly limit: LimitFunction;
   readonly readContent?: ContentReader | null;
-  /**
-   * Where pre-context is read from (imported modules, users of changed
-   * exports); `null` gathers none. Needs `changeSet` for the related diffs.
-   */
+  /** Where pre-context is read from; `null` gathers none. */
   readonly codeContext?: CodeContext | null;
   /** Every changed file of the change set, this one included. */
   readonly changeSet?: readonly ChangedFile[];
-  /**
-   * How many findings the run will report per file; `0` (the default) means
-   * all of them. Passed on to the prompt, so the model stops where the
-   * report would have cut anyway instead of generating what gets thrown away.
-   */
+  /** The per-file cap, passed to the prompt; `0` means all. */
   readonly maxFindingsPerFile?: number;
   readonly logger?: Logger;
-  /** The clock the timings are read from; injected so a test can pin them. */
+  /** The clock timings are read from; injectable for tests. */
   readonly now?: Clock;
 }
 
-/**
- * How long each waiting step of one file's review took, in milliseconds.
- *
- * Three steps because those are the three things a file waits on: the
- * repository (pre-context), the model (the review), and the model again
- * (verification). `verify` is `null` when no verifier was given, so the log
- * does not report a step that was never there.
- */
+/** How long each waiting step took, in milliseconds; `verify` is `null` without a verifier. */
 interface StepTimings {
   readonly context: number;
   readonly model: number;
   readonly verify: number | null;
 }
 
-/**
- * The timings as the log states them: `context 0.2s, model 42.3s, verify 18.1s`.
- *
- * This is the line that answers "why did a one-file review take four
- * minutes": without it a slow model and a slow verifier are one number, and
- * a retry inside either is invisible.
- */
+/** Formats timings as the log states them: `context 0.2s, model 42.3s, verify 18.1s`. */
 function describeTimings(timings: StepTimings): string {
   const steps: [string, number | null][] = [
     ["context", timings.context],
@@ -127,14 +86,11 @@ function describeTimings(timings: StepTimings): string {
 }
 
 /**
- * Review one selected file, or return `null` when it must not be reviewed.
+ * Reviews one selected file.
  *
- * The scope decision was already made (`selection.ts`), so `null` has exactly
- * one cause left, and it is the one worth paying for twice: a path that names
- * a credential file. That check is re-asked here, where the prompt is
- * actually built, because a secret that reaches a model provider cannot be
- * recalled -- a caller that hand-builds a decision, or a future flow that
- * forgets to select, still cannot leak one (see `guards.ts`).
+ * @returns The reviewed file, or `null` when the path names a credential file.
+ * @remarks The secret check is re-asked here, where the prompt is built, so a hand-built decision cannot leak one.
+ * Both model calls share the one concurrency slot.
  */
 export async function reviewChangedFile(
   selected: SelectedFile,
@@ -153,13 +109,8 @@ export async function reviewChangedFile(
   const verifier = options.verifier ?? null;
   const now = options.now ?? SYSTEM_CLOCK;
 
-  // Both model calls share the one slot: verification is part of this file's
-  // work, so letting it run outside the limit would raise how much is in
-  // flight beyond what the caller asked for.
   const { verdict, timings } = await limit(async () => {
-    // An added file's patch already IS the whole file, so a separate content
-    // block would only duplicate it in the prompt. Context is fetched for
-    // modified files, where the patch is a partial view.
+    // An added file's patch is the whole file; content is fetched only for modified files.
     const readContent = options.readContent ?? null;
     const content =
       readContent !== null && file.status !== "added"
@@ -181,9 +132,6 @@ export async function reviewChangedFile(
       language: settings.language,
       skillsText,
       contextText,
-      // The shown diff's new side, carried by the decision rather than
-      // recomputed from the whole patch: a quote may only be placed in text
-      // the model was actually given (see `selection.ts`).
       anchorIndex: selected.newSide,
       maxFindings: options.maxFindingsPerFile ?? 0,
     });
@@ -204,10 +152,7 @@ export async function reviewChangedFile(
   return { path: file.path, findings: verdict.kept, skillNames, refuted };
 }
 
-/**
- * The pre-context block for one file, or "" when none is configured, none is
- * available, or nothing was found. Failure here never fails the review.
- */
+/** The pre-context block for one file, or `""`. Failure here never fails the review. */
 async function surroundingsOf(
   file: ChangedFile,
   options: ReviewChangedFileOptions,
@@ -233,15 +178,13 @@ async function surroundingsOf(
 }
 
 /**
- * Tally how each finding's line was decided (see `anchor.ts`).
+ * Tallies how each finding's line was decided.
  *
- * This is what makes the anchoring measurable: without it a repaired line is
- * indistinguishable from one the model got right.
+ * @returns Anchor outcome → count. A finding with no outcome counts as `exact`.
  */
 export function countAnchors(findings: Iterable<Finding>): Map<string, number> {
   const counts = new Map<string, number>();
   for (const finding of findings) {
-    // A finding built without an outcome (e.g. by a test double) counts as exact.
     const anchor: string = finding.anchor;
     const key = anchor === "" ? EXACT : anchor;
     counts.set(key, (counts.get(key) ?? 0) + 1);

@@ -1,6 +1,6 @@
 /**
- * The skill registry: load sources, apply the project's skill mappings, match
- * + render.
+ * The skill registry: loads sources, applies the project's mappings, matches and renders per file.
+ * @packageDocumentation
  */
 
 import { type SkillMappings } from "../config/settings";
@@ -17,17 +17,13 @@ import {
   show,
 } from "../util/text";
 
-/** Holds the merged set of skills and selects/renders them per file. */
+/** The merged set of skills, selected and rendered per file. */
 export class SkillRegistry implements SkillMatcher {
   private readonly skills: readonly Skill[];
   private readonly log: Logger;
 
   /**
-   * A name identifies a skill, so a repeated name is one skill declared twice
-   * and the later declaration wins (keeping the first one's position). With a
-   * single source this is only reachable within one directory, where it means
-   * two files claim the same name -- worth being deterministic about, not
-   * worth ranking.
+   * @param skills - Loaded skills; a repeated name keeps the last declaration in the first's position.
    */
   constructor(skills: readonly Skill[], logger: Logger = NULL_LOGGER) {
     this.log = logger.child("skills.registry");
@@ -42,15 +38,11 @@ export class SkillRegistry implements SkillMatcher {
   }
 
   /**
-   * Load the given sources into one registry and apply the project's `mappings`.
+   * Loads the sources into one registry and applies the project's mappings.
    *
-   * Callers choose the source, because only they know which repository is
-   * reachable how. Passing no source is valid and yields an empty registry --
-   * a project that names no skills path is reviewed by the lenses alone.
-   *
-   * A source that fails is logged and skipped rather than fatal: losing
-   * project conventions degrades a review, but losing the whole review because
-   * a directory could not be listed is worse.
+   * @param sources - Where skills come from; none yields an empty registry.
+   * @param mappings - Skill name → globs.
+   * @returns The registry. A source that fails is logged and skipped.
    */
   static async build(
     sources: readonly SkillSource[],
@@ -73,7 +65,7 @@ export class SkillRegistry implements SkillMatcher {
     return registry;
   }
 
-  /** All skills whose globs match `path`, in a stable order. */
+  /** Every skill whose globs match `path`, sorted by name. */
   skillsFor(path: string): Skill[] {
     return this.skills
       .filter((skill) => isSkillMatch(skill, path))
@@ -81,12 +73,11 @@ export class SkillRegistry implements SkillMatcher {
   }
 
   /**
-   * Render matching skills into a prompt block within the char budget.
+   * Renders the matching skills into a prompt block.
    *
-   * `maxSkillChars` truncates one skill's body; `maxTotalChars` caps the whole
-   * block, and a skill that would overflow it is skipped (and named in an INFO
-   * log). The first matching skill is always included, so a single oversized
-   * skill still reaches the prompt rather than silencing every rule.
+   * @param maxSkillChars - Truncates one skill's body.
+   * @param maxTotalChars - Caps the whole block; a skill that would overflow is skipped and logged.
+   * @returns The block, or `""` when nothing matches. The first matching skill is always included.
    */
   renderFor(path: string, maxSkillChars: number, maxTotalChars: number): string {
     const matched = this.skillsFor(path);
@@ -114,15 +105,10 @@ export class SkillRegistry implements SkillMatcher {
 }
 
 /**
- * The project's say over which files each skill reviews -- the only say.
+ * Sets each skill's globs from the project's mappings.
  *
- * A skill document carries no scope of its own: the catalogue's
- * `skills.mappings` is where a project states which files a skill reviews,
- * and a mapping of `[]` switches a skill off without touching the file. So a
- * loaded skill that no mapping names can never match, and that is almost
- * always a forgotten line rather than a decision -- it is reported as a
- * warning, once. A mapping for a skill that was not loaded is almost always
- * a typo, and says so too.
+ * @returns The skills with globs applied. An unmapped skill (never matches) and a mapping naming no loaded
+ * skill are each warned about; `[]` switches a skill off at INFO.
  */
 export function applyMappings(
   skills: readonly Skill[],
@@ -138,7 +124,6 @@ export function applyMappings(
   return skills.map((skill) => {
     const mapped = Object.hasOwn(mappings, skill.name) ? mappings[skill.name] : undefined;
     if (mapped === undefined) {
-      // Loaded, unreachable, and nobody said so on purpose.
       log.warn(
         `Skill ${show(skill.name)} has no entry in the project's skills.mappings and will not be applied to any file. Map it (skills.mappings.${skill.name}: ["<glob>"]) or switch it off explicitly with [].`,
       );

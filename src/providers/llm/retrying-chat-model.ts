@@ -1,24 +1,7 @@
 /**
- * A model that survives a rate limit, wrapped around one that does not.
- *
- * `ChatModel -> ChatModel`, the same shape the transport uses
- * (`providers/http/retrying-fetch`), and for the same reason: the adapter under
- * it makes one call and this decides what a failed call means. Neither the
- * vendor adapters nor the review layer change, and a test can leave the
- * decorator off entirely.
- *
- * **Not configuration.** How many times to try a model is an operational
- * property of this program, not a dial an operator turns per project: the
- * numbers below are the answer, and the constructor options exist so a test
- * can run the schedule without spending it. An environment variable for each
- * would be four more things to document, validate and get wrong, in exchange
- * for a choice nobody has needed to make.
- *
- * The timeout is the part that was missing rather than merely invisible. A
- * completion had no deadline at all, so a vendor that accepted the connection
- * and never answered would hold a concurrency slot -- one of very few -- for
- * the rest of the run, and the file it was reviewing would never be reported
- * either way.
+ * A `ChatModel` decorator that retries transient failures with a per-attempt timeout. The numbers are
+ * operational constants, not settings; the options exist so tests can run the schedule without spending it.
+ * @packageDocumentation
  */
 
 import {
@@ -46,27 +29,16 @@ import { isRetryableModelFailure } from "./transient-failures";
 
 /** Total calls, the first included. */
 export const DEFAULT_ATTEMPTS = 3;
-/**
- * The first retry's backoff window.
- *
- * Longer than the transport's: a vendor's rate limit is counted per minute,
- * so coming back in half a second only spends another unit of the quota that
- * was just refused.
- */
+/** The first retry's backoff window; longer than the transport's because rate limits are per minute. */
 export const DEFAULT_BASE_DELAY_MS = 1000;
 /** The longest any single wait may be. */
 export const DEFAULT_MAX_DELAY_MS = 30_000;
-/**
- * How long one completion may take.
- *
- * Generous on purpose: a reasoning model reading a large diff is slow, and a
- * deadline that fires on a call that would have answered costs the file's
- * findings *and* pays for them twice.
- */
+/** How long one completion may take; generous because a reasoning model on a large diff is slow. */
 export const DEFAULT_TIMEOUT_MS = 180_000;
 /** The budget for one completion including its retries. */
 export const DEFAULT_MAX_DURATION_MS = 600_000;
 
+/** Options for {@link RetryingChatModel}. */
 export interface ChatRetryOptions {
   readonly attempts?: number;
   readonly baseDelayMs?: number;
@@ -75,15 +47,15 @@ export interface ChatRetryOptions {
   readonly timeoutMs?: number;
   /** The whole call's budget, retries and waits together. */
   readonly maxDurationMs?: number;
-  /** Where each retry is announced. Omitted, they happen in silence. */
+  /** Where each retry is announced; omitted, retries are silent. */
   readonly logger?: Logger;
-  /** Injected so a test can pin the wait. */
+  /** Injectable so a test can pin the wait. */
   readonly random?: () => number;
-  /** Injected so a test need not spend the waits. */
+  /** Injectable so a test need not spend the waits. */
   readonly timer?: ITimer;
 }
 
-/** Why an attempt is being repeated, for the one line that says so. */
+/** Why an attempt is being repeated, for the log line. */
 function describe(reason: IRetryEvent["reason"]): string {
   if ("value" in reason) return "was refused";
   const { error } = reason;
@@ -94,6 +66,7 @@ function describe(reason: IRetryEvent["reason"]): string {
     : `failed (${errorMessage(error)})`;
 }
 
+/** Retries a `ChatModel` on transient failure, each attempt under its own deadline. */
 export class RetryingChatModel implements ChatModel {
   private readonly policy: RetryPolicy;
   private readonly perAttempt: TimeoutPolicy;

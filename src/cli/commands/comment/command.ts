@@ -1,12 +1,7 @@
 /**
- * `reviewer comment`: what it takes.
- *
- * The other half of the split, and the only half that holds a repository
- * token. It never builds a model: its input is the NDJSON `reviewer --out`
- * wrote, a plain data file, so nothing a diff says can reach it -- and the
- * review that read the diff never had a token to post with. One executable,
- * two commands, no run that holds both credentials (see README, "Why the
- * reviewer cannot post").
+ * `reviewer comment`: its flags and their parsed shape. The only command that holds a repository token;
+ * it builds no model and reads a plain NDJSON file.
+ * @packageDocumentation
  */
 
 import { type Command, Option } from "commander";
@@ -28,27 +23,27 @@ import { severityList } from "../../options/severity";
 
 import { runComment } from "./run";
 
-/** The parsed `comment` command line, one field per flag. */
+/** The parsed `comment` command line. */
 export interface CommentArguments {
   readonly findings: string;
-  /** Which hosting system posts; a name the registry knows. */
+  /** The hosting system; a name the registry knows. */
   readonly provider: string;
   readonly repo: string;
   readonly pr: number;
   readonly maxInline: number;
   /** Severities that make the review a request for changes; empty means never. */
   readonly requestChangesOn: readonly Severity[];
-  /** Dismiss this identity's earlier pending reviews before posting. */
+  /** Dismiss this identity's earlier pending reviews first. */
   readonly supersede: boolean;
   readonly baseUrl: string | null;
   /** Print the review instead of posting it; needs no token. */
   readonly dryRun: boolean;
 }
 
-/** `comment` takes the root's logging flags like every other command. */
+/** `comment`'s options plus the root's logging flags. */
 export type CommentOptions = ParsedOptions<CommentArguments> & ParsedOptions<LoggingArguments>;
 
-/** The `comment` subcommand's flags. */
+/** The `comment` flags. */
 function commentOptions(command: Command): Command {
   return command
     .requiredOption("--findings <path>", "The NDJSON record stream to post.")
@@ -89,19 +84,10 @@ function commentOptions(command: Command): Command {
     .option("--dry-run", "Print the review that would be posted and stop. Needs no token.", false);
 }
 
-/**
- * A refusal from the hosting system (a wrong slug, a token without write
- * permission) is the operator's to act on, whichever system it was.
- */
+/** A hosting system's refusal is the operator's to act on. */
 const isCommentOperatorError = instanceOfAny(PostingError);
 
-/**
- * `reviewer comment`, as the root command registers it.
- *
- * The logging flags are read off the globals and settled at the parse, then
- * carried alongside the command's own arguments -- `comment` builds no
- * container, so it is the one command that has to hold its own logger.
- */
+/** `reviewer comment`, as the root registers it. Builds no container, so it carries its own settled logging. */
 export const COMMENT = defineCommand<CommentArguments & { logging: LogSettings }, CommentOptions>({
   name: "comment",
   description:

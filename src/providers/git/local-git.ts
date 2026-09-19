@@ -1,13 +1,6 @@
 /**
- * Branch review's diff source: local git, read through the `git` executable.
- *
- * The payoff beyond speed is reach: this module needs no credentials and no
- * provider, so branch review works against a repository whose hosting system
- * nobody has implemented, and against work that has not been pushed.
- *
- * Output mirrors what a provider's `changedFiles` returns (`filename` /
- * `status` / `patch`), so the per-file review loop cannot tell the two sources
- * apart.
+ * The `GitReader` port over the `git` executable: diffs and files from one working tree, no credentials.
+ * @packageDocumentation
  */
 
 import { existsSync, statSync } from "node:fs";
@@ -24,21 +17,18 @@ import { GitError, errorMessage } from "../../core/util/errors";
 import { compareCodePoints, cutToLength, show } from "../../core/util/text";
 import { expandUser } from "../catalog/paths";
 
-/** What a git command may exit with without having failed. */
+/** Options for one git invocation. */
 export interface GitRunOptions {
-  /**
-   * Exit codes to accept as success, stdout and all.
-   *
-   * Needed because git reports answers through the exit code as well as
-   * through stdout: `diff` exits 1 for "these differ", which is the *normal*
-   * outcome when the question is "what changed", and `rev-parse --verify`
-   * exits 1 for "no such ref", which is an answer rather than a breakage.
-   * Only a code nobody named is a failure.
-   */
+  /** Exit codes to accept as success: git answers through the exit code too (`diff` exits 1 for "differ"). */
   readonly allowedExitCodes?: readonly number[];
 }
 
-/** Runs one git command in a directory and returns its stdout, or throws `GitError`. */
+/**
+ * Runs one git command in a directory.
+ *
+ * @returns stdout.
+ * @throws {@link GitError} on a non-zero exit not in `allowedExitCodes`.
+ */
 export type GitRunner = (
   root: string,
   arguments_: readonly string[],
@@ -46,13 +36,11 @@ export type GitRunner = (
 ) => Promise<string>;
 
 /**
- * The working tree to read, and proof that it is one.
+ * Resolves the working tree to read and checks it is a git repository.
  *
- * Defaults to the current directory: branch review is the pre-pull-request
- * check you run from inside the repository you are working in. An explicit
- * path (`REVIEW_LOCAL_PATH`) overrides it, which is why that setting lives in
- * the environment rather than in `config.yaml` -- it is machine-specific and
- * the catalogue is meant to be shareable.
+ * @param localPath - `REVIEW_LOCAL_PATH`; `""` means `cwd`.
+ * @returns The absolute root.
+ * @throws {@link GitError} when the path is not a directory or not a checkout.
  */
 export function worktree(localPath = "", cwd: string = process.cwd()): string {
   const root = localPath === "" ? cwd : resolve(expandUser(localPath));
@@ -68,11 +56,8 @@ export function worktree(localPath = "", cwd: string = process.cwd()): string {
 }
 
 /**
- * The default runner: the `git` executable on `PATH`.
- *
- * stdout is returned byte for byte -- a patch's final newline is part of the
- * patch. Both pipes are drained together with the exit, so a large diff
- * cannot deadlock the child on a full pipe.
+ * The default runner: `git` on `PATH`. stdout is returned byte for byte; both pipes are drained with the
+ * exit so a large diff cannot deadlock the child.
  */
 export const runGit: GitRunner = async (root, arguments_, options) => {
   const command = `git ${arguments_.join(" ")}`;
@@ -98,34 +83,19 @@ export const runGit: GitRunner = async (root, arguments_, options) => {
   return stdout;
 };
 
-/**
- * `-c core.quotePath=false`: a path arrives as its bytes, not as C escapes.
- *
- * git otherwise prints a non-ASCII path quoted (`"src/\303\274.ts"`), and the
- * diff parser would report *that* as the file's name -- a path no reader can
- * open and no anchor can match, so the file's findings would point nowhere.
- * Passed per invocation rather than assumed of the repository, so a machine
- * whose git config differs cannot change what a review sees.
- */
+/** Paths as bytes, not C escapes, whatever the machine's git config says. */
 const RAW_PATHS = ["-c", "core.quotePath=false"] as const;
 
-/** `git diff` exits 1 when the two sides differ, which is what we asked. */
+/** `git diff` exits 1 when the sides differ. */
 const DIFFERS: readonly number[] = [1];
 
-/** `git rev-parse --verify --quiet` exits 1 when the ref is simply not there. */
+/** `git rev-parse --verify --quiet` exits 1 when the ref is absent. */
 const ABSENT_REF: readonly number[] = [1];
 
 /** The empty side of an untracked file's diff. */
 const DEV_NULL = "/dev/null";
 
-/**
- * Untracked files whose patches are read at once.
- *
- * `git diff --no-index` compares exactly two paths, so an untracked file
- * costs one subprocess and a change set of them cannot be one call. A small
- * bound is what keeps a new directory of fifty files from being fifty
- * round-trips in series, without handing the machine a process per file.
- */
+/** Untracked files diffed at once; each is one `--no-index` subprocess. */
 const UNTRACKED_AT_ONCE = 8;
 
 /** Reads a branch's diff and files from one working tree. */
@@ -154,11 +124,7 @@ export class LocalGitReader implements GitReader {
     return sha === "" ? null : sha;
   }
 
-  /**
-   * Three-dot (`base...branch`) so that commits `base` gained after the fork
-   * are not reported as this branch's work. Rename detection is on: a renamed
-   * file is reported once as a rename rather than twice as a delete and an add.
-   */
+  /** The three-dot diff with rename detection, so a rename is one entry rather than a delete and an add. */
   async changedFiles(base: string, branch: string): Promise<ChangedFileEntry[]> {
     const raw = await this.run(this.root, [
       ...RAW_PATHS,
@@ -172,22 +138,8 @@ export class LocalGitReader implements GitReader {
   }
 
   /**
-   * The uncommitted change set: everything `git status` would call dirty,
-   * as one diff.
-   *
-   * Two questions, because git answers them separately and the review needs
-   * one change set:
-   *
-   * - **Tracked files** are `git diff HEAD`, which is staged *and* unstaged
-   *   work in one patch. Staging is a step on the way to a commit, not a
-   *   judgement about what is finished, so a reviewer that saw only one side
-   *   of it would review a change set the author never made.
-   * - **Untracked files** are invisible to every `git diff` against a ref, so
-   *   each is read as a patch against nothing. They are where a new module
-   *   arrives, which is the code most worth reviewing before it is committed.
-   *
-   * Sorted by path, so the change set reads the same twice and does not
-   * depend on which of the two questions answered first.
+   * Everything `git status` would call dirty: tracked changes (staged and unstaged as one patch) plus
+   * untracked, non-ignored files as added-file patches. Sorted by path.
    */
   async worktreeFiles(): Promise<ChangedFileEntry[]> {
     const against = await this.committedSide();
@@ -198,11 +150,7 @@ export class LocalGitReader implements GitReader {
     return [...tracked, ...untracked].toSorted((a, b) => compareCodePoints(a.filename, b.filename));
   }
 
-  /**
-   * Unreadable is not exceptional here: the file may be binary, or deleted
-   * since the diff was taken. Context is a bonus for the prompt, so its
-   * absence must not cost the file its review.
-   */
+  /** The file's text from the working tree, or `null` when unreadable (binary, deleted). */
   async readFile(path: string, limit: number): Promise<string | null> {
     try {
       const bytes = await readFile(join(this.root, path));
@@ -215,23 +163,13 @@ export class LocalGitReader implements GitReader {
     }
   }
 
-  /**
-   * What the tracked files are compared against: `HEAD`, or the empty tree in
-   * a repository that has no commit yet.
-   *
-   * A fresh `git init` has no `HEAD` to name, and `git diff HEAD` there fails
-   * with git's own "ambiguous argument" -- an error about a ref, for a run
-   * whose question was "what have I written". Against the empty tree the
-   * answer is the honest one: everything the tree has is new.
-   */
+  /** `HEAD`, or the empty tree in a repository with no commit yet. */
   private async committedSide(): Promise<string> {
     const head = await this.run(this.root, ["rev-parse", "--verify", "--quiet", "HEAD"], {
       allowedExitCodes: ABSENT_REF,
     });
     if (head.trim() !== "") return "HEAD";
-    // `--stdin` with no stdin: the hash of an empty tree, in this
-    // repository's own object format, rather than the sha-1 constant every
-    // sha-256 repository would reject.
+    // The empty tree's hash in this repository's own object format (sha-1 or sha-256).
     const empty = await this.run(this.root, ["hash-object", "-t", "tree", "--stdin"]);
     const tree = empty.trim();
     this.log.debug(`No HEAD in ${this.root}; comparing the working tree against the empty tree.`);
@@ -247,21 +185,12 @@ export class LocalGitReader implements GitReader {
       "--find-renames",
       "--no-color",
       against,
-      // Ends the revisions, so a file named like a ref cannot be read as one.
       "--",
     ]);
     return splitPatches(raw);
   }
 
-  /**
-   * Every untracked file git is not ignoring, each as an added-file patch.
-   *
-   * `--exclude-standard` is what makes this usable at all: without it the
-   * change set would be `node_modules`. A path git reports with a trailing
-   * slash is an untracked *directory* it declined to descend into -- an
-   * embedded repository -- and its files are that repository's work, not this
-   * one's, so it is dropped rather than diffed.
-   */
+  /** Every untracked, non-ignored file as an added-file patch; an embedded repository (trailing `/`) is dropped. */
   private async untrackedChanges(): Promise<ChangedFileEntry[]> {
     const out = await this.run(this.root, ["ls-files", "--others", "--exclude-standard", "-z"]);
     const paths = out.split("\0").filter((path) => path !== "" && !path.endsWith("/"));
@@ -273,15 +202,7 @@ export class LocalGitReader implements GitReader {
     return patches.flat();
   }
 
-  /**
-   * One untracked file as a patch against nothing (`--no-index`), so git
-   * decides what a new file's diff looks like -- its mode, its binary-ness,
-   * its missing final newline -- rather than this module guessing.
-   *
-   * A file that cannot be diffed costs itself and nothing else: a symlink to
-   * nowhere or a path that vanished between the listing and the read is a
-   * property of a working tree, not a reason to abandon the review.
-   */
+  /** One untracked file as a patch against `/dev/null`; a file that cannot be diffed costs only itself. */
   private async untrackedPatch(path: string): Promise<ChangedFileEntry[]> {
     try {
       const raw = await this.run(

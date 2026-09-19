@@ -1,11 +1,6 @@
 /**
- * Reading the catalogue off the disk: find it, read it, decode the YAML, and
- * hand the payload to the core to validate.
- *
- * A missing catalogue is not an error -- a run may proceed on the environment
- * alone -- but an explicitly named file that is missing *is*: the operator
- * said where to look. An unreadable or invalid one is an error either way,
- * because it states an intent that cannot be honoured.
+ * Reads the catalogue off the disk: find, read, decode YAML, hand to the core to validate.
+ * @packageDocumentation
  */
 
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -20,7 +15,13 @@ import { CatalogError, errorMessage } from "../../core/util/errors";
 
 import { type Environment, configPath } from "./paths";
 
-/** Read the catalogue, or `null` when there is no file to read. */
+/**
+ * Loads the catalogue.
+ *
+ * @param explicit - `--config`.
+ * @returns The catalogue, or `null` when there is no file (a run may proceed on the environment alone).
+ * @throws {@link CatalogError} when an explicitly named file is missing, or a file is unreadable or invalid.
+ */
 export function loadCatalog(
   explicit: string | null | undefined,
   environment: Environment = process.env,
@@ -46,7 +47,6 @@ export function loadCatalog(
   }
   let payload: unknown;
   try {
-    // YAML 1.2 reads JSON as well, so a file from before the format change loads.
     payload = parseYaml(text);
   } catch (error) {
     throw new CatalogError(`${path} is not valid YAML: ${errorMessage(error)}`);

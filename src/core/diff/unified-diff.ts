@@ -1,48 +1,43 @@
 /**
- * A unified diff as the review flow reads it: files, hunks and typed lines.
- *
- * Tokenising is delegated to `parse-diff`; this module gives its output the
- * shape the rest of the review layer reasons about -- new-file line numbers on
- * every added and context line, the hunk header's section text, and the
- * file-level facts (added, removed, renamed) that decide whether a file is
- * reviewable at all -- and can render a file back to text in canonical form.
- *
- * Two inputs arrive here. A hosting provider's per-file `patch` is *headerless*
- * (it starts at the first `@@` hunk); `git diff` output carries full
- * `diff --git` headers and many files. Both parse through the same path.
+ * A unified diff as files, hunks and typed lines. Parses both a headerless per-file patch and a
+ * whole `git diff`, and renders a file back in canonical form.
+ * @packageDocumentation
  */
 
 import parseDiff from "parse-diff";
 
-/** The prefix character of a diff line. `\` is the no-newline marker. */
+/** The prefix character of a diff line; `\` is the no-newline marker. */
 export type LineType = "+" | "-" | " " | "\\";
 
+/** One line of a hunk. */
 export interface DiffLine {
   readonly type: LineType;
-  /** The line's text after its prefix, without the terminating `\n`. */
+  /** The text after the prefix, without the terminating `\n`. */
   readonly value: string;
   readonly sourceLineNo: number | null;
   readonly targetLineNo: number | null;
-  /** Whether the line ends with `\n` when rendered back to text. */
+  /** Whether the line ends with `\n` when rendered. */
   readonly terminated: boolean;
 }
 
+/** One `@@` hunk. */
 export interface Hunk {
   readonly sourceStart: number;
   readonly sourceLength: number;
   readonly targetStart: number;
   readonly targetLength: number;
-  /** Text after the closing `@@`, e.g. the enclosing function's signature. */
+  /** Text after the closing `@@`, e.g. the enclosing function. */
   readonly sectionHeader: string;
   readonly lines: readonly DiffLine[];
 }
 
+/** One file of a diff. */
 export interface PatchedFile {
   /** The path the review reports: the target for an added or renamed file, else the source. */
   readonly path: string;
   readonly sourceFile: string;
   readonly targetFile: string;
-  /** Every header line before the first hunk, verbatim (`diff --git`, `index`, `---`, `+++`, ...). */
+  /** Every header line before the first hunk, verbatim. */
   readonly headerLines: readonly string[];
   readonly hunks: readonly Hunk[];
   readonly isAddedFile: boolean;
@@ -54,22 +49,26 @@ const DEV_NULL = "/dev/null";
 const NO_NEWLINE_MARKER = String.raw`\ No newline at end of file`;
 const NO_NEWLINE_VALUE = " No newline at end of file";
 
-// Python's `.` matches `\r`; JavaScript's does not. Every character class
-// below that stands in for a Python `.` is spelled `[^\n]` for that reason.
+/** `[^\n]` rather than `.` so `\r` is matched. */
 const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?([^\n]*)/;
 
-/** Parse a unified diff (one headerless patch or a whole `git diff`). */
+/**
+ * Parses a unified diff.
+ *
+ * @param text - One headerless patch, or a whole `git diff`.
+ * @returns One entry per file.
+ */
 export function parseUnifiedDiff(text: string): PatchedFile[] {
   return splitFileBlocks(text).flatMap((block) => parseFileBlock(block));
 }
 
-/** Render a file back to text in canonical form (normalised hunk headers). */
+/** Renders a file back to text with normalised hunk headers. */
 export function renderPatchedFile(file: PatchedFile): string {
   const header = file.headerLines.map((line) => `${line}\n`).join("");
   return header + file.hunks.map(renderHunk).join("");
 }
 
-/** The canonical `@@ -a,b +c,d @@ section` header of a hunk. */
+/** The canonical `@@ -a,b +c,d @@ section` header. */
 export function hunkHeader(hunk: Hunk): string {
   const range = `@@ -${hunk.sourceStart},${hunk.sourceLength} +${hunk.targetStart},${hunk.targetLength} @@`;
   return hunk.sectionHeader ? `${range} ${hunk.sectionHeader}` : range;
@@ -87,11 +86,7 @@ interface FileBlock {
   readonly isTerminated: boolean;
 }
 
-/**
- * Split a multi-file diff into per-file text blocks at `diff --git` lines.
- * Text without such a header (a provider's headerless patch, or a plain
- * `---`/`+++` diff) is a single block.
- */
+/** Splits at `diff --git` lines; text without such a header is one block. */
 function splitFileBlocks(text: string): FileBlock[] {
   const lines = text.split("\n");
   const isEndsWithNewline = text.endsWith("\n");
@@ -118,7 +113,6 @@ function parseFileBlock(block: FileBlock): PatchedFile[] {
     if (HUNK_HEADER.test(line)) break;
     headerLines.push(line);
   }
-  // `split` leaves a trailing "" after the final "\n" of a hunk-less block.
   if (headerLines.at(-1) === "") headerLines.pop();
 
   return parseDiff(block.text).map((file) => toPatchedFile(file, headerLines, block.isTerminated));
@@ -134,8 +128,7 @@ function toPatchedFile(
   const hunks = file.chunks.map((chunk, index) =>
     toHunk(chunk, index === file.chunks.length - 1 && !isTerminated),
   );
-  // A diff without git headers still reveals an added or removed file through
-  // its single hunk's empty side.
+  // A headerless diff still reveals an added/removed file through its single hunk's empty side.
   const single = hunks.length === 1 ? hunks[0] : undefined;
   const isAddedFile =
     sourceFile === DEV_NULL ||
@@ -163,8 +156,7 @@ function toHunk(chunk: parseDiff.Chunk, isLastLineUnterminated: boolean): Hunk {
   const match = HUNK_HEADER.exec(chunk.content);
   const sectionHeader = match?.[5] ?? "";
   const lines = chunk.changes.map((change) => toDiffLine(change));
-  // The no-newline marker is always re-attached with a newline of its own;
-  // only a real content line can inherit the input's missing final newline.
+  // Only a content line can inherit a missing final newline; the marker always keeps its own.
   const last = lines.at(-1);
   if (isLastLineUnterminated && last !== undefined && last.type !== "\\") {
     lines[lines.length - 1] = { ...last, terminated: false };
@@ -209,8 +201,7 @@ function toDiffLine(change: parseDiff.Change): DiffLine {
       };
     }
     case "normal": {
-      // An empty context line may arrive as "" rather than " "; both mean an
-      // empty line, so the leading marker is optional here.
+      // An empty context line may arrive as "" rather than " ".
       return {
         type: " ",
         value: change.content.startsWith(" ") ? change.content.slice(1) : change.content,

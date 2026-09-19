@@ -1,57 +1,33 @@
 /**
- * What the operator asked of the logs, settled once.
- *
- * Three questions -- how much to say, in what shape, and in colour or not --
- * are each answered from several places: a flag, an environment variable, a
- * CI runner's own switch, the terminal itself. Answering them where the
- * logger is built would scatter that precedence across the composition root
- * and make it untestable, so it is decided here, in one pure function of
- * (flags, environment, terminal), and the logger receives a settled
- * `LogSettings` with nothing left to interpret.
- *
- * The conventions followed are the ones a CLI user already knows, so that
- * this tool behaves like the others in their pipeline:
- *
- * - `-q`/`-v`/`--log-level`, and `REVIEWER_LOG_LEVEL` under them
- *   (clig.dev, "Arguments and flags").
- * - `NO_COLOR` disables colour whatever else is true; `FORCE_COLOR` and
- *   `CLICOLOR_FORCE` demand it even off a terminal; `TERM=dumb` and a
- *   non-TTY disable it (no-color.org, bixense.com/clicolors).
- * - A GitHub runner sets `RUNNER_DEBUG=1` when a job is re-run with debug
- *   logging, which is the operator asking this tool for debug too.
+ * Resolves what the operator asked of the logs (level, format, colour) from flags, environment and
+ * terminal, once, in one pure function. Follows clig.dev, no-color.org and the GitHub runner's conventions.
+ * @packageDocumentation
  */
 
-/** How much a run says, loudest first; `silent` says nothing at all. */
+/** How much a run says, loudest first; `silent` says nothing. */
 export const LOG_LEVELS = ["debug", "info", "warn", "error", "silent"] as const;
 
+/** One of {@link LOG_LEVELS}. */
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
-/**
- * The shape of a log line.
- *
- * - `text` -- for a person: `info: message`, or the full record under `-v`.
- * - `json` -- one JSON object per line, for whatever collects logs.
- * - `github` -- workflow commands (`::debug::`, `::warning::`, `::error::`),
- *   so a runner folds and colours the lines itself.
- *
- * `auto` is not one of them: it is the *absence* of a choice, resolved to
- * `github` on a runner and `text` everywhere else.
- */
+/** The line shapes; `auto` resolves to `github` on a runner and `text` elsewhere. */
 export const LOG_FORMATS = ["auto", "text", "json", "github"] as const;
 
+/** One of {@link LOG_FORMATS}. */
 export type LogFormatChoice = (typeof LOG_FORMATS)[number];
 
+/** A resolved format. */
 export type LogFormat = Exclude<LogFormatChoice, "auto">;
 
-/** What the command line said about logging, before anything is resolved. */
+/** What the command line said about logging. */
 export interface LoggingFlags {
   /** `-v`: debug detail, timestamps and component names. */
   readonly verbose?: boolean;
   /** `-q`: warnings and errors only. */
   readonly quiet?: boolean;
-  /** `--log-level`: the exact threshold, outranking `-v` and `-q`. */
+  /** `--log-level`; outranks `-v` and `-q`. */
   readonly level?: LogLevel | null;
-  /** `--log-format`; `auto` (the default) decides from the environment. */
+  /** `--log-format`; `auto` decides from the environment. */
   readonly format?: LogFormatChoice | null;
   /** `--color`/`--no-color`; `null` when neither was given. */
   readonly color?: boolean | null;
@@ -62,56 +38,36 @@ export interface LogSettings {
   readonly level: LogLevel;
   readonly format: LogFormat;
   readonly color: boolean;
-  /**
-   * Whether a line carries its timestamp and component name.
-   *
-   * Off by default because stderr is not a log file: a person running the
-   * command wants the sentence, not the record around it (clig.dev, "Don't
-   * treat stderr like a log file"). `-v` is them asking for the record.
-   */
+  /** Whether a line carries its timestamp and component name; on at `debug`. */
   readonly detailed: boolean;
-  /**
-   * Values that must never reach a log line, whatever a message was built
-   * from. Masked verbatim, so this is precise rather than a guess at what a
-   * secret looks like.
-   */
+  /** Values masked verbatim in every line. */
   readonly secrets: readonly string[];
 }
 
-/** The environment, as much of it as this module reads. */
+/** An environment map. */
 export type Environment = Readonly<Record<string, string | undefined>>;
 
-/** A variable that is set to something; `""` counts as unset throughout. */
+/** Whether a variable is set to something; `""` counts as unset. */
 function isSet(value: string | undefined): value is string {
   return value !== undefined && value !== "";
 }
 
-/** A variable meaning "yes" unless it explicitly says `0` or `false`. */
+/** Whether a variable means "yes": set, and not `0` or `false`. */
 function isTruthy(value: string | undefined): boolean {
   if (!isSet(value)) return false;
   const folded = value.trim().toLowerCase();
   return folded !== "0" && folded !== "false";
 }
 
-/** A level name, however it was spelled, or `null` if it names no level. */
+/** Parses a level name (`warning` reads as `warn`), or `null`. */
 export function parseLogLevel(value: string | undefined): LogLevel | null {
   if (!isSet(value)) return null;
   const folded = value.trim().toLowerCase();
-  // `warning` is what a Python-shaped log calls it, and operators type it.
   const name = folded === "warning" ? "warn" : folded;
   return (LOG_LEVELS as readonly string[]).includes(name) ? (name as LogLevel) : null;
 }
 
-/**
- * The threshold, from the most specific source that named one.
- *
- * `--log-level` is an exact answer and outranks the two shorthands. Between
- * those, `-q` wins: `-v -q` is a contradiction, and the reading that
- * silences output is the one that cannot flood a script that asked for
- * quiet. `RUNNER_DEBUG` comes last of the *requests*, above only the
- * default, because it is the runner speaking for an operator who re-ran the
- * job asking to see more.
- */
+/** The threshold: `--log-level` › `-q` › `-v` › `REVIEWER_LOG_LEVEL` › `RUNNER_DEBUG` › `info`. */
 function resolveLevel(flags: LoggingFlags, environment: Environment): LogLevel {
   if (flags.level != null) return flags.level;
   if (flags.quiet === true) return "warn";
@@ -123,19 +79,19 @@ function resolveLevel(flags: LoggingFlags, environment: Environment): LogLevel {
     : "info";
 }
 
-/** Whether the process is running as a step of a GitHub Actions job. */
+/** Whether the process runs as a GitHub Actions step. */
 function isGitHubRunner(environment: Environment): boolean {
   return isTruthy(environment["GITHUB_ACTIONS"]);
 }
 
-/** The line shape: what was asked for, or what the surroundings imply. */
+/** The line shape: the flag, else `REVIEWER_LOG_FORMAT`, else `auto` resolved by the surroundings. */
 function resolveFormat(flags: LoggingFlags, environment: Environment): LogFormat {
   const asked = flags.format ?? parseFormatName(environment["REVIEWER_LOG_FORMAT"]) ?? "auto";
   if (asked !== "auto") return asked;
   return isGitHubRunner(environment) ? "github" : "text";
 }
 
-/** A format name, however it was spelled, or `null` if it names no format. */
+/** Parses a format name, or `null`. */
 export function parseFormatName(value: string | undefined): LogFormatChoice | null {
   if (!isSet(value)) return null;
   const folded = value.trim().toLowerCase();
@@ -143,17 +99,9 @@ export function parseFormatName(value: string | undefined): LogFormatChoice | nu
 }
 
 /**
- * Whether the log lines may be coloured.
+ * Whether log lines may be coloured.
  *
- * Decided against the *log's* stream, not the program's output: piping
- * findings into another program says nothing about whether the person
- * watching the run can see colour (clig.dev, "Output"). `NO_COLOR` sits
- * above `FORCE_COLOR` because an accessibility preference should not be
- * overridable by a variable a build image happened to set; only the explicit
- * flag outranks it.
- *
- * `json` and `github` are never coloured: one is parsed, and the other is
- * coloured by the runner from the command itself.
+ * @remarks Only `text` is coloured. Flag › `NO_COLOR` › `FORCE_COLOR`/`CLICOLOR_FORCE` › `TERM=dumb`/`CLICOLOR=0` › TTY.
  */
 function shouldColor(
   flags: LoggingFlags,
@@ -168,22 +116,10 @@ function shouldColor(
   return environment["TERM"] === "dumb" || environment["CLICOLOR"] === "0" ? false : isTTY;
 }
 
-/**
- * Environment variables whose *name* says they hold a credential.
- *
- * Matched on the name rather than the value: a key's shape is a guess that
- * over-masks (every hex string) and under-masks (the next provider's
- * format), while a name is what the operator themselves called it.
- */
+/** Variable names that say they hold a credential. */
 const SECRET_NAME = /(?:API_?KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL)/iu;
 
-/**
- * The shortest value worth masking.
- *
- * A two-character secret is not a secret, and masking it would redact every
- * innocent occurrence of those two characters -- including in file paths,
- * which is how redaction starts corrupting the logs it was added to protect.
- */
+/** The shortest value worth masking; shorter ones would redact innocent text. */
 const SHORTEST_SECRET = 8;
 
 /** The credential values in `environment`, longest first so a prefix cannot mask a longer one. */
@@ -201,11 +137,9 @@ export function secretsFrom(environment: Environment): readonly string[] {
 export const SECRET_MASK = "***";
 
 /**
- * `text` with every known secret replaced by `***`.
+ * Replaces every known secret with `***`.
  *
- * The replacement is a function rather than the string itself: a secret can
- * contain `$&`, and passing it as a literal would let `replaceAll` expand
- * that into the very text being masked.
+ * @remarks The replacement is a function so a secret containing `$&` cannot be expanded by `replaceAll`.
  */
 export function redact(text: string, secrets: readonly string[]): string {
   let result = text;
@@ -213,13 +147,14 @@ export function redact(text: string, secrets: readonly string[]): string {
   return result;
 }
 
+/** Options for {@link resolveLogSettings}. */
 export interface ResolveOptions {
   readonly environment?: Environment;
   /** Whether the log's own stream is a terminal; `false` when not stated. */
   readonly isTTY?: boolean;
 }
 
-/** Settle every logging question from the flags, the environment and the terminal. */
+/** Settles every logging question from the flags, the environment and the terminal. */
 export function resolveLogSettings(
   flags: LoggingFlags = {},
   options: ResolveOptions = {},
@@ -231,8 +166,6 @@ export function resolveLogSettings(
     level,
     format,
     color: shouldColor(flags, environment, format, options.isTTY ?? false),
-    // The record around a message is detail, and `-v` is the request for
-    // detail -- however that level was arrived at, including `RUNNER_DEBUG`.
     detailed: level === "debug",
     secrets: secretsFrom(environment),
   };

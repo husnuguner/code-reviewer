@@ -1,26 +1,7 @@
 /**
- * A transport that survives a 429, wrapped around one that does not.
- *
- * `FetchLike -> FetchLike`, so a client that already works keeps working: the
- * GitHub poster's one endpoint, its origin allowlist and its error handling
- * are untouched, and the decision that "the network may fail once" is made
- * where the network enters the program rather than in the module that happens
- * to speak HTTP.
- *
- * This file composes and does not decide. The policies come from
- * `lib/resilience`, the rules from `./transient-failures`, the waiting from
- * `./retry-after-backoff`; what is left here is the wiring and the defaults.
- *
- * The composition is worth reading once:
- *
- * - A **retry policy** whose handler treats a retryable *status* as a failure.
- *   That is why there is no sentinel exception anywhere below: when the
- *   attempts run out, the policy hands the last `Response` back as a value,
- *   body unread, and the caller cannot tell a retried request from a fresh
- *   one.
- * - A **timeout policy** inside it, one per attempt, supplying the signal the
- *   transport aborts on. Per attempt rather than per call, because the call's
- *   own bound is the retry policy's `maxDuration`.
+ * A `FetchLike` decorator that retries transient failures: a retry policy whose handler treats a
+ * retryable status as a failure, with a per-attempt timeout inside it. Composes; decides nothing itself.
+ * @packageDocumentation
  */
 
 import { type Logger, NULL_LOGGER } from "../../core/ports/logger";
@@ -53,40 +34,36 @@ export const DEFAULT_BASE_DELAY_MS = 500;
 export const DEFAULT_MAX_DELAY_MS = 20_000;
 /** The budget for the whole call, retries and waits included. */
 export const DEFAULT_MAX_DURATION_MS = 90_000;
-/** How long one attempt may take before it is abandoned. */
+/** How long one attempt may take. */
 export const DEFAULT_TIMEOUT_MS = 30_000;
 
+/** Options for {@link withRetry}. */
 export interface HttpRetryOptions {
   readonly attempts?: number;
   readonly baseDelayMs?: number;
   readonly maxDelayMs?: number;
-  /** The whole call's budget; not one attempt's. */
+  /** The whole call's budget. */
   readonly maxDurationMs?: number;
   /** Per attempt, not per call. */
   readonly timeoutMs?: number;
-  /** Where each retry is announced. Omitted, they happen in silence. */
+  /** Where each retry is announced; omitted, retries are silent. */
   readonly logger?: Logger;
-  /** Injected so a test can pin the wait. */
+  /** Injectable so a test can pin the wait. */
   readonly random?: () => number;
-  /** Injected so a test need not spend the waits. */
+  /** Injectable so a test need not spend the waits. */
   readonly timer?: ITimer;
 }
 
-/**
- * Release the connection a response we are discarding would otherwise hold.
- *
- * An unread body keeps its socket checked out of the pool; a run that retried
- * twice per request would leak them steadily.
- */
+/** Releases the socket a discarded response would otherwise hold. */
 async function discard(response: Response): Promise<void> {
   try {
     await response.body?.cancel();
   } catch {
-    // Already consumed or already closed: either way the socket is free.
+    // Already consumed or closed.
   }
 }
 
-/** Why an attempt is being repeated, for the one line that says so. */
+/** Why an attempt is being repeated, for the log line. */
 function describe(reason: IRetryEvent["reason"]): string {
   if ("value" in reason) {
     return reason.value instanceof Response
@@ -98,19 +75,11 @@ function describe(reason: IRetryEvent["reason"]): string {
 }
 
 /**
- * A transport, with the transient failures answered by asking again.
+ * Wraps a transport so transient failures are retried.
  *
- * The returned function keeps the `FetchLike` contract exactly: a `URL` in, a
- * `Response` out, and the last response returned unread when the attempts run
- * out -- so a caller that reads `response.status` and `response.text()` to
- * build its own error is none the wiser, and a caller that never fails pays
- * one comparison.
- *
- * `transport`, not `fetch`: this module reaches for no global and adds no
- * destination of its own, and the `URL` it is handed was produced by the
- * caller's own origin allowlist. Naming the parameter for what it is keeps
- * the one bare `fetch` identifier in this program at the composition root,
- * where the comment explaining it lives.
+ * @param transport - The underlying `fetch`; named for what it is, since this adds no destination.
+ * @returns A `FetchLike` that keeps the contract exactly: when attempts run out, the last response is
+ * returned unread, so a caller cannot tell a retried request from a fresh one.
  */
 export function withRetry(transport: FetchLike, options: HttpRetryOptions = {}): FetchLike {
   const maxDelayMs = options.maxDelayMs ?? DEFAULT_MAX_DELAY_MS;
@@ -141,8 +110,7 @@ export function withRetry(transport: FetchLike, options: HttpRetryOptions = {}):
     );
 
     policy.onRetry(({ attempt, delayMs, reason }) => {
-      // Only a response we are about to throw away is released here; the one
-      // that survives the last attempt is the caller's to read.
+      // Only a response about to be thrown away is released; the last one is the caller's to read.
       if ("value" in reason && reason.value instanceof Response) void discard(reason.value);
       log.warn(
         `${method} ${input.pathname} ${describe(reason)}; retrying in ${String(delayMs)}ms ` +
