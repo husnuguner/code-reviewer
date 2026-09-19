@@ -8,3 +8,6 @@ node_modules/
 .DS_Store
 .idea/
 .vscode/
+
+# Local research notes -- working material, not part of the project.
+.research/

@@ -9,7 +9,7 @@ import tseslint from "typescript-eslint";
 
 export default defineConfig(
   {
-    ignores: ["coverage/**", "node_modules/**", "tests/fixtures/**"],
+    ignores: ["coverage/**", "node_modules/**", "tests/fixtures/**", ".research/**"],
   },
 
   js.configs.recommended,
