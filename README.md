@@ -119,8 +119,8 @@ cd code-reviewer && bun install && bun link   # `reviewer` on PATH from src/
 ## Quick start
 
 ```bash
-# 1. The model's key, once per machine (never committed)
-mkdir -p ~/.config/reviewer
+# 1. The model, once per machine (never committed)
+cd ~ && reviewer init            # writes ~/.config/reviewer/config.yaml: provider, model, the key's name
 printf 'ANTHROPIC_API_KEY=sk-ant-...\n' > ~/.config/reviewer/.env && chmod 600 ~/.config/reviewer/.env
 
 # 2. In the repository you want reviewed
@@ -130,13 +130,16 @@ reviewer --preview --base main   # what would be reviewed; no model call, no cos
 reviewer --base main             # the review
 ```
 
-`reviewer init` writes the project's review setup into the checkout. Commit
-`.review/`: the rules are then versioned with the code they govern, and CI
-reads them from the checkout like any other file.
+Two files, one rule: **the machine's says how the reviewer runs, the
+repository's says what is reviewed** — and the repository's may restate any
+key to override the machine's for itself. `reviewer init` writes the
+repository's into the checkout. Commit `.review/`: the rules are then
+versioned with the code they govern, and CI reads them from the checkout like
+any other file.
 
 ```text
 .review/
-├── config.yaml     model, excludes, which skill applies to which paths
+├── config.yaml     excludes, which skill applies to which paths; the model only if pinned here
 ├── prompts/        every *.md here is added to every file's prompt
 ├── skills/         one Markdown file per convention
 └── .gitignore      keeps a project-specific .env out of git
@@ -163,13 +166,11 @@ reviewer --uncommitted                      # the work that is not in a commit y
 
 ### Commands
 
-| Command               | What it does                                                                             |
-| --------------------- | ---------------------------------------------------------------------------------------- |
-| `reviewer [review]`   | Review a branch against a base (the default command).                                    |
-| `reviewer comment`    | Post a findings file to a pull request. Needs `GITHUB_TOKEN`; runs no model.             |
-| `reviewer init`       | Write the review setup: `.review/` inside a checkout, `~/.config/reviewer/` outside one. |
-| `reviewer add <name>` | Define a project in the machine-wide catalogue.                                          |
-| `reviewer projects`   | List the projects the catalogue in force defines.                                        |
+| Command             | What it does                                                                            |
+| ------------------- | --------------------------------------------------------------------------------------- |
+| `reviewer [review]` | Review a branch against a base (the default command).                                   |
+| `reviewer comment`  | Post a findings file to a pull request. Needs `GITHUB_TOKEN`; runs no model.            |
+| `reviewer init`     | Write the config file: `.review/` inside a checkout, `~/.config/reviewer/` outside one. |
 
 ### Review flags
 
@@ -186,7 +187,7 @@ reviewer --uncommitted                      # the work that is not in a commit y
 | `--exclude GLOB`                                        | Skip files matching the glob; repeatable.                                              |
 | `--skills-path PATH`                                    | Directory of review skills inside the reviewed repo; empty disables skills.            |
 | `--no-verify`                                           | Report every finding the model produced, skipping the verification pass.               |
-| `--project NAME`, `--config PATH`                       | Which project / catalogue to use when more than one could apply.                       |
+| `--config PATH`                                         | Another repository `config.yaml`, in place of the nearest `.review/config.yaml`.       |
 | `-v`, `-q`, `--log-level`, `--log-format`, `--no-color` | Logging; see [docs/output.md](docs/output.md#logging).                                 |
 
 Exit codes: `0` success · `1` usage error · `2` a configuration or working-tree
@@ -206,33 +207,48 @@ shapes and the summary counters are documented in
 
 ## Configuration
 
-Precedence, highest first: **command line › environment › `config.yaml`
-project › `config.yaml` defaults › built-in default.**
+Precedence, highest first: **command line › environment › `.env` ›
+`<repo>/.review/config.yaml` › `~/.config/reviewer/config.yaml` › built-in
+default.**
 
-A minimal `.review/config.yaml`:
+The machine's file and a repository's, at their smallest useful:
 
 ```yaml
+# ~/.config/reviewer/config.yaml
 version: 1
-defaults:
+settings:
   llm: { provider: claude, model: claude-sonnet-4-6, api-key: ANTHROPIC_API_KEY }
-  exclude: ["**/*.spec.ts", "**/migrations/*.ts"]
-  max-findings-per-file: 3
-projects:
-  this-repo:
-    skills:
-      path: skills # beside config.yaml
-      mappings:
-        api-conventions: ["src/api/**/*.ts"]
-        error-handling: "src/**/*.ts"
+  language: en
 ```
 
-`llm.api-key` takes the **name** of an environment variable, so the file is
+```yaml
+# <repo>/.review/config.yaml
+version: 1
+settings: # on top of the machine's
+  exclude: ["**/*.spec.ts", "**/migrations/*.ts"]
+  max-findings-per-file: 3
+skills: # this file only
+  path: skills # beside config.yaml
+  mappings:
+    api-conventions: ["src/api/**/*.ts"]
+    error-handling: "src/**/*.ts"
+```
+
+`settings` is how the reviewer runs and may be set in either file: a key the
+repository restates wins, and `llm` merges key by key, so
+`settings: { llm: { model: claude-opus-4 } }` pins the model and keeps the
+machine's provider. `skills` is what the code is held to and belongs to the
+repository's file alone.
+
+`settings.llm.api-key` takes the **name** of an environment variable, so the file is
 shareable; the key lives in `~/.config/reviewer/.env` or the gitignored
 `.review/.env`. A key the schema does not recognise is rejected with the
 accepted set named.
 
-Without a catalogue, environment variables describe the whole run
-(`LLM_PROVIDER`, `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, `REVIEW_*`).
+Without any file, environment variables describe the whole run
+(`LLM_PROVIDER`, `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, `REVIEW_*`) —
+which is also how a CI runner, having no `~/.config/reviewer/`, is told the
+model: by the action's inputs.
 
 Every key, its default and the environment variable behind it:
 [docs/configuration.md](docs/configuration.md). The complete annotated
@@ -301,6 +317,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - uses: husnuguner/code-reviewer/actions/review@v0.0.5
         with:
+          provider: claude # the workflow names the model: a runner has no ~/.config/reviewer
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           skills-path: .review/skills
           out: code-review.ndjson

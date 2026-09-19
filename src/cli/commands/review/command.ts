@@ -7,10 +7,10 @@ import { type Command, Option } from "commander";
 
 import { ConfigError } from "../../../core/config/config";
 import { type Severity } from "../../../core/review/severity";
-import { CatalogError, GitError, ReportFileError } from "../../../core/util/errors";
+import { ConfigFileError, GitError, ReportFileError } from "../../../core/util/errors";
 import { choice, defineCommand, instanceOfAny, repeatable, text } from "../../command-line";
 import { type ReportFormat } from "../../container";
-import { type CatalogArguments, catalogArguments, catalogOptions } from "../../options/catalog";
+import { type ConfigArguments, configArguments, configOptions } from "../../options/config";
 import { DEFAULT_FORMAT, REPORT_FORMATS } from "../../options/format";
 import { severityList } from "../../options/severity";
 
@@ -20,8 +20,7 @@ import { runReview } from "./run";
 export const DEFAULT_BRANCH = "HEAD";
 
 /** The parsed `review` command line. */
-export interface ReviewArguments extends CatalogArguments {
-  readonly project: string | null;
+export interface ReviewArguments extends ConfigArguments {
   readonly branch: string;
   readonly base: string;
   /** Review the working tree; `--branch` and `--base` are then not used. */
@@ -40,14 +39,10 @@ export interface ReviewArguments extends CatalogArguments {
   readonly verify: boolean;
 }
 
-/** The `review` flags, on top of the catalogue's. */
+/** The `review` flags, on top of `--config`. */
 function reviewOptions(command: Command): Command {
   return (
-    catalogOptions(command)
-      .option(
-        "--project <name>",
-        "Name of the project to review, as defined in config.yaml. Optional when the config defines exactly one, or when there is no config and the environment describes the target.",
-      )
+    configOptions(command)
       .option(
         "--branch <name>",
         "Branch or commit to review against --base; unset, the current checkout.",
@@ -76,17 +71,17 @@ function reviewOptions(command: Command): Command {
       )
       .option(
         "--lang <lang>",
-        "Language for the findings, e.g. 'tr' or 'en' (default: the project's setting, else REVIEW_LANG, else English).",
+        "Language for the findings, e.g. 'tr' or 'en' (default: the config files' setting, else REVIEW_LANG, else English).",
       )
       .option(
         "--skills-path <path>",
-        "Directory of review skills inside the reviewed repository (overrides the project's skills_path). Empty disables skills.",
+        "Directory of review skills inside the reviewed repository (overrides the repository's skills.path). Empty disables skills.",
       )
       // `Option` where the default is a list, so help prints "none" rather than `[]`.
       .addOption(
         new Option(
           "--exclude <glob>",
-          "Glob of files to skip entirely (repeatable); adds to the project's exclude list. E.g. --exclude '**/*.md'.",
+          "Glob of files to skip entirely (repeatable); adds to the configured exclude list. E.g. --exclude '**/*.md'.",
         )
           .argParser(repeatable(text))
           .default([], "none"),
@@ -107,7 +102,12 @@ function reviewOptions(command: Command): Command {
 }
 
 /** Configuration, working-tree and `--out` problems: one `error:` line, exit 2. */
-const isReviewOperatorError = instanceOfAny(CatalogError, GitError, ConfigError, ReportFileError);
+const isReviewOperatorError = instanceOfAny(
+  ConfigFileError,
+  GitError,
+  ConfigError,
+  ReportFileError,
+);
 
 /** `reviewer review`, as the root registers it. */
 export const REVIEW = defineCommand<ReviewArguments>({
@@ -120,8 +120,7 @@ export const REVIEW = defineCommand<ReviewArguments>({
   options: reviewOptions,
   arguments: (options) => ({
     ...options,
-    ...catalogArguments(options),
-    project: options.project ?? null,
+    ...configArguments(options),
     out: options.out ?? null,
     lang: options.lang ?? null,
     skillsPath: options.skillsPath ?? null,

@@ -1,46 +1,42 @@
 # Every key the reviewer accepts, with its default. Nothing writes this file:
-# `reviewer init` writes a starter beside it (config.yaml, or repo-config.yaml
-# inside a checkout). Copy what you need; an omitted key takes its default.
-# Kept in step with the parser by tests/core/catalog/config-example.test.ts.
+# `reviewer init` writes a starter beside it (config.yaml outside a checkout,
+# repo-config.yaml inside one). Copy what you need; an omitted key takes its
+# default. A test (tests/core/config/config-example.test.ts) keeps it in step
+# with the parser.
 #
-# Beside this file: .env (the named secret), prompts/ (every *.md is appended
-# to the policy for every reviewed file) and skills/. The review policy itself
-# ships with the reviewer and is not configurable.
+# Two files share this shape:
+#   ~/.config/reviewer/config.yaml  this machine: `settings` -- the model, its
+#                                   key's name, language, concurrency
+#   <repo>/.review/config.yaml      that repository: `skills`, plus any
+#                                   `settings` key restated to override the
+#                                   machine's for this repository
+# Beside each: .env (the named secret) and prompts/ (every *.md is appended to
+# the policy for every reviewed file; the repository's when it says anything,
+# else the machine's). The review policy itself ships with the reviewer and is
+# not configurable.
 #
-# Precedence, highest first: command line > environment > .env > the project >
-# defaults > built-in.
+# Precedence, highest first: command line > environment > .env > the
+# repository's file > the machine's file > built-in.
 
 # Schema version. Optional; a newer number than this build knows is refused.
 version: 1
 
-# What every project starts from; a project overrides a key by restating it.
-defaults:
+# How the reviewer runs. Set once on the machine; a repository restates the
+# keys it wants otherwise, and `llm` merges key by key.
+settings:
   llm:
     provider: claude # or: local (any OpenAI-compatible server). Default local
-    model: claude-opus-5 # default: the provider's own
-    api-key: LLM_API_KEY # env var name, or the key itself. Required
+    model: claude-sonnet-4-6 # default: the provider's own
+    api-key: ANTHROPIC_API_KEY # env var name, or the key itself. Required
     # local: the server's root; claude: a proxy. Default: the public endpoint
     # base-url: http://127.0.0.1:1234/v1
 
   language: tr # findings' language, ISO code or name. Default en
   verify: true # a second pass drops findings their diff disproves. Default true
 
-  skills:
-    # Where the skill documents are; relative paths are taken from beside this
-    # file, {{project}} stands for the project's name. Default "": no skills.
-    # Mappings are per project, so `defaults.skills` names the directory only.
-    path: ~/.config/reviewer/skills/{{project}}
-  max-skill-chars: 10000 # per-skill body cap. Default 10000
-  max-skills-total-chars: 18000 # cap for one file's skills block. Default 18000
-
-  # Cap on the pre-context (imported signatures, related diffs) read from the
-  # checkout for each file; 0 switches it off. Default 6000.
-  max-context-chars: 6000
-
-  # The checkout to review. Default: the current directory.
-  local-path: ~/Documents/workspace/{{project}}
   # Files never sent to the model. Globs, as a list or one comma-separated
-  # string; `--exclude` adds more for a run. Default [].
+  # string; `--exclude` adds more for a run. Default []. Set in the machine's
+  # file, this makes a local run differ from CI, where that file does not exist.
   exclude:
     - "**/*.md"
     - "**/*.tsx"
@@ -51,39 +47,27 @@ defaults:
     - "**/migrations/*.ts"
     - "**/.snapshot*.json"
     - "src/scripts/**"
-  max-file-chars: 8000 # per-file cap on diff + content. Default 8000
 
   max-findings-per-file: 3 # the most severe survive; 0 = no cap. Default 3
+  max-file-chars: 8000 # per-file cap on diff + content. Default 8000
+  max-skill-chars: 10000 # per-skill body cap. Default 10000
+  max-skills-total-chars: 18000 # cap for one file's skills block. Default 18000
+  # Cap on the pre-context (imported signatures, related diffs) read from the
+  # checkout for each file; 0 switches it off. Default 6000.
+  max-context-chars: 6000
   max-concurrent-files: 4 # file reviews in flight. Default 0: from CPU count
 
-# Reviewable targets. With exactly one project, --project may be omitted.
-projects:
-  shop:
-    # Any key from defaults may be restated here (a section such as llm merges
-    # key by key).
-    llm:
-      model: claude-sonnet-5
-    language: tr
-    verify: true
-    local-path: ~/work/shop
-    exclude: ["**/*.md"]
-    max-findings-per-file: 2
-    max-file-chars: 8000
-    max-skill-chars: 10000
-    max-skills-total-chars: 18000
-    max-context-chars: 6000
-    max-concurrent-files: 4
-
-    skills:
-      # skill name -> the globs it reviews: a list, one bare glob, or [] to
-      # switch a skill off without deleting its file. A skill mapped nowhere
-      # never applies, and a mapping naming no skill is warned about.
-      # Default {}.
-      mappings:
-        api-rules: ["src/api/**/route.ts", "src/api/**/middlewares.ts"]
-        data-model: "src/modules/**/models/**/*.ts"
-        background-jobs: []
-
-  # The minimum that parses: the defaults, the four built-in lenses, and the
-  # current directory.
-  another: {}
+# REPOSITORY FILE ONLY. Skills describe the reviewed code, so the machine's
+# file may not set them; `reviewer` refuses the file if it does.
+skills:
+  # Where the skill documents are; a relative path is taken from beside this
+  # file, so in .review/config.yaml `skills` means .review/skills. Default "":
+  # no skills.
+  path: skills
+  # skill name -> the globs it reviews: a list, one bare glob, or [] to switch
+  # a skill off without deleting its file. A skill mapped nowhere never
+  # applies, and a mapping naming no skill is warned about. Default {}.
+  mappings:
+    api-rules: ["src/api/**/route.ts", "src/api/**/middlewares.ts"]
+    data-model: "src/modules/**/models/**/*.ts"
+    background-jobs: []

@@ -46,7 +46,7 @@ describe("skills read from the working tree", () => {
   });
 
   it("feeds a registry that matches skills to the paths the project maps them to", async () => {
-    // The scope comes from the catalogue's mappings and nowhere else: a
+    // The scope comes from the config file's mappings and nowhere else: a
     // source that loaded these two skills without a mapping would give the
     // registry nothing that matches.
     const registry = await SkillRegistry.build(

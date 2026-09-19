@@ -4,8 +4,8 @@
  */
 
 /** A configuration file that cannot be used as written. Printed plainly; exit 2. */
-export class CatalogError extends Error {
-  override readonly name = "CatalogError";
+export class ConfigFileError extends Error {
+  override readonly name = "ConfigFileError";
 }
 
 /** A git invocation that did not succeed. Printed plainly; exit 2. */

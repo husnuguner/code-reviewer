@@ -9,7 +9,8 @@ import { dirname, join } from "node:path";
 import { parseEnv } from "node:util";
 
 import { type EnvironmentValues } from "../../core/config/resolver";
-import { ENV_FILENAME, type Environment, configHome, findRepoConfig } from "../catalog/paths";
+
+import { ENV_FILENAME, type Environment, configHome, findRepoConfig } from "./paths";
 
 /** One `.env` file's pairs, or `{}` when it cannot be read. */
 export function readEnvironmentFile(path: string): EnvironmentValues {

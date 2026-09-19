@@ -5,16 +5,13 @@
 
 import { describe, expect, it } from "bun:test";
 
-import { ADD } from "../../src/cli/commands/add/command";
 import { COMMENT } from "../../src/cli/commands/comment/command";
 import { INIT } from "../../src/cli/commands/init/command";
-import { PROJECTS } from "../../src/cli/commands/projects/command";
 import { REVIEW } from "../../src/cli/commands/review/command";
 import { UsageError, parseArguments } from "../../src/cli/reviewer";
 import { argumentsOf, parsedBy } from "../helpers/command-line";
 
 const review = parsedBy(REVIEW);
-const add = parsedBy(ADD);
 
 describe("naming the command", () => {
   it("reviews unless told otherwise", () => {
@@ -23,10 +20,14 @@ describe("naming the command", () => {
     expect(parseArguments(["review", "--base", "develop"]).command).toBe("review");
   });
 
-  it("knows the catalogue commands", () => {
+  it("knows init", () => {
     expect(parseArguments(["init"]).command).toBe("init");
-    expect(parseArguments(["projects", "--config", "/c.json"]).command).toBe("projects");
-    expect(parseArguments(["add", "x"]).command).toBe("add");
+    expect(parseArguments(["init", "--config", "/c.yaml"]).command).toBe("init");
+  });
+
+  it("no longer knows the project commands", () => {
+    expect(() => parseArguments(["projects"])).toThrow(UsageError);
+    expect(() => parseArguments(["add", "x"])).toThrow(UsageError);
   });
 
   it("knows the poster", () => {
@@ -90,7 +91,6 @@ describe("the review flags", () => {
       logFormat: "auto",
       // Commander's shape for `--no-color`: on until the flag is given.
       color: true,
-      project: null,
       // The current checkout: a CI build sits on a detached commit, so the
       // common case must not need a branch name.
       branch: "HEAD",
@@ -115,10 +115,8 @@ describe("the review flags", () => {
     expect(review(["--no-verify"]).verify).toBe(false);
   });
 
-  it("name the project, the catalogue, the language, the skills and the exclusions", () => {
+  it("name the config file, the language, the skills and the exclusions", () => {
     const arguments_ = review([
-      "--project",
-      "app",
       "--config",
       "/c.yaml",
       "--lang",
@@ -130,7 +128,6 @@ describe("the review flags", () => {
       "--exclude",
       "**/*.lock",
     ]);
-    expect(arguments_.project).toBe("app");
     expect(arguments_.config).toBe("/c.yaml");
     expect(arguments_.lang).toBe("tr");
     expect(arguments_.skillsPath).toBe(".review/skills");
@@ -167,24 +164,13 @@ describe("the review flags", () => {
   });
 });
 
-describe("the catalogue flags", () => {
-  it("parse 'add' with a name and the two scaffolding flags", () => {
-    const arguments_ = add(["add", "my-app", "--path", "/src/app", "--skills", "rules"]);
-    expect(arguments_.name).toBe("my-app");
-    expect(arguments_.path).toBe("/src/app");
-    expect(arguments_.skills).toBe("rules");
-    // The default is inside the reviewed repository, which is what CI reads.
-    expect(add(["add", "x"]).skills).toBe(".review/skills");
-  });
-
-  it("refuse 'add' without a name", () => {
-    expect(() => parseArguments(["add"])).toThrow(UsageError);
-  });
-
-  it("take --config on every command that opens the catalogue", () => {
+describe("the config-file flags", () => {
+  it("take --config on every command that opens the config files", () => {
     expect(argumentsOf(INIT, ["init", "--config", "/c.yaml"]).config).toBe("/c.yaml");
-    expect(argumentsOf(PROJECTS, ["projects", "--config", "/c.yaml"]).config).toBe("/c.yaml");
-    expect(add(["add", "x", "--config", "/c.yaml"]).config).toBe("/c.yaml");
     expect(review(["--config", "/c.yaml"]).config).toBe("/c.yaml");
+  });
+
+  it("no longer take --project", () => {
+    expect(() => parseArguments(["--project", "app"])).toThrow(UsageError);
   });
 });

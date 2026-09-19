@@ -76,10 +76,9 @@ describe("the working tree", () => {
     expect(() => worktree(join(tmpdir(), "reviewer-does-not-exist"))).toThrow(/not a directory/u);
   });
 
-  it("accepts the repository root, and defaults to the cwd", () => {
+  it("accepts the repository root", () => {
     const root = repo();
     expect(worktree(root)).toBe(root);
-    expect(worktree("", root)).toBe(root);
   });
 });
 

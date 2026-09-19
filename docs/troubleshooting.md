@@ -11,20 +11,22 @@ scope, without calling a model.
 
 ## When it does not run
 
-| Symptom                                                   | Cause / fix                                                                               |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| exit 2, `ANTHROPIC_API_KEY ... is not set`                | Put the key in `~/.config/reviewer/.env` (or `.review/.env`), or export it.               |
-| exit 2, `1 validation error for Config`                   | A setting has the wrong shape; the message names the variable.                            |
-| exit 2, `... is not a git repository`                     | Run inside a checkout, or set `local-path` / `REVIEW_LOCAL_PATH`.                         |
-| exit 2, `... has unrecognised setting(s) [...]`           | A key the schema does not know; the message names the accepted set.                       |
-| exit 2, `... declares schema version N ... up to 1`       | A catalogue from a newer build; upgrade the reviewer or lower `version`.                  |
-| exit 3                                                    | Not an error: a finding matched `--fail-on`.                                              |
-| exit 1 with a usage message                               | Bad flag; see `--help`.                                                                   |
-| `No merge-base for 'X' and 'Y'`                           | Unrelated refs, or a shallow clone. CI needs `fetch-depth: 0`.                            |
-| `0 changed file(s)` with work in `git status`             | The work is not committed, or the branch is already merged. Use `reviewer --uncommitted`. |
-| 0 findings and `files_reviewed=0`                         | Everything was skipped; `--preview` says why, per file.                                   |
-| `Skill ... has no entry in the project's skills.mappings` | A loaded skill nobody scoped. Map it, or switch it off with `[]`.                         |
-| `Skill mapping for '…' matches no loaded skill`           | The mapping names a skill that is not in `skills.path`; almost always a typo.             |
+| Symptom                                                            | Cause / fix                                                                                                                    |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| exit 2, `ANTHROPIC_API_KEY ... is not set`                         | Put the key in `~/.config/reviewer/.env` (or `.review/.env`), or export it.                                                    |
+| exit 2, `1 validation error for Config`                            | A setting has the wrong shape; the message names the variable.                                                                 |
+| exit 2, `... is not a git repository`                              | Run inside a checkout: the one owning `.review/config.yaml`, else the working directory.                                       |
+| exit 2, `... has unrecognised setting(s) [...]`                    | A key the schema does not know; the message names the accepted set.                                                            |
+| exit 2, `... sets ['skills'], which belongs to a repository's ...` | `skills` is in `~/.config/reviewer/config.yaml`; move it to the repository's `.review/config.yaml`.                            |
+| exit 2, `... declares schema version N ... up to 1`                | A config file from a newer build; upgrade the reviewer or lower `version`.                                                     |
+| The model is not the one I set                                     | Two files and the environment speak; `-v` logs which files were read, and `LLM_*` variables (a CI input among them) beat both. |
+| exit 3                                                             | Not an error: a finding matched `--fail-on`.                                                                                   |
+| exit 1 with a usage message                                        | Bad flag; see `--help`.                                                                                                        |
+| `No merge-base for 'X' and 'Y'`                                    | Unrelated refs, or a shallow clone. CI needs `fetch-depth: 0`.                                                                 |
+| `0 changed file(s)` with work in `git status`                      | The work is not committed, or the branch is already merged. Use `reviewer --uncommitted`.                                      |
+| 0 findings and `files_reviewed=0`                                  | Everything was skipped; `--preview` says why, per file.                                                                        |
+| `Skill ... has no entry in the project's skills.mappings`          | A loaded skill nobody scoped. Map it, or switch it off with `[]`.                                                              |
+| `Skill mapping for '…' matches no loaded skill`                    | The mapping names a skill that is not in `skills.path`; almost always a typo.                                                  |
 
 ## A branch with no commits of its own reviews nothing
 

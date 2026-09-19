@@ -1,0 +1,514 @@
+{
+  "module": "config-file",
+  "schema": "config.yaml schema v1: one file per home, `settings` (how the reviewer runs) at the root beside `skills` (repository only). The parsed value is flat: the settings section's keys beside `skills`. Expectations for parse/* are what the parser does; layer/* what layerSettings does.",
+  "cases": [
+    {
+      "name": "parse/valid_repo",
+      "input": {
+        "home": "repo",
+        "payload": {
+          "version": 1,
+          "skills": {
+            "path": "skills",
+            "mappings": {
+              "api-routes": [
+                "src/api/**/route.ts"
+              ]
+            }
+          },
+          "settings": {
+            "language": "tr",
+            "exclude": [
+              "**/*.spec.ts"
+            ],
+            "max-findings-per-file": 2,
+            "llm": {
+              "model": "claude-opus-4"
+            }
+          }
+        }
+      },
+      "expected": {
+        "source": "/x/config.yaml",
+        "home": "repo",
+        "values": {
+          "language": "tr",
+          "exclude": [
+            "**/*.spec.ts"
+          ],
+          "max-findings-per-file": 2,
+          "llm": {
+            "model": "claude-opus-4"
+          },
+          "skills": {
+            "path": "skills",
+            "mappings": {
+              "api-routes": [
+                "src/api/**/route.ts"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "parse/valid_machine",
+      "input": {
+        "home": "machine",
+        "payload": {
+          "version": 1,
+          "settings": {
+            "llm": {
+              "provider": "claude",
+              "model": "claude-sonnet-4-6",
+              "api-key": "ANTHROPIC_API_KEY"
+            },
+            "language": "en",
+            "max-concurrent-files": 4
+          }
+        }
+      },
+      "expected": {
+        "source": "/x/config.yaml",
+        "home": "machine",
+        "values": {
+          "llm": {
+            "provider": "claude",
+            "model": "claude-sonnet-4-6",
+            "api-key": "ANTHROPIC_API_KEY"
+          },
+          "language": "en",
+          "max-concurrent-files": 4
+        }
+      }
+    },
+    {
+      "name": "parse/empty_object",
+      "input": {
+        "home": "repo",
+        "payload": {}
+      },
+      "expected": {
+        "source": "/x/config.yaml",
+        "home": "repo",
+        "values": {}
+      }
+    },
+    {
+      "name": "parse/version_99",
+      "input": {
+        "home": "repo",
+        "payload": {
+          "version": 99
+        }
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml declares schema version 99, but this build understands up to 1. Upgrade the reviewer."
+      }
+    },
+    {
+      "name": "parse/version_string",
+      "input": {
+        "home": "repo",
+        "payload": {
+          "version": "1"
+        }
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml declares schema version '1', but this build understands up to 1. Upgrade the reviewer."
+      }
+    },
+    {
+      "name": "parse/version_zero",
+      "input": {
+        "home": "repo",
+        "payload": {
+          "version": 0
+        }
+      },
+      "expected": {
+        "source": "/x/config.yaml",
+        "home": "repo",
+        "values": {}
+      }
+    },
+    {
+      "name": "parse/version_bool",
+      "input": {
+        "home": "repo",
+        "payload": {
+          "version": true
+        }
+      },
+      "expected": {
+        "source": "/x/config.yaml",
+        "home": "repo",
+        "values": {}
+      }
+    },
+    {
+      "name": "parse/version_null",
+      "input": {
+        "home": "repo",
+        "payload": {
+          "version": null
+        }
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml declares schema version null, but this build understands up to 1. Upgrade the reviewer."
+      }
+    },
+    {
+      "name": "parse/root_not_object",
+      "input": {
+        "home": "repo",
+        "payload": [
+          "not",
+          "an",
+          "object"
+        ]
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml must be an object, got array"
+      }
+    },
+    {
+      "name": "parse/root_null",
+      "input": {
+        "home": "repo",
+        "payload": null
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml must be an object, got null"
+      }
+    },
+    {
+      "name": "parse/unknown_key",
+      "input": {
+        "home": "repo",
+        "payload": {
+          "settings": {
+            "exlude": [
+              "*.md"
+            ]
+          }
+        }
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml: settings has unrecognised setting(s) ['exlude']; known: ['exclude', 'language', 'llm', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'verify']"
+      }
+    },
+    {
+      "name": "parse/legacy_spelling_unknown",
+      "input": {
+        "home": "repo",
+        "payload": {
+          "settings": {
+            "lang": "tr"
+          }
+        }
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml: settings has unrecognised setting(s) ['lang']; known: ['exclude', 'language', 'llm', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'verify']"
+      }
+    },
+    {
+      "name": "parse/old_layout_defaults_projects",
+      "input": {
+        "home": "machine",
+        "payload": {
+          "version": 1,
+          "defaults": {
+            "language": "tr"
+          },
+          "projects": {
+            "app": {}
+          }
+        }
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml has unrecognised key(s) ['defaults', 'projects']; known: ['settings', 'skills']"
+      }
+    },
+    {
+      "name": "parse/local_path_unknown",
+      "input": {
+        "home": "repo",
+        "payload": {
+          "settings": {
+            "local-path": "~/src/app"
+          }
+        }
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml: settings has unrecognised setting(s) ['local-path']; known: ['exclude', 'language', 'llm', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'verify']"
+      }
+    },
+    {
+      "name": "parse/machine_skills_rejected",
+      "input": {
+        "home": "machine",
+        "payload": {
+          "skills": {
+            "path": "~/x"
+          }
+        }
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml sets ['skills'], which belongs to a repository's .review/config.yaml: it describes the reviewed code, not this machine."
+      }
+    },
+    {
+      "name": "parse/setting_at_root",
+      "input": {
+        "home": "repo",
+        "payload": {
+          "llm": {
+            "model": "x"
+          },
+          "language": "tr",
+          "skills": {
+            "path": "s"
+          }
+        }
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml has ['language', 'llm'] at the root; a setting goes under the settings section."
+      }
+    },
+    {
+      "name": "parse/skills_inside_settings",
+      "input": {
+        "home": "repo",
+        "payload": {
+          "settings": {
+            "skills": {
+              "path": "s"
+            }
+          }
+        }
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml: settings has unrecognised setting(s) ['skills']; known: ['exclude', 'language', 'llm', 'max-concurrent-files', 'max-context-chars', 'max-file-chars', 'max-findings-per-file', 'max-skill-chars', 'max-skills-total-chars', 'verify']"
+      }
+    },
+    {
+      "name": "parse/settings_not_object",
+      "input": {
+        "home": "repo",
+        "payload": {
+          "settings": "claude"
+        }
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml: settings must be an object, got string"
+      }
+    },
+    {
+      "name": "parse/skills_section_unknown_key",
+      "input": {
+        "home": "repo",
+        "payload": {
+          "skills": {
+            "path": ".s",
+            "globs": {}
+          }
+        }
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml: skills has unrecognised key(s) ['globs']; known: ['mappings', 'path']"
+      }
+    },
+    {
+      "name": "parse/skills_not_object",
+      "input": {
+        "home": "repo",
+        "payload": {
+          "skills": "skills"
+        }
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml: skills must be an object, got string"
+      }
+    },
+    {
+      "name": "parse/llm_unknown_key",
+      "input": {
+        "home": "machine",
+        "payload": {
+          "settings": {
+            "llm": {
+              "provider": "local",
+              "apiKey": "K"
+            }
+          }
+        }
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml: settings.llm has unrecognised key(s) ['apiKey']; known: ['api-key', 'base-url', 'model', 'provider']"
+      }
+    },
+    {
+      "name": "parse/llm_not_object",
+      "input": {
+        "home": "repo",
+        "payload": {
+          "settings": {
+            "llm": "claude"
+          }
+        }
+      },
+      "expected": {
+        "error": "ConfigFileError",
+        "message": "/x/config.yaml: settings.llm must be an object, got string"
+      }
+    },
+    {
+      "name": "layer/repo_restates_a_key",
+      "input": {
+        "machine": {
+          "language": "en",
+          "max-findings-per-file": 3
+        },
+        "repo": {
+          "language": "tr"
+        }
+      },
+      "expected": {
+        "language": "tr",
+        "max-findings-per-file": 3
+      }
+    },
+    {
+      "name": "layer/llm_merges_key_by_key",
+      "input": {
+        "machine": {
+          "llm": {
+            "provider": "claude",
+            "model": "claude-sonnet-4-6",
+            "api-key": "ANTHROPIC_API_KEY"
+          }
+        },
+        "repo": {
+          "llm": {
+            "model": "claude-opus-4"
+          }
+        }
+      },
+      "expected": {
+        "llm": {
+          "provider": "claude",
+          "model": "claude-opus-4",
+          "api-key": "ANTHROPIC_API_KEY"
+        }
+      }
+    },
+    {
+      "name": "layer/exclude_replaces_not_unions",
+      "input": {
+        "machine": {
+          "exclude": [
+            "**/*.md"
+          ]
+        },
+        "repo": {
+          "exclude": [
+            "**/*.spec.ts"
+          ]
+        }
+      },
+      "expected": {
+        "exclude": [
+          "**/*.spec.ts"
+        ]
+      }
+    },
+    {
+      "name": "layer/skills_come_from_the_repo_alone",
+      "input": {
+        "machine": {
+          "language": "en"
+        },
+        "repo": {
+          "skills": {
+            "path": "skills",
+            "mappings": {
+              "a": [
+                "**"
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "language": "en",
+        "skills": {
+          "path": "skills",
+          "mappings": {
+            "a": [
+              "**"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "layer/machine_alone",
+      "input": {
+        "machine": {
+          "llm": {
+            "provider": "local"
+          },
+          "verify": false
+        },
+        "repo": null
+      },
+      "expected": {
+        "llm": {
+          "provider": "local"
+        },
+        "verify": false
+      }
+    },
+    {
+      "name": "layer/repo_alone",
+      "input": {
+        "machine": null,
+        "repo": {
+          "llm": {
+            "model": "x"
+          }
+        }
+      },
+      "expected": {
+        "llm": {
+          "model": "x"
+        }
+      }
+    },
+    {
+      "name": "layer/neither",
+      "input": {
+        "machine": null,
+        "repo": null
+      },
+      "expected": {}
+    }
+  ]
+}

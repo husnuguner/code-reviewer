@@ -29,16 +29,13 @@ export type {
   SummaryWriter,
 } from "./ports/review-reporter";
 export type { SkillSource } from "./ports/skill-source";
-export { Catalog } from "./catalog/catalog";
-export type { ProjectSettings, ProjectSpec } from "./catalog/catalog";
-export { parseCatalog } from "./catalog/parse";
-export { PROJECT_SETTING_KEYS, SCHEMA_VERSION } from "./catalog/schema";
-export { initCatalog } from "./catalog/init";
-export type { StarterFiles } from "./catalog/init";
-export { addProject } from "./catalog/add-project";
-export type { NewProject } from "./catalog/add-project";
-export { listProjects } from "./catalog/list-projects";
-export type { CatalogFiles, CatalogHome } from "./ports/catalog-files";
+export { layerSettings } from "./config/config-file";
+export type { ConfigFile, SettingValues } from "./config/config-file";
+export { parseConfigFile } from "./config/parse";
+export { REPO_ONLY_KEYS, SCHEMA_VERSION, SETTING_KEYS } from "./config/schema";
+export { initConfigFile } from "./config/init";
+export type { StarterFiles } from "./config/init";
+export type { ConfigDirectory, ConfigHome } from "./ports/config-directory";
 export { type Config, ConfigError, buildConfig } from "./config/config";
 export type {
   ConcurrencyLimits,
@@ -82,4 +79,4 @@ export { SEVERITIES } from "./review/severity";
 export type { Severity } from "./review/severity";
 export { FrontmatterSkillParser } from "./skills/parser";
 export { SkillRegistry } from "./skills/registry";
-export { CatalogError, GitError, ValueError, errorMessage } from "./util/errors";
+export { ConfigFileError, GitError, ValueError, errorMessage } from "./util/errors";

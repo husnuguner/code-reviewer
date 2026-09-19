@@ -3,19 +3,17 @@
  * @packageDocumentation
  */
 
-import { dirname } from "node:path";
-
 import { type Config, type ConfigField, type RegisteredProviders } from "../../core/config/config";
 import { type ConfigSources, resolveConfig } from "../../core/config/resolver";
 import { type Logger, NULL_LOGGER } from "../../core/ports/logger";
-import { type Environment, configHome } from "../catalog/paths";
-import { loadCatalog } from "../catalog/reader";
 
 import { environmentFilePaths, readEnvironmentFile } from "./environment-files";
+import { type Environment, configHome, configPaths } from "./paths";
+import { loadConfigFiles } from "./reader";
 
 /** Options for {@link loadRunConfig}. */
 export interface LoadRunConfigOptions {
-  readonly project?: string | null;
+  /** `--config`: another file for the repository slot. */
   readonly configFile?: string | null;
   readonly overrides?: Readonly<Partial<Record<ConfigField, unknown>>>;
   /** `false` for a flow that builds no model (`--preview`). */
@@ -29,7 +27,8 @@ export interface LoadRunConfigOptions {
 }
 
 /**
- * Resolves one run's configuration: command line › environment and `.env` › catalogue project › defaults.
+ * Resolves one run's configuration: command line › environment and `.env` › repository file › machine file ›
+ * defaults.
  *
  * @returns The validated `Config`.
  */
@@ -41,11 +40,9 @@ export function loadRunConfig(options: LoadRunConfigOptions): Config {
     processEnv: environment,
     envFiles: environmentFilePaths(environment, cwd).map(readEnvironmentFile),
   };
-  const catalog = loadCatalog(options.configFile, environment, logger, cwd);
+  const files = loadConfigFiles(configPaths(options.configFile, environment, cwd), logger);
   return resolveConfig({
-    catalog,
-    ...(catalog !== null && { catalogDirectory: dirname(catalog.source) }),
-    project: options.project ?? null,
+    files,
     ...(options.overrides && { overrides: options.overrides }),
     ...(options.requiresModel !== undefined && { requiresModel: options.requiresModel }),
     sources,

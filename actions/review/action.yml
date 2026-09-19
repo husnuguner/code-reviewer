@@ -26,8 +26,11 @@ inputs:
     required: true
   provider:
     description: >-
-      LLM provider: claude, or local for an OpenAI-compatible server. Empty
-      takes the checkout's .review/config.yaml (else the tool's default).
+      LLM provider: claude, or local for an OpenAI-compatible server. On a
+      runner the workflow is what names the model -- the machine-wide
+      ~/.config/reviewer/config.yaml does not exist here -- so set this
+      unless the checkout's .review/config.yaml pins llm.provider itself.
+      Empty takes that file's value, else the tool's default (local).
     required: false
     default: ""
   model:
@@ -56,14 +59,11 @@ inputs:
     default: ""
   config:
     description: >-
-      Path to a catalogue. Usually unnecessary: a checkout that carries its own
-      .review/config.yaml (written by `reviewer init`) is found automatically,
-      and its skills, policy and mappings apply. Set this only to point at a
-      different file. Empty with no .review/ runs from these inputs alone.
-    required: false
-    default: ""
-  project:
-    description: "Which project of the catalogue to use; only with config."
+      Path to a repository config.yaml. Usually unnecessary: a checkout that
+      carries its own .review/config.yaml (written by `reviewer init`) is found
+      automatically, and its skills, prompts and mappings apply. Set this only
+      to point at a different file. Empty with no .review/ runs from these
+      inputs alone.
     required: false
     default: ""
   exclude:
@@ -203,7 +203,6 @@ runs:
         HEAD_REF: ${{ inputs.head-ref }}
         FAIL_ON: ${{ inputs.fail-on }}
         OUT_FILE: ${{ inputs.out }}
-        PROJECT: ${{ inputs.project }}
         PREVIEW: ${{ inputs.preview }}
         ANNOTATIONS: ${{ inputs.annotations }}
         REVIEWER: ${{ github.action_path }}/../../src/cli/main.ts
@@ -240,9 +239,6 @@ runs:
           quiet=1
         else
           args+=(--format github --out "${OUT_FILE}")
-        fi
-        if [ -n "${PROJECT}" ]; then
-          args+=(--project "${PROJECT}")
         fi
         if [ -n "${REVIEWER_CONFIG}" ]; then
           args+=(--config "${REVIEWER_CONFIG}")

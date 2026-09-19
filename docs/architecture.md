@@ -19,8 +19,7 @@ src/
 │   ├── diff/        unified-diff parsing, patch views
 │   ├── skills/      glob engine, frontmatter parser, registry
 │   ├── posting/     records → one review payload (pure)
-│   ├── catalog/     config.yaml: schema, model, parse, init / add / list
-│   ├── config/      settings schema, resolver, secrets, typed setting groups
+│   ├── config/      config.yaml: schema, parse, layering, init · settings schema, resolver, secrets
 │   └── util/        errors, text, JSON, timing, completion-ordered promises
 ├── providers/   what can change; every implementation of a port
 │   ├── llm/         model-provider (kind) · claude/ · local/ · AI SDK adapter · retry decorator
@@ -28,8 +27,7 @@ src/
 │   ├── reporting/   format-provider (kind) · text/ · ndjson/ · github/ · tee, collecting, closable
 │   ├── git/         Bun.spawn: diff source and pre-context
 │   ├── skills/      directory and worktree sources
-│   ├── catalog/     where config.yaml lives, how it is read
-│   ├── config/      .env layers, one run's Config
+│   ├── config/      where the two config.yaml files live, how they are read; .env layers; one run's Config
 │   ├── logging/     pino → stderr
 │   ├── console/, assets/, http/
 │   ├── provider.ts  Provider<In, Out>
@@ -48,7 +46,7 @@ src/
 
 `ports/` is the whole of what the core asks for: `ChatModel`, `ReviewPoster`,
 `BranchReviewReporter`, `GitReader`, `CodeContext`, `SkillSource`,
-`CatalogFiles`, `Logger`, `ConsoleOutput`. Nothing in this tree knows which
+`ConfigDirectory`, `Logger`, `ConsoleOutput`. Nothing in this tree knows which
 vendor, host or rendering answers.
 
 Key modules under `review/`:
@@ -85,7 +83,7 @@ meets and the composition root all learn the name from the registry.
 
 Each command is two files: `command.ts` says what it takes, `run.ts` what it
 does. `review` (the default) calls a model and cannot post; `comment` holds a
-token and cannot call a model; `init`, `add`, `projects` manage the catalogue.
+token and cannot call a model; `init` writes a config file.
 Each has its own composition root, so no run ever holds both credentials.
 
 ## Embedding
@@ -126,10 +124,17 @@ The choices with a real trade-off behind them, and what was given up:
 - **Skills belong to the reviewed repository, not to the reviewer.** They are
   that repository's conventions, versioned with its code. The reviewer ships
   none.
-- **A skill's scope is stated once, in the catalogue.** A skill document
-  carries no scope of its own. Two places for one decision means one of them
-  eventually lies.
-- **Every relative path in a catalogue is taken from the catalogue's own
+- **The machine's config file says how; the repository's says what.** The
+  model, its key's name and the caps are set once per machine; skills,
+  mappings and excludes are set once per repository, which may also restate
+  any machine key for itself. There is no list of projects anywhere: a project
+  is a checkout that carries `.review/`. Given up: reviewing a repository with
+  personal skills without putting a `.review/` in it, and reviewing a checkout
+  from outside it.
+- **A skill's scope is stated once, in the repository's config file.** A skill
+  document carries no scope of its own. Two places for one decision means one
+  of them eventually lies.
+- **Every relative path in a config file is taken from the file's own
   directory.** One base for all of them.
 - **The whole system prompt is the reviewer's own.** No setting can drop a
   hard rule or break the parser. A project extends the review with standing
@@ -150,7 +155,7 @@ The choices with a real trade-off behind them, and what was given up:
   language model. Git is not mocked: letting git compute the diff is the point.
 - `tests/actions/` and `tests/cli/commands/comment/action.test.ts` keep the
   composite actions in step with the commands they wrap.
-- `tests/core/catalog/config-example.test.ts` keeps
+- `tests/core/config/config-example.test.ts` keeps
   `templates/config.example.yaml` in step with the parser.
 
 ## Development

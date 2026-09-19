@@ -1,6 +1,6 @@
 /**
- * The project catalogue on disk, and how one project resolves into a run's
- * configuration: command line > environment (real and `.env`) > project > default.
+ * The two config files on disk, and how they resolve into a run's configuration:
+ * command line > environment (real and `.env`) > the repository's file > the machine's file > default.
  */
 
 import { afterAll, describe, expect, it } from "bun:test";
@@ -14,54 +14,63 @@ import {
   buildConfig,
   defaultConcurrency,
 } from "../../../src/core/config/config";
-import { CatalogError } from "../../../src/core/util/errors";
-import { sortedByCodePoint } from "../../../src/core/util/text";
+import { ConfigFileError } from "../../../src/core/util/errors";
+import { loadRunConfig } from "../../../src/providers/config/loader";
 import {
   configHome,
-  configPath,
+  configPaths,
   findGitRoot,
   findRepoConfig,
-} from "../../../src/providers/catalog/paths";
-import { loadCatalog } from "../../../src/providers/catalog/reader";
-import { loadRunConfig } from "../../../src/providers/config/loader";
+} from "../../../src/providers/config/paths";
+import { loadConfigFiles } from "../../../src/providers/config/reader";
 import { casesUnder, isErrorContract, loadFixture } from "../../contracts/fixtures";
-
-const CATALOG = {
-  version: 1,
-  defaults: {
-    llm: { provider: "claude", model: "claude-opus-5", "api-key": "ANTHROPIC_API_KEY" },
-    language: "en",
-    "max-file-chars": 4000,
-    skills: { path: "~/.config/reviewer/skills/{{project}}" },
-    "local-path": "~/src/{{project}}",
-  },
-  projects: {
-    app: {
-      language: "tr",
-      skills: {
-        path: ".review/skills",
-        mappings: { "api-routes": ["src/api/**/route.ts"], models: "src/modules/**/models/*.ts" },
-      },
-      exclude: ["**/*.spec.ts", "**/migrations/*.ts"],
-      "max-findings-per-file": 2,
-    },
-    legacy: {
-      llm: { provider: "local", "base-url": "http://127.0.0.1:1234/v1", "api-key": "lm-studio" },
-    },
-  },
-};
 
 /** What the composition root tells the configuration: the registered names and the default. */
 const PROVIDERS = { names: ["local", "claude"], default: "local" };
 
-/** A throwaway home directory, working directory and catalogue for one test. */
+/** The machine's file: how the reviewer runs here. */
+const MACHINE = {
+  version: 1,
+  settings: {
+    llm: { provider: "claude", model: "claude-opus-5", "api-key": "ANTHROPIC_API_KEY" },
+    language: "en",
+    "max-file-chars": 4000,
+    "max-concurrent-files": 3,
+  },
+};
+
+/** A repository's file: what is reviewed there, and the settings it restates. */
+const REPO = {
+  version: 1,
+  settings: {
+    language: "tr",
+    llm: { model: "claude-sonnet-5" },
+    exclude: ["**/*.spec.ts", "**/migrations/*.ts"],
+    "max-findings-per-file": 2,
+  },
+  skills: {
+    path: "skills",
+    mappings: { "api-routes": ["src/api/**/route.ts"], models: "src/modules/**/models/*.ts" },
+  },
+};
+
+/** A throwaway home and checkout for one test. */
 interface Scratch {
   readonly root: string;
-  readonly home: string;
-  readonly cwd: string;
-  readonly catalogFile: string;
-  readonly homeEnvFile: string;
-  readonly cwdEnvFile: string;
+  /** `$XDG_CONFIG_HOME`. */
+  readonly xdg: string;
+  /** The machine's config home under it. */
+  readonly machineDirectory: string;
+  readonly machineFile: string;
+  readonly machineEnvFile: string;
+  /** A git checkout. */
+  readonly repo: string;
+  readonly repoFile: string;
+  readonly repoEnvFile: string;
+  /** A working directory two levels into the checkout. */
+  readonly deep: string;
+  /** A working directory outside any checkout. */
+  readonly elsewhere: string;
 }
 
 /** Every temporary tree made by this file, removed when it is done. */
@@ -77,35 +86,56 @@ function temporaryRoot(): string {
   return root;
 }
 
+/** Writes a file, making its directory. */
+function touch(path: string, content = ""): void {
+  mkdirSync(join(path, ".."), { recursive: true });
+  writeFileSync(path, content, "utf8");
+}
+
+/** The bare tree: directories only, no config file written. */
 function scratch(): Scratch {
   const root = temporaryRoot();
-  const home = join(root, "home");
-  const cwd = join(root, "cwd");
-  mkdirSync(join(home, ".config", "reviewer"), { recursive: true });
-  mkdirSync(cwd, { recursive: true });
-  const catalogFile = join(root, "config.yaml");
-  writeFileSync(catalogFile, JSON.stringify(CATALOG), "utf8");
+  const xdg = join(root, "home", ".config");
+  const machineDirectory = join(xdg, "reviewer");
+  const repo = join(root, "home", "work", "repo");
+  const deep = join(repo, "src", "deep");
+  const elsewhere = join(root, "elsewhere");
+  for (const directory of [machineDirectory, deep, elsewhere, join(repo, ".git")]) {
+    mkdirSync(directory, { recursive: true });
+  }
   return {
     root,
-    home,
-    cwd,
-    catalogFile,
-    homeEnvFile: join(home, ".config", "reviewer", ".env"),
-    cwdEnvFile: join(cwd, ".env"),
+    xdg,
+    machineDirectory,
+    machineFile: join(machineDirectory, "config.yaml"),
+    machineEnvFile: join(machineDirectory, ".env"),
+    repo,
+    repoFile: join(repo, ".review", "config.yaml"),
+    repoEnvFile: join(repo, ".review", ".env"),
+    deep,
+    elsewhere,
   };
+}
+
+/** The tree with both files written. */
+function scratchWithBoth(): Scratch {
+  const s = scratch();
+  touch(s.machineFile, JSON.stringify(MACHINE));
+  touch(s.repoFile, JSON.stringify(REPO));
+  return s;
 }
 
 /** An environment that defines none of the run's settings but the essentials. */
 function cleanEnvironment(s: Scratch, extra: Record<string, string> = {}): Record<string, string> {
   return {
-    XDG_CONFIG_HOME: join(s.home, ".config"),
-    // What the catalogue's defaults name; LLM_API_KEY would be the override layer.
+    XDG_CONFIG_HOME: s.xdg,
+    // What the machine's file names; LLM_API_KEY would be the override layer.
     ANTHROPIC_API_KEY: "llm-key",
     ...extra,
   };
 }
 
-/** The environment a run without a catalogue needs: the key under its own name. */
+/** The environment a run without any config file needs: the key under its own name. */
 function environmentOnly(s: Scratch, extra: Record<string, string> = {}): Record<string, string> {
   return cleanEnvironment(s, { LLM_API_KEY: "llm-key", ...extra });
 }
@@ -113,56 +143,26 @@ function environmentOnly(s: Scratch, extra: Record<string, string> = {}): Record
 function load(
   s: Scratch,
   options: {
-    project?: string | null;
+    /** The working directory; defaults to deep inside the checkout. */
+    cwd?: string;
     configFile?: string | null;
     env?: Record<string, string>;
     overrides?: Record<string, unknown>;
+    requiresModel?: boolean;
   } = {},
 ): Config {
   return loadRunConfig({
-    project: options.project ?? null,
     configFile: options.configFile ?? null,
     ...(options.overrides && { overrides: options.overrides }),
+    ...(options.requiresModel !== undefined && { requiresModel: options.requiresModel }),
     providers: PROVIDERS,
     cpuCount: 8,
     environment: options.env ?? cleanEnvironment(s),
-    cwd: s.cwd,
+    cwd: options.cwd ?? s.deep,
   });
 }
 
 // -- paths -----------------------------------------------------------------
-
-/** A throwaway disk for the path walks: a home with a config home, and a checkout under it. */
-interface Disk {
-  readonly root: string;
-  readonly home: string;
-  /** What `XDG_CONFIG_HOME` is set to. */
-  readonly xdg: string;
-  readonly repo: string;
-  /** A working directory two levels into the checkout. */
-  readonly deep: string;
-  /** A working directory outside any checkout. */
-  readonly elsewhere: string;
-}
-
-function disk(): Disk {
-  const root = temporaryRoot();
-  const home = join(root, "home");
-  const xdg = join(home, ".config");
-  const repo = join(home, "work", "repo");
-  const deep = join(repo, "src", "deep");
-  const elsewhere = join(root, "elsewhere");
-  for (const directory of [join(xdg, "reviewer"), deep, elsewhere]) {
-    mkdirSync(directory, { recursive: true });
-  }
-  return { root, home, xdg, repo, deep, elsewhere };
-}
-
-/** Writes a file, making its directory. */
-function touch(path: string, content = ""): void {
-  mkdirSync(join(path, ".."), { recursive: true });
-  writeFileSync(path, content, "utf8");
-}
 
 describe("configuration paths", () => {
   it("honours XDG_CONFIG_HOME and falls back to ~/.config", () => {
@@ -171,370 +171,338 @@ describe("configuration paths", () => {
     expect(configHome({ XDG_CONFIG_HOME: "~/cfg" })).toBe(join(homedir(), "cfg", "reviewer"));
   });
 
-  it("lets --config beat REVIEWER_CONFIG beat the repository's own beat the config home", () => {
-    const d = disk();
-    const repoConfig = join(d.repo, ".review", "config.yaml");
-    touch(repoConfig);
-    const environment = { XDG_CONFIG_HOME: d.xdg };
+  it("always names the machine's file, and fills the repository slot from --config, REVIEWER_CONFIG, or the nearest .review/", () => {
+    const s = scratch();
+    touch(s.repoFile);
+    const environment = { XDG_CONFIG_HOME: s.xdg };
+    // The machine's path is the same whatever else is said.
+    for (const paths of [
+      configPaths("/explicit.yaml", { ...environment, REVIEWER_CONFIG: "/env.yaml" }, s.deep),
+      configPaths(null, environment, s.deep),
+      configPaths(null, environment, s.elsewhere),
+    ]) {
+      expect(paths.machine).toBe(s.machineFile);
+    }
+    // The repository slot: --config beats REVIEWER_CONFIG, and both are "named by hand".
     expect(
-      configPath("/explicit.json", { ...environment, REVIEWER_CONFIG: "/env.json" }, d.deep),
-    ).toBe("/explicit.json");
-    expect(configPath(null, { ...environment, REVIEWER_CONFIG: "/env.json" }, d.deep)).toBe(
-      "/env.json",
-    );
-    // The repository's own wins over the machine's, and is found from any
-    // subdirectory -- the way git finds its repository.
-    expect(configPath(null, environment, d.deep)).toBe(repoConfig);
-    expect(configPath(null, environment, d.elsewhere)).toBe(join(d.xdg, "reviewer", "config.yaml"));
+      configPaths("/explicit.yaml", { ...environment, REVIEWER_CONFIG: "/env.yaml" }, s.deep),
+    ).toMatchObject({ repo: "/explicit.yaml", isRepoNamed: true });
+    expect(
+      configPaths(null, { ...environment, REVIEWER_CONFIG: "/env.yaml" }, s.deep),
+    ).toMatchObject({ repo: "/env.yaml", isRepoNamed: true });
+    // Otherwise the repository's own, found from any subdirectory -- the way
+    // git finds its repository -- and `null` outside one.
+    expect(configPaths(null, environment, s.deep)).toMatchObject({
+      repo: s.repoFile,
+      isRepoNamed: false,
+    });
+    expect(configPaths(null, environment, s.elsewhere)).toMatchObject({
+      repo: null,
+      isRepoNamed: false,
+    });
   });
 
   it("does not mistake the home directory for a repository", () => {
-    const d = disk();
-    touch(join(d.home, ".review", "config.yaml"));
-    mkdirSync(join(d.repo, ".git"));
+    const s = scratch();
+    const home = join(s.root, "home");
+    touch(join(home, ".review", "config.yaml"));
     // The walk for `.review/config.yaml` goes through the home directory like
-    // any other, so a `~/.review/` is a catalogue for every checkout under it...
-    expect(findRepoConfig(d.repo)).toBe(join(d.home, ".review", "config.yaml"));
+    // any other, so a `~/.review/` is a repository file for every checkout under it...
+    expect(findRepoConfig(s.repo)).toBe(join(home, ".review", "config.yaml"));
     // ...but `init` never writes there: it asks for a git root, not a `.review/`.
-    expect(findGitRoot(d.deep)).toBe(d.repo);
-    expect(findGitRoot(d.elsewhere)).toBeNull();
+    expect(findGitRoot(s.deep)).toBe(s.repo);
+    expect(findGitRoot(s.elsewhere)).toBeNull();
   });
 
   it("takes a .git file for a repository root too, as a worktree or submodule has", () => {
-    const d = disk();
-    mkdirSync(join(d.repo, ".git"));
-    const worktree = join(d.repo, "trees", "feature");
+    const s = scratch();
+    const worktree = join(s.repo, "trees", "feature");
     touch(join(worktree, ".git"), "gitdir: ../../.git/worktrees/feature\n");
     expect(findGitRoot(join(worktree, "src"))).toBe(worktree);
   });
-
-  it("falls back to a config.json from before the format change when config.yaml is absent", () => {
-    const d = disk();
-    const environment = { XDG_CONFIG_HOME: d.xdg };
-    const configHomeDirectory = join(d.xdg, "reviewer");
-    expect(configPath(null, environment, d.elsewhere)).toBe(
-      join(configHomeDirectory, "config.yaml"),
-    );
-    touch(join(configHomeDirectory, "config.json"));
-    expect(configPath(null, environment, d.elsewhere)).toBe(
-      join(configHomeDirectory, "config.json"),
-    );
-    touch(join(configHomeDirectory, "config.yaml"));
-    expect(configPath(null, environment, d.elsewhere)).toBe(
-      join(configHomeDirectory, "config.yaml"),
-    );
-  });
 });
 
-// -- parsing on disk -------------------------------------------------------
+// -- reading on disk -------------------------------------------------------
 
-describe("loading the catalogue", () => {
-  it("parses the projects", () => {
-    const s = scratch();
-    const catalog = loadCatalog(s.catalogFile, cleanEnvironment(s));
-    expect(catalog).not.toBeNull();
-    expect(sortedByCodePoint(catalog?.projects.keys() ?? [])).toEqual(["app", "legacy"]);
-    expect(catalog?.project("app").name).toBe("app");
+describe("loading the config files", () => {
+  it("reads both, each knowing which home it is", () => {
+    const s = scratchWithBoth();
+    const files = loadConfigFiles(configPaths(null, { XDG_CONFIG_HOME: s.xdg }, s.deep));
+    expect(files.machine).toMatchObject({ source: s.machineFile, home: "machine" });
+    expect(files.repo).toMatchObject({ source: s.repoFile, home: "repo" });
+    expect(files.repo?.values.language).toBe("tr");
   });
 
-  it("treats a missing catalogue as no catalogue", () => {
+  it("treats a missing file as no file, in either slot", () => {
     const s = scratch();
-    expect(loadCatalog(null, cleanEnvironment(s))).toBeNull();
+    const files = loadConfigFiles(configPaths(null, { XDG_CONFIG_HOME: s.xdg }, s.deep));
+    expect(files).toEqual({ machine: null, repo: null });
   });
 
   it("treats an explicitly named missing file as an error", () => {
     const s = scratch();
-    expect(() => loadCatalog(join(s.root, "nope.json"), cleanEnvironment(s))).toThrow(
-      /No config file/u,
+    const paths = configPaths(join(s.root, "nope.yaml"), { XDG_CONFIG_HOME: s.xdg }, s.deep);
+    expect(() => loadConfigFiles(paths)).toThrow(/No config file/u);
+  });
+
+  it("refuses a future schema version, and names the file that is not valid YAML", () => {
+    const s = scratch();
+    touch(s.machineFile, JSON.stringify({ version: 99 }));
+    const environment = { XDG_CONFIG_HOME: s.xdg };
+    expect(() => loadConfigFiles(configPaths(null, environment, s.deep))).toThrow(
+      /understands up to/u,
+    );
+    touch(s.machineFile, "llm: [unclosed");
+    expect(() => loadConfigFiles(configPaths(null, environment, s.deep))).toThrow(
+      /config\.yaml is not valid YAML/u,
     );
   });
 
-  it("refuses a future schema version", () => {
+  it("reads YAML, which JSON also is", () => {
     const s = scratch();
-    const path = join(s.root, "future.json");
-    writeFileSync(path, JSON.stringify({ version: 99 }), "utf8");
-    expect(() => loadCatalog(path, cleanEnvironment(s))).toThrow(/understands up to/u);
-  });
-
-  it("reads the catalogue as YAML, which JSON also is", () => {
-    const s = scratch();
-    const yamlFile = join(s.root, "c.yaml");
-    writeFileSync(
-      yamlFile,
+    touch(
+      s.repoFile,
       [
         "version: 1",
-        "projects:",
-        "  one:",
-        "    local-path: ~/src/one",
-        "    max-findings-per-file: 1   # a comment, which JSON could not carry",
+        "settings:",
+        "  max-findings-per-file: 1   # a comment, which JSON could not carry",
       ].join("\n"),
-      "utf8",
     );
-    const catalog = loadCatalog(yamlFile, cleanEnvironment(s));
-    expect(catalog?.project("one").settings["max-findings-per-file"]).toBe(1);
+    const files = loadConfigFiles(configPaths(null, { XDG_CONFIG_HOME: s.xdg }, s.deep));
+    expect(files.repo?.values["max-findings-per-file"]).toBe(1);
   });
 
-  it("names the file when it is not valid YAML", () => {
+  it("refuses skills in the machine's file, naming where they belong", () => {
     const s = scratch();
-    const path = join(s.root, "broken.yaml");
-    writeFileSync(path, "projects: [unclosed", "utf8");
-    expect(() => loadCatalog(path, cleanEnvironment(s))).toThrow(/not valid YAML/u);
+    touch(s.machineFile, JSON.stringify({ skills: { path: "~/rules" } }));
+    const attempt = (): unknown =>
+      loadConfigFiles(configPaths(null, { XDG_CONFIG_HOME: s.xdg }, s.deep));
+    expect(attempt).toThrow(ConfigFileError);
+    expect(attempt).toThrow(/belongs to a repository's \.review\/config\.yaml/u);
   });
 });
 
 // -- secrets ---------------------------------------------------------------
 
 describe("secrets", () => {
-  it("reads the model's key from the variable the catalogue names", () => {
-    const s = scratch();
-    expect(load(s, { project: "app", configFile: s.catalogFile }).apiKey).toBe("llm-key");
+  it("reads the model's key from the variable the machine's file names", () => {
+    const s = scratchWithBoth();
+    expect(load(s).apiKey).toBe("llm-key");
   });
 
   it("says which variable is missing when the key is unset", () => {
-    const s = scratch();
+    const s = scratchWithBoth();
     const environment = cleanEnvironment(s);
     delete environment["ANTHROPIC_API_KEY"];
-    expect(() => load(s, { project: "app", configFile: s.catalogFile, env: environment })).toThrow(
-      /ANTHROPIC_API_KEY/u,
-    );
+    expect(() => load(s, { env: environment })).toThrow(/ANTHROPIC_API_KEY/u);
   });
 
-  it("does not demand the key the catalogue names when the environment supplies LLM_API_KEY", () => {
-    // The CI case: the workflow hands the key in as LLM_API_KEY, while the
-    // repository's committed config says `api-key: ANTHROPIC_API_KEY`. That
-    // variable is the override layer above the catalogue -- a run that has
-    // it has its key, and the catalogue's *name* for a different variable
-    // must not be demanded as well.
-    const s = scratch();
+  it("does not demand the key the file names when the environment supplies LLM_API_KEY", () => {
+    // The CI case: the workflow hands the key in as LLM_API_KEY, while a
+    // config file says `api-key: ANTHROPIC_API_KEY`. That variable is the
+    // override layer above the files -- a run that has it has its key, and
+    // the file's *name* for a different variable must not be demanded as well.
+    const s = scratchWithBoth();
     const environment = cleanEnvironment(s, { LLM_API_KEY: "from-ci" });
     delete environment["ANTHROPIC_API_KEY"];
-    const config = load(s, { project: "app", configFile: s.catalogFile, env: environment });
+    const config = load(s, { env: environment });
     expect(config.apiKey).toBe("from-ci");
-    // Everything else the catalogue says still applies.
+    // Everything else the files say still applies.
     expect(config.provider).toBe("claude");
-    expect(config.model).toBe("claude-opus-5");
+    expect(config.model).toBe("claude-sonnet-5");
   });
 
-  it("does not demand a key the catalogue names when the flow builds no model", () => {
+  it("does not demand a key the file names when the flow builds no model", () => {
     // `--preview` decides scope and calls nobody; a pre-flight that refused to
     // run without a key it would never send is a pre-flight nobody can run
     // before they have one. The name is carried, the lookup is deferred.
-    const s = scratch();
+    const s = scratchWithBoth();
     const environment = cleanEnvironment(s);
     delete environment["ANTHROPIC_API_KEY"];
-    const config = loadRunConfig({
-      project: "app",
-      configFile: s.catalogFile,
-      requiresModel: false,
-      providers: PROVIDERS,
-      cpuCount: 8,
-      environment,
-      cwd: s.cwd,
-    });
+    const config = load(s, { env: environment, requiresModel: false });
     expect(config.apiKey).toBe("");
     expect(config.provider).toBe("claude"); // everything else still resolves
   });
 
-  it("finds a key placed in the .env beside the catalogue", () => {
-    const s = scratch();
+  it("finds a key placed in the machine's .env, and lets the repository's .env win over it", () => {
+    const s = scratchWithBoth();
     const environment = cleanEnvironment(s);
     delete environment["ANTHROPIC_API_KEY"];
-    writeFileSync(s.homeEnvFile, "ANTHROPIC_API_KEY=from-dotenv\n", "utf8");
-    expect(load(s, { project: "app", configFile: s.catalogFile, env: environment }).apiKey).toBe(
-      "from-dotenv",
-    );
+    writeFileSync(s.machineEnvFile, "ANTHROPIC_API_KEY=from-machine\n", "utf8");
+    expect(load(s, { env: environment }).apiKey).toBe("from-machine");
+    writeFileSync(s.repoEnvFile, "ANTHROPIC_API_KEY=from-repo\n", "utf8");
+    expect(load(s, { env: environment }).apiKey).toBe("from-repo");
   });
 });
 
 // -- resolution ------------------------------------------------------------
 
-describe("resolution", () => {
-  it("carries project settings into the flat config", () => {
-    const s = scratch();
-    const config = load(s, { project: "app", configFile: s.catalogFile });
+describe("the repository's file on top of the machine's", () => {
+  it("takes what the repository restates from the repository, and the rest from the machine", () => {
+    const s = scratchWithBoth();
+    const config = load(s);
+    // Restated in the repository's file.
     expect(config.reviewLang).toBe("Turkish");
-    expect(config.localPath).toBe("~/src/app");
     expect(config.excludeGlobs).toEqual(["**/*.spec.ts", "**/migrations/*.ts"]);
     expect(config.maxFindingsPerFile).toBe(2);
+    // Said only in the machine's.
+    expect(config.maxFileChars).toBe(4000);
+    expect(config.concurrency()).toEqual({ files: 3 });
+    // Said in neither: the built-in default.
+    expect(config.maxContextChars).toBe(6000);
   });
 
-  it("carries the skills map, one bare glob becoming a list", () => {
-    const s = scratch();
-    const config = load(s, { project: "app", configFile: s.catalogFile });
-    expect(config.skillSettings()).toEqual({
-      // Relative in the file, anchored to the file's own directory here.
-      path: join(s.root, ".review/skills"),
+  it("merges llm key by key, so a repository pins the model and keeps the machine's provider and key", () => {
+    const s = scratchWithBoth();
+    const config = load(s);
+    expect(config.provider).toBe("claude");
+    expect(config.llmSettings()).toEqual({
+      apiKey: "llm-key", // ANTHROPIC_API_KEY, named in the machine's file
+      baseUrl: null,
+      model: "claude-sonnet-5", // the repository's
+    });
+  });
+
+  it("carries the skills map, one bare glob becoming a list, the path anchored beside the repository's file", () => {
+    const s = scratchWithBoth();
+    expect(load(s).skillSettings()).toEqual({
+      path: join(s.repo, ".review", "skills"),
       mappings: { "api-routes": ["src/api/**/route.ts"], models: ["src/modules/**/models/*.ts"] },
     });
   });
 
-  it("anchors every relative path the catalogue names to the catalogue's own directory", () => {
-    // One base for every relative path a catalogue names: "beside this file".
-    // A repository's .review/config.yaml therefore says
-    // `skills: { path: skills }` without knowing where the checkout is.
-    const s = scratch();
-    const config = load(s, { project: "app", configFile: s.catalogFile });
-    expect(config.skillSettings().path).toBe(join(s.root, ".review/skills"));
-    // An anchored path is left alone: `~` and `/` already say where.
-    const legacy = load(s, { project: "legacy", configFile: s.catalogFile });
-    expect(legacy.skillSettings().path).toBe("~/.config/reviewer/skills/legacy");
-    // The environment's path comes from no file, so it is not re-anchored:
-    // the checkout is its natural base, as it always was.
-    const fromEnvironment = load(s, {
-      project: "app",
-      configFile: s.catalogFile,
-      env: cleanEnvironment(s, { REVIEW_SKILLS_PATH: "rules" }),
-    });
+  it("leaves an anchored skills path alone, and does not re-anchor the environment's", () => {
+    const s = scratchWithBoth();
+    touch(s.repoFile, JSON.stringify({ skills: { path: "~/rules" } }));
+    expect(load(s).skillSettings().path).toBe("~/rules");
+    // The environment's path comes from no file, so the checkout is its natural base.
+    const fromEnvironment = load(s, { env: cleanEnvironment(s, { REVIEW_SKILLS_PATH: "rules" }) });
     expect(fromEnvironment.skillSettings().path).toBe("rules");
   });
 
-  it("lets the catalogue's defaults fill what a project leaves out, and the project win the rest", () => {
-    const s = scratch();
-    const bare = load(s, { project: "legacy", configFile: s.catalogFile });
-    expect(bare.reviewLang).toBe("English");
-    expect(bare.maxFileChars).toBe(4000);
-    // The directory comes from the defaults; the mappings are a project's own.
-    // `{{project}}` in that shared path is the selected project's name.
-    expect(bare.skillSettings()).toEqual({
-      path: "~/.config/reviewer/skills/legacy",
-      mappings: {},
-    });
-    expect(bare.maxFindingsPerFile).toBe(3); // the system default, set nowhere
-
-    const app = load(s, { project: "app", configFile: s.catalogFile });
-    expect(app.reviewLang).toBe("Turkish");
-    expect(app.maxFileChars).toBe(4000);
-    expect(app.maxFindingsPerFile).toBe(2);
+  it("runs on the machine's file alone outside a checkout that carries .review/", () => {
+    const s = scratchWithBoth();
+    const config = load(s, { cwd: s.elsewhere });
+    expect(config.provider).toBe("claude");
+    expect(config.model).toBe("claude-opus-5");
+    expect(config.reviewLang).toBe("English");
+    expect(config.skillSettings()).toEqual({ path: "", mappings: {} });
   });
 
-  it("takes the model settings from the catalogue, the key by name or as given", () => {
+  it("runs on the repository's file alone when the machine has none", () => {
     const s = scratch();
-    const app = load(s, { project: "app", configFile: s.catalogFile });
-    // The provider's name is the selection key and travels beside the knobs,
-    // not among them (`modelProviders.create(config.provider, config.llmSettings())`).
-    expect(app.provider).toBe("claude");
-    expect(app.llmSettings()).toEqual({
-      apiKey: "llm-key", // ANTHROPIC_API_KEY, named in defaults, read from the environment
-      baseUrl: null,
-      model: "claude-opus-5",
-    });
-    // The project's llm merges key by key over the defaults' llm.
-    const legacy = load(s, { project: "legacy", configFile: s.catalogFile });
-    expect(legacy.provider).toBe("local");
-    expect(legacy.llmSettings()).toEqual({
-      apiKey: "lm-studio", // not spelled like a variable: the key itself
-      baseUrl: "http://127.0.0.1:1234/v1",
-      model: "claude-opus-5",
-    });
-    expect(legacy.localPath).toBe("~/src/legacy");
+    touch(
+      s.repoFile,
+      JSON.stringify({
+        ...REPO,
+        settings: { ...REPO.settings, llm: { provider: "local", "api-key": "lm-studio" } },
+      }),
+    );
+    const config = load(s);
+    expect(config.provider).toBe("local");
+    expect(config.apiKey).toBe("lm-studio"); // not spelled like a variable: the key itself
+    expect(config.reviewLang).toBe("Turkish");
   });
 
-  it("reads the skills map from the environment as JSON, which beats the catalogue", () => {
+  it("lets --config stand in for the repository's file, with the machine's still underneath", () => {
+    const s = scratchWithBoth();
+    const other = join(s.root, "other", "config.yaml");
+    touch(other, JSON.stringify({ settings: { language: "tr" }, skills: { path: "rules" } }));
+    const config = load(s, { configFile: other, cwd: s.elsewhere });
+    expect(config.reviewLang).toBe("Turkish");
+    expect(config.provider).toBe("claude"); // from the machine's file
+    expect(config.skillSettings().path).toBe(join(s.root, "other", "rules"));
+  });
+
+  it("reports an unrecognised setting rather than ignoring it, in either file", () => {
     const s = scratch();
+    touch(s.machineFile, JSON.stringify({ settings: { exlude: ["*.md"] } }));
+    expect(() => load(s)).toThrow(/unrecognised setting/u);
+    touch(s.machineFile, JSON.stringify(MACHINE));
+    touch(s.repoFile, JSON.stringify({ settings: { "local-path": "~/src/x" } }));
+    expect(() => load(s)).toThrow(/unrecognised setting\(s\) \['local-path'\]/u);
+    // A setting at the root is pointed to the section rather than merely refused.
+    touch(s.repoFile, JSON.stringify({ language: "tr" }));
+    expect(() => load(s)).toThrow(/at the root; a setting goes under the settings section/u);
+  });
+});
+
+describe("the environment and the command line", () => {
+  it("reads the skills map from the environment as JSON, which beats the files", () => {
+    const s = scratchWithBoth();
     const config = load(s, {
-      project: "app",
-      configFile: s.catalogFile,
       env: cleanEnvironment(s, { REVIEW_SKILL_MAPPINGS: '{"models": [" a/** ", ""]}' }),
     });
     expect(config.skillSettings().mappings).toEqual({ models: ["a/**"] });
   });
 
   it("refuses a skills map that is not an object", () => {
-    const s = scratch();
+    const s = scratchWithBoth();
     const attempt = (): Config =>
-      load(s, {
-        project: "app",
-        configFile: s.catalogFile,
-        env: cleanEnvironment(s, { REVIEW_SKILL_MAPPINGS: "not json" }),
-      });
+      load(s, { env: cleanEnvironment(s, { REVIEW_SKILL_MAPPINGS: "not json" }) });
     expect(attempt).toThrow(ConfigError);
     expect(attempt).toThrow(/REVIEW_SKILL_MAPPINGS/u);
   });
 
-  it("lets the environment override the catalogue", () => {
-    const s = scratch();
-    const config = load(s, {
-      project: "app",
-      configFile: s.catalogFile,
-      env: cleanEnvironment(s, { REVIEW_LANG: "en" }),
-    });
-    // The file says Turkish; the environment outranks it.
+  it("lets the environment override both files", () => {
+    const s = scratchWithBoth();
+    const config = load(s, { env: cleanEnvironment(s, { REVIEW_LANG: "en", LLM_MODEL: "m" }) });
+    // The repository says Turkish and claude-sonnet-5; the environment outranks it.
     expect(config.reviewLang).toBe("English");
+    expect(config.model).toBe("m");
   });
 
   it("treats an empty environment variable as unset, not as an override", () => {
     // `REVIEW_SKILLS_PATH=` in a shell, or a CI input left blank and exported
     // anyway, is not an instruction to disable skills: it must fall through
-    // to the project the way an unset variable does. Otherwise a repository's
+    // to the files the way an unset variable does. Otherwise a repository's
     // own .review/config.yaml is silently overridden by nothing.
-    const s = scratch();
+    const s = scratchWithBoth();
     const config = load(s, {
-      project: "app",
-      configFile: s.catalogFile,
       env: cleanEnvironment(s, { REVIEW_SKILLS_PATH: "", REVIEW_LANG: "  " }),
     });
-    expect(config.skillSettings().path).toBe(join(s.root, ".review/skills"));
+    expect(config.skillSettings().path).toBe(join(s.repo, ".review", "skills"));
     expect(config.reviewLang).toBe("Turkish");
   });
 
-  it("lets a .env file override the catalogue too", () => {
-    const s = scratch();
-    writeFileSync(s.cwdEnvFile, "REVIEW_LANG=en\n", "utf8");
-    expect(load(s, { project: "app", configFile: s.catalogFile }).reviewLang).toBe("English");
+  it("lets a .env file override the files too", () => {
+    const s = scratchWithBoth();
+    writeFileSync(join(s.deep, ".env"), "REVIEW_LANG=en\n", "utf8");
+    expect(load(s).reviewLang).toBe("English");
   });
 
-  it("ranks the config-home .env above the working-directory .env", () => {
-    const s = scratch();
-    writeFileSync(s.cwdEnvFile, "REVIEW_LANG=en\nREVIEW_SKILLS_PATH=from-cwd\n", "utf8");
-    writeFileSync(s.homeEnvFile, "REVIEW_LANG=tr\n", "utf8");
+  it("ranks the repository's .env above the machine's above the working directory's", () => {
+    // The repository's .env sits beside its config.yaml, so it is found only when that file is.
+    const s = scratchWithBoth();
+    writeFileSync(join(s.deep, ".env"), "REVIEW_LANG=en\nREVIEW_SKILLS_PATH=from-cwd\n", "utf8");
+    writeFileSync(s.machineEnvFile, "REVIEW_LANG=tr\nREVIEW_MAX_FILE_CHARS=1\n", "utf8");
+    touch(s.repoEnvFile, "REVIEW_MAX_FILE_CHARS=2\n");
     const config = load(s, { env: environmentOnly(s) });
     expect(config.reviewLang).toBe("Turkish");
     expect(config.skillsPath).toBe("from-cwd");
+    expect(config.maxFileChars).toBe(2);
   });
 
   it("lets the real environment override every .env file", () => {
     const s = scratch();
-    writeFileSync(s.homeEnvFile, "REVIEW_LANG=tr\n", "utf8");
+    writeFileSync(s.machineEnvFile, "REVIEW_LANG=tr\n", "utf8");
     expect(load(s, { env: environmentOnly(s, { REVIEW_LANG: "en" }) }).reviewLang).toBe("English");
   });
 
   it("lets the command line override the environment", () => {
-    const s = scratch();
+    const s = scratchWithBoth();
     const config = load(s, {
-      project: "app",
-      configFile: s.catalogFile,
       env: cleanEnvironment(s, { REVIEW_LANG: "en" }),
       overrides: { reviewLang: "tr" },
     });
     expect(config.reviewLang).toBe("Turkish");
   });
 
-  it("reports an unrecognised project setting rather than ignoring it", () => {
+  it("configures the run from the environment alone without any file", () => {
     const s = scratch();
-    const path = join(s.root, "typo.json");
-    writeFileSync(
-      path,
-      JSON.stringify({ projects: { x: { "local-path": "~/src/x", exlude: ["*.md"] } } }),
-      "utf8",
-    );
-    expect(() => load(s, { project: "x", configFile: path })).toThrow(/unrecognised setting/u);
-  });
-
-  it("configures the run from the environment alone without a catalogue", () => {
-    const s = scratch();
-    const config = load(s, {
-      env: environmentOnly(s, { REVIEW_LOCAL_PATH: "~/src/from-env", REVIEW_LANG: "tr" }),
-    });
-    expect(config.localPath).toBe("~/src/from-env");
+    const config = load(s, { env: environmentOnly(s, { REVIEW_LANG: "tr" }) });
+    expect(config.provider).toBe("local");
     expect(config.reviewLang).toBe("Turkish");
-  });
-
-  it("refuses --project without a catalogue", () => {
-    const s = scratch();
-    const attempt = (): Config =>
-      load(s, { project: "app", env: cleanEnvironment(s, { REVIEW_LOCAL_PATH: "~/src/x" }) });
-    expect(attempt).toThrow(CatalogError);
-    expect(attempt).toThrow(/needs a catalogue/u);
   });
 });
 
@@ -547,7 +515,6 @@ function snapshot(config: Config): Record<string, unknown> {
     model_name: config.model,
     api_key: config.apiKey,
     base_url: config.baseUrl,
-    local_path: config.localPath,
     max_file_chars: config.maxFileChars,
     skills_path: config.skillsPath,
     max_skill_chars: config.maxSkillChars,

@@ -1,23 +1,78 @@
 # Configuration
 
-Five layers speak, highest first:
+Six layers speak, highest first:
 
 ```text
-command line  ›  environment  ›  .env files  ›  config.yaml project  ›  config.yaml defaults  ›  built-in default
+command line  ›  environment  ›  .env files  ›  <repo>/.review/config.yaml  ›  ~/.config/reviewer/config.yaml  ›  built-in default
 ```
 
 They resolve into one flat settings object; nothing below the config layer
-knows a catalogue exists.
+knows there are two files.
 
-## Where a project's rules live
+## Two files, one shape
 
-`reviewer init`, run inside a git checkout, writes the project's review setup
-into that checkout:
+The reviewer serves many repositories from one machine, so its settings live
+in two places with one rule between them: **the machine's file says how the
+reviewer runs, the repository's file says what is reviewed there** — and the
+repository's file may restate any key to override the machine's for that
+repository.
+
+| File                             | Written by                         | Holds                                                                                                 |
+| -------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `~/.config/reviewer/config.yaml` | `reviewer init` outside a checkout | `settings`: the model (`llm`), the findings' language, concurrency, caps. Never committed.            |
+| `<repo>/.review/config.yaml`     | `reviewer init` inside a checkout  | `skills` and their mappings, plus the `settings` restated to pin them for this repository. Committed. |
+
+Both files have two sections. **`settings`** is how the reviewer runs and is
+the same set of keys in either file; **`skills`** is what the repository's
+code is held to and exists only in the repository's file.
+
+```yaml
+# ~/.config/reviewer/config.yaml -- this machine
+version: 1
+settings:
+  llm: { provider: claude, model: claude-sonnet-4-6, api-key: ANTHROPIC_API_KEY }
+  language: en
+  max-concurrent-files: 4
+```
+
+```yaml
+# <repo>/.review/config.yaml -- this repository
+version: 1
+settings: # on top of the machine's
+  exclude: ["**/*.spec.ts", "**/migrations/*.ts"]
+  max-findings-per-file: 2
+skills: # this file only
+  path: skills # beside this file
+  mappings:
+    api-conventions: ["src/api/**/*.ts"]
+```
+
+A setting the repository's file restates wins whole; `llm` merges key by key,
+so `settings: { llm: { model: claude-opus-4 } }` in the repository pins the
+model and still takes the provider and the key's name from the machine.
+`exclude` is replaced, not unioned. `skills` may be set only in the
+repository's file: it describes the reviewed code, and the machine's file is
+refused if it names it. A setting written at the root is refused with a
+message pointing at the section.
+
+### Where each file is found
+
+`reviewer` finds `.review/config.yaml` from any subdirectory of the checkout,
+the way `git` finds its repository; the checkout reviewed is the one that owns
+it, else the working directory. The machine's file is
+`$XDG_CONFIG_HOME/reviewer/config.yaml`, `~/.config/reviewer/config.yaml` by
+default.
+
+`--config PATH` (or `$REVIEWER_CONFIG`) puts another file in the repository's
+slot; the machine's file still sits underneath. A named file that does not
+exist is an error; an absent `.review/` or machine file is simply not there.
+
+### What the repository's directory carries
 
 ```text
 my-repo/
 └── .review/
-    ├── config.yaml        which skill applies to which paths, the model, excludes
+    ├── config.yaml        which skill applies to which paths, excludes, caps
     ├── prompts/           every *.md in here is added to every file's prompt
     │   └── prompts.md     standing instructions (written empty)
     ├── skills/            one Markdown file per convention (README explains the format)
@@ -29,92 +84,60 @@ my-repo/
 team reviews them like everything else, and a CI runner reads them from the
 checkout like any other file.
 
-`reviewer` finds `.review/config.yaml` from any subdirectory of the checkout,
-the way `git` finds its repository. Precedence when more than one could apply:
-
-```text
---config PATH  ›  $REVIEWER_CONFIG  ›  <checkout>/.review/config.yaml  ›  ~/.config/reviewer/config.yaml
-```
-
 The key stays out of the repository: `~/.config/reviewer/.env` for every
 project, or `.review/.env` (gitignored by `init`) for one.
 
-### Machine-wide catalogue
+### On a CI runner
 
-For repositories that carry no rules of their own, or for one person's rules
-that are not the team's, `reviewer init` run _outside_ a checkout writes
-`~/.config/reviewer/config.yaml` instead. `reviewer add <name>` (from inside a
-checkout) defines a project in it, and `reviewer projects` lists what the
-catalogue in force defines. Everything below applies to both homes.
-
-`$XDG_CONFIG_HOME/reviewer` moves the machine-wide home under another base.
+A runner has no `~/.config/reviewer/`, so the workflow plays the machine's
+part: the action's `provider`, `model`, `base-url` and `api-key` inputs become
+`LLM_*` variables, which sit above both files. Set `provider` in the workflow
+unless the repository's file pins `llm.provider` itself; with neither, the
+tool's default (`local`) applies. See [GitHub Action](github-action.md).
 
 ## `config.yaml`
 
 The complete annotated reference is
 [`templates/config.example.yaml`](../templates/config.example.yaml); a test
 keeps it in step with the parser. `reviewer init` writes a shorter starter
-([`templates/config.yaml`](../templates/config.yaml) or
-[`templates/repo-config.yaml`](../templates/repo-config.yaml)). The shape, at
-its smallest useful:
+([`templates/config.yaml`](../templates/config.yaml) for the machine,
+[`templates/repo-config.yaml`](../templates/repo-config.yaml) for a
+repository).
 
-```yaml
-version: 1
-defaults:
-  llm: { provider: claude, model: claude-sonnet-4-6, api-key: ANTHROPIC_API_KEY }
-  language: en
-  exclude: ["**/*.spec.ts", "**/migrations/*.ts"]
-projects:
-  app:
-    skills:
-      path: skills # beside config.yaml
-      mappings:
-        api-conventions: ["src/api/**/*.ts"]
-        error-handling: "src/**/*.ts"
-    max-findings-per-file: 2
-```
+### Keys
 
-Two sections: **`defaults`** (what every project starts from) and
-**`projects`** (each a checkout plus whatever it overrides). A key set on the
-project wins over `defaults`, which wins over the built-in default; `llm`
-merges key by key.
+Keys are kebab-case. Everything under `settings` may be set in either file;
+`skills` sits at the root of the repository's file alone.
 
-A project is a _checkout_, not a repository on a hosting system:
-`local-path` names it, and omitting it reviews the current directory, which is
-what a CI job wants after `actions/checkout`.
-
-### Setting keys
-
-Valid under `defaults` and under each project. Keys are kebab-case.
-
-| Key                      | Default           | Meaning                                                                                     |
-| ------------------------ | ----------------- | ------------------------------------------------------------------------------------------- |
-| `llm.provider`           | `local`           | `local` (any OpenAI-compatible endpoint) or `claude` (Anthropic).                           |
-| `llm.model`              | provider default  | `local` → `gpt-4.1`, `claude` → `claude-sonnet-4-6`.                                        |
-| `llm.base-url`           | —                 | Endpoint URL including the API prefix, e.g. `http://localhost:11434/v1`.                    |
-| `llm.api-key`            | _required_        | The **name** of an environment variable, or the key itself. See below.                      |
-| `language`               | `en`              | Language of each finding's body. Accepted: `en`, `tr`; anything else falls back to English. |
-| `verify`                 | `true`            | Run the [verification pass](how-it-works.md#verification).                                  |
-| `skills.path`            | `""` (no skills)  | Directory of skill documents. Relative paths are taken from beside the catalogue.           |
-| `skills.mappings`        | `{}`              | Skill name → globs it reviews. **Project only**, never a default.                           |
-| `local-path`             | current directory | The checkout to review.                                                                     |
-| `exclude`                | `[]`              | Globs never sent to the model; a list or one comma-separated string.                        |
-| `max-findings-per-file`  | `3`               | Per-file cap; the most severe survive. `0` = no cap.                                        |
-| `max-file-chars`         | `8000`            | Per-file cap on the diff shown; a longer diff is cut at a hunk boundary.                    |
-| `max-skill-chars`        | `10000`           | Cap on one skill's body.                                                                    |
-| `max-skills-total-chars` | `18000`           | Cap on one file's whole skills block.                                                       |
-| `max-context-chars`      | `6000`            | Cap on the [pre-context](how-it-works.md#pre-context) block; `0` switches it off.           |
-| `max-concurrent-files`   | CPU-derived       | File reviews in flight at once.                                                             |
-
-`{{project}}` in `skills.path` and `local-path` stands for the project's name.
+| Key                               | Default          | Machine | Repo | Meaning                                                                                     |
+| --------------------------------- | ---------------- | :-----: | :--: | ------------------------------------------------------------------------------------------- |
+| `settings.llm.provider`           | `local`          |    ✓    |  ✓   | `local` (any OpenAI-compatible endpoint) or `claude` (Anthropic).                           |
+| `settings.llm.model`              | provider default |    ✓    |  ✓   | `local` → `gpt-4.1`, `claude` → `claude-sonnet-4-6`.                                        |
+| `settings.llm.base-url`           | —                |    ✓    |  ✓   | Endpoint URL including the API prefix, e.g. `http://localhost:11434/v1`.                    |
+| `settings.llm.api-key`            | _required_       |    ✓    |  ✓   | The **name** of an environment variable, or the key itself. See below.                      |
+| `settings.language`               | `en`             |    ✓    |  ✓   | Language of each finding's body. Accepted: `en`, `tr`; anything else falls back to English. |
+| `settings.verify`                 | `true`           |    ✓    |  ✓   | Run the [verification pass](how-it-works.md#verification).                                  |
+| `settings.exclude`                | `[]`             |    ✓    |  ✓   | Globs never sent to the model; a list or one comma-separated string.                        |
+| `settings.max-findings-per-file`  | `3`              |    ✓    |  ✓   | Per-file cap; the most severe survive. `0` = no cap.                                        |
+| `settings.max-file-chars`         | `8000`           |    ✓    |  ✓   | Per-file cap on the diff shown; a longer diff is cut at a hunk boundary.                    |
+| `settings.max-skill-chars`        | `10000`          |    ✓    |  ✓   | Cap on one skill's body.                                                                    |
+| `settings.max-skills-total-chars` | `18000`          |    ✓    |  ✓   | Cap on one file's whole skills block.                                                       |
+| `settings.max-context-chars`      | `6000`           |    ✓    |  ✓   | Cap on the [pre-context](how-it-works.md#pre-context) block; `0` switches it off.           |
+| `settings.max-concurrent-files`   | CPU-derived      |    ✓    |  ✓   | File reviews in flight at once.                                                             |
+| `skills.path`                     | `""` (no skills) |         |  ✓   | Directory of skill documents. A relative path is taken from beside the file.                |
+| `skills.mappings`                 | `{}`             |         |  ✓   | Skill name → globs it reviews.                                                              |
 
 A key the schema does not recognise is **rejected**, not ignored: the error
 names the key and the accepted set. The schema is at `version: 1`; a newer
 number than the build knows is refused.
 
+A word on `settings.exclude` and `settings.language` in the machine's file: they change what the
+review says, and a runner does not have that file, so a local run then differs
+from CI. Rules that are the team's belong in the repository's file.
+
 ### The model's key
 
-`llm.api-key` takes either the name of an environment variable (spelled like
+`settings.llm.api-key` takes either the name of an environment variable (spelled like
 one: `ANTHROPIC_API_KEY`) or the value itself. Naming keeps the file
 shareable; a named variable that is not set is an error at startup rather
 than a 401 later.
@@ -142,8 +165,8 @@ What a project adds _on top_ has two shapes, and neither is a key:
 ## Environment
 
 The environment is the override layer: any variable below beats its
-`config.yaml` counterpart for every project. Without a catalogue, these
-describe the whole run.
+`config.yaml` counterpart in both files. Without any file, these describe the
+whole run.
 
 | Variable                        | Default          | Purpose                                                                     |
 | ------------------------------- | ---------------- | --------------------------------------------------------------------------- |
@@ -151,20 +174,19 @@ describe the whole run.
 | `LLM_API_KEY`                   | _required_       | Credential; must be non-empty even for a local server.                      |
 | `LLM_BASE_URL`                  | —                | Endpoint URL including the API prefix.                                      |
 | `LLM_MODEL`                     | provider default | Model name.                                                                 |
-| `REVIEW_LOCAL_PATH`             | the cwd          | The checkout to review.                                                     |
 | `REVIEW_LANG`                   | `en`             | Language of finding bodies.                                                 |
 | `REVIEW_EXCLUDE_PATHS`          | —                | Comma-separated globs skipped entirely.                                     |
 | `REVIEW_MAX_FINDINGS_PER_FILE`  | `3`              | Per-file cap; `0` = uncapped.                                               |
 | `REVIEW_SKILLS_PATH`            | —                | Directory of review skills inside the reviewed repo; empty disables skills. |
-| `REVIEW_SKILL_MAPPINGS`         | `{}`             | The project's `skills.mappings` as JSON.                                    |
+| `REVIEW_SKILL_MAPPINGS`         | `{}`             | The repository's `skills.mappings` as JSON.                                 |
 | `REVIEW_VERIFY`                 | `true`           | Run the verification pass. `--no-verify` wins.                              |
 | `REVIEW_MAX_SKILL_CHARS`        | `10000`          | Per-skill body cap.                                                         |
 | `REVIEW_MAX_SKILLS_TOTAL_CHARS` | `18000`          | Per-file cap for the whole skills block.                                    |
 | `REVIEW_MAX_CONTEXT_CHARS`      | `6000`           | Cap on the pre-context block; `0` switches it off.                          |
 | `REVIEW_MAX_FILE_CHARS`         | `8000`           | Per-file diff cap.                                                          |
 | `REVIEW_MAX_CONCURRENT_FILES`   | CPU-derived      | Simultaneous file reviews.                                                  |
-| `REVIEWER_CONFIG`               | —                | Path to `config.yaml`, overriding the default location.                     |
-| `XDG_CONFIG_HOME`               | `~/.config`      | Base of the machine-wide home.                                              |
+| `REVIEWER_CONFIG`               | —                | A repository `config.yaml` in place of the nearest `.review/config.yaml`.   |
+| `XDG_CONFIG_HOME`               | `~/.config`      | Base of the machine's config home.                                          |
 
 Logging variables (`REVIEWER_LOG_LEVEL`, `REVIEWER_LOG_FORMAT`, `NO_COLOR`,
 …) are listed in [Output → Logging](output.md#logging).
@@ -172,10 +194,10 @@ Logging variables (`REVIEWER_LOG_LEVEL`, `REVIEWER_LOG_FORMAT`, `NO_COLOR`,
 ## Standing instructions
 
 The review policy cannot be replaced, but a repository can **add** to it:
-every `*.md` under the `prompts/` directory **beside the catalogue** is read,
-at any depth, in path order, and appended to the system prompt for every
-reviewed file. `reviewer init` writes an empty `.review/prompts/prompts.md`;
-filling it in is the whole of being heard.
+every `*.md` under `.review/prompts/` is read, at any depth, in path order,
+and appended to the system prompt for every reviewed file. `reviewer init`
+writes an empty `.review/prompts/prompts.md`; filling it in is the whole of
+being heard.
 
 ```text
 .review/
@@ -207,8 +229,13 @@ another module's repository directly is a bug however well it works today.
   then byte-for-byte the prompt of a repository that said nothing.
 - **A file that cannot be read is a warning**, not a failed run.
 
-A machine-wide catalogue's directory is `~/.config/reviewer/prompts/`: one
-shared house style for every project reviewed without a `.review/` of its own.
+### The machine's prompts
+
+`~/.config/reviewer/prompts/` holds one person's house style. It is read
+**only when the repository's `.review/prompts/` says nothing** — no
+directory, or only empty files. When the repository's directory holds at
+least one non-empty file, that directory alone is read; the two are never
+combined. The log says which one was in force.
 
 ## Review skills
 
@@ -218,13 +245,14 @@ that file's prompt under _"Project/framework standards for this file (apply IN
 ADDITION to the four lenses)"_. A file that matches nothing is still reviewed,
 with the four lenses alone.
 
-The reviewer ships no skills of its own. Where they are read from is
-`skills.path`:
+The reviewer ships no skills of its own, and the machine's file may not name
+any: skills are the reviewed repository's conventions, versioned with its
+code. Where they are read from is `skills.path` in `.review/config.yaml`:
 
-| `skills.path`        | Read from                                                                                  |
-| -------------------- | ------------------------------------------------------------------------------------------ |
-| absolute or `~` path | that directory, as written; the machine-wide home is `~/.config/reviewer/skills/<project>` |
-| relative path        | **beside the catalogue file**: in `.review/config.yaml`, `skills` means `.review/skills`   |
+| `skills.path`        | Read from                                                                      |
+| -------------------- | ------------------------------------------------------------------------------ |
+| absolute or `~` path | that directory, as written                                                     |
+| relative path        | **beside the file**: in `.review/config.yaml`, `skills` means `.review/skills` |
 
 `--skills-path` and `REVIEW_SKILLS_PATH` come from no file and are taken from
 the reviewed checkout instead.

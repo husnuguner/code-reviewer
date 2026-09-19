@@ -48,7 +48,7 @@ describe("frontmatter skill parser", () => {
   });
 
   it("gives no document a scope of its own: every parsed skill has globs: []", () => {
-    // The scope is the catalogue's to give (skills.mappings); a document
+    // The scope is the config file's to give (skills.mappings); a document
     // that could scope itself would be a second place for the same
     // decision, and one of the two would eventually be wrong.
     const scopes = parseCases
@@ -86,7 +86,7 @@ describe("skill registry", () => {
       .map((c) => parser.parse(c.input.text, "repo"))
       .filter((skill): skill is Skill => skill !== null)
       // Only the skills the fixture scoped take part; the rest were the
-      // "keeps a skill the catalogue may scope" cases, unscoped by design.
+      // "keeps a skill the config file may scope" cases, unscoped by design.
       .filter((skill) => Object.hasOwn(SCOPES, skill.name)),
     SCOPES,
   );
@@ -166,7 +166,7 @@ describe("the project's skill mappings", () => {
     expect(ruled.find((s) => s.name === "jobs")?.globs).toEqual(["src/jobs/**"]);
   });
 
-  it("scopes a skill that the catalogue names, and nothing else does", () => {
+  it("scopes a skill that the config file names, and nothing else does", () => {
     const ruled = applyMappings(loaded, { models: ["src/modules/**/models/*.ts"] });
     const registry = new SkillRegistry(ruled);
     expect(registry.skillsFor("src/modules/x/models/m.ts").map((s) => s.name)).toEqual(["models"]);

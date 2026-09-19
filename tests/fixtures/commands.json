@@ -1,60 +1,13 @@
 {
   "module": "commands",
-  "schema": "Catalogue schema v3 (local git only): no repositories/providers, no per-project repository, no posting settings. Maintained by hand.",
+  "schema": "What `reviewer init` prints, for each home. Maintained by hand.",
   "cases": [
-    {
-      "name": "list_projects/valid",
-      "input": {
-        "catalog": {
-          "version": 3,
-          "_readme": [
-            "ignored at the root"
-          ],
-          "projects": {
-            "app": {
-              "local-path": "~/src/app",
-              "language": "tr",
-              "exclude": [
-                "**/*.spec.ts",
-                "**/migrations/*.ts"
-              ],
-              "max-findings-per-file": 2,
-              "max-file-chars": 4000,
-              "max-skill-chars": 100,
-              "max-skills-total-chars": 200,
-              "max-concurrent-files": 3,
-              "skills": {
-                "path": ".review/skills"
-              }
-            },
-            "legacy": {
-              "local-path": "~/src/legacy"
-            },
-            "here": {}
-          }
-        }
-      },
-      "expected": {
-        "code": 0,
-        "out": "<CONFIG_PATH>\n  app          ~/src/app\n  csv-strings  (current directory)\n  legacy       ~/src/legacy\n"
-      }
-    },
-    {
-      "name": "list_projects/no_projects",
-      "input": {
-        "catalog": {}
-      },
-      "expected": {
-        "code": 1,
-        "out": "<CONFIG_PATH>\n  (no projects defined)\n"
-      }
-    },
     {
       "name": "init/writes_skeleton",
       "input": {},
       "expected": {
         "code": 0,
-        "out": "Wrote <CONFIG_PATH>\n\nNext:\n  1. Put LLM_API_KEY in <CONFIG_HOME>/.env\n  2. cd <a checkout> && reviewer add <name>    # define a project\n  3. reviewer projects                          # check what is defined\n"
+        "out": "Wrote <CONFIG_PATH>\n\nNext:\n  1. Put the model's key in <CONFIG_HOME>/.env under the name <CONFIG_PATH> gives it.\n  2. cd <a checkout> && reviewer init         # that repository's rules: .review/\n  3. reviewer --preview --base main            # what would be reviewed; no model call\n"
       }
     },
     {

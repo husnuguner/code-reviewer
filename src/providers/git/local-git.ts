@@ -15,7 +15,7 @@ import { type GitReader } from "../../core/ports/git-reader";
 import { type Logger, NULL_LOGGER } from "../../core/ports/logger";
 import { GitError, errorMessage } from "../../core/util/errors";
 import { compareCodePoints, cutToLength, show } from "../../core/util/text";
-import { expandUser } from "../catalog/paths";
+import { expandUser } from "../config/paths";
 
 /** Options for one git invocation. */
 export interface GitRunOptions {
@@ -36,23 +36,23 @@ export type GitRunner = (
 ) => Promise<string>;
 
 /**
- * Resolves the working tree to read and checks it is a git repository.
+ * Checks the working tree to read is a git repository.
  *
- * @param localPath - `REVIEW_LOCAL_PATH`; `""` means `cwd`.
+ * @param root - The checkout: the repository owning `.review/config.yaml`, else the working directory.
  * @returns The absolute root.
  * @throws {@link GitError} when the path is not a directory or not a checkout.
  */
-export function worktree(localPath = "", cwd: string = process.cwd()): string {
-  const root = localPath === "" ? cwd : resolve(expandUser(localPath));
-  if (!existsSync(root) || !statSync(root).isDirectory()) {
-    throw new GitError(`${root} is not a directory`);
+export function worktree(root: string): string {
+  const absolute = resolve(expandUser(root));
+  if (!existsSync(absolute) || !statSync(absolute).isDirectory()) {
+    throw new GitError(`${absolute} is not a directory`);
   }
-  if (!existsSync(join(root, ".git"))) {
+  if (!existsSync(join(absolute, ".git"))) {
     throw new GitError(
-      `${root} is not a git repository. Branch review reads the diff from local git; run it inside a checkout or set REVIEW_LOCAL_PATH.`,
+      `${absolute} is not a git repository. Branch review reads the diff from local git; run it inside a checkout.`,
     );
   }
-  return root;
+  return absolute;
 }
 
 /**

@@ -56,7 +56,6 @@ function contextReference(arguments_: ReviewArguments): string {
 /** The container request from the parsed arguments; a preview needs no model. */
 function requestFrom(arguments_: ReviewArguments): RunRequest {
   return {
-    project: arguments_.project,
     configFile: arguments_.config,
     logging: logSettingsFrom(arguments_),
     overrides: cliOverrides(arguments_),

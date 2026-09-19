@@ -1,6 +1,6 @@
 /**
- * The project's standing instructions: every `*.md` under `prompts/` beside the catalogue, read in path
- * order, each labelled with its file.
+ * Standing instructions: every `*.md` under `prompts/` beside a config file, read in path order, each labelled
+ * with its file. The repository's directory is read when it says anything; otherwise the machine's.
  * @packageDocumentation
  */
 
@@ -12,12 +12,40 @@ import { type StandingInstruction } from "../../core/review/prompts";
 import { errorMessage } from "../../core/util/errors";
 import { compareCodePoints, show } from "../../core/util/text";
 
-/** The directory beside the catalogue that holds standing instructions. */
+/** The directory beside a config file that holds standing instructions. */
 export const PROMPTS_DIR_NAME = "prompts";
 
-/** `prompts/` beside the catalogue, whether or not the catalogue exists yet. */
-export function promptsDirectory(catalogPath: string): string {
-  return join(dirname(catalogPath), PROMPTS_DIR_NAME);
+/** `prompts/` beside a config file, whether or not the file exists yet. */
+export function promptsDirectory(configPath: string): string {
+  return join(dirname(configPath), PROMPTS_DIR_NAME);
+}
+
+/**
+ * The standing instructions in force: the repository's when its `prompts/` holds at least one non-empty file,
+ * else the machine's. The two are never combined.
+ *
+ * @param repoDirectory - The repository's `prompts/`, or `null` outside a checkout that carries `.review/`.
+ * @param machineDirectory - The machine's `prompts/`.
+ */
+export function readStandingInstructions(
+  repoDirectory: string | null,
+  machineDirectory: string,
+  logger: Logger = NULL_LOGGER,
+): StandingInstruction[] {
+  const log = logger.child("prompts");
+  if (repoDirectory !== null) {
+    const own = readProjectPrompts(repoDirectory, logger);
+    if (own.length > 0) {
+      log.info(`Standing instructions: ${repoDirectory} (${own.length} file(s)).`);
+      return own;
+    }
+    log.info(`The repository's ${repoDirectory} says nothing; reading the machine's prompts.`);
+  }
+  const shared = readProjectPrompts(machineDirectory, logger);
+  if (shared.length > 0) {
+    log.info(`Standing instructions: ${machineDirectory} (${shared.length} file(s)).`);
+  }
+  return shared;
 }
 
 /**

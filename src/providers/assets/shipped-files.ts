@@ -49,7 +49,7 @@ export type ShippedFile =
   | "prompts/output-contract.md"
   /** The verification policy. */
   | "prompts/verify.md"
-  /** The machine-wide catalogue `init` writes outside a repository. */
+  /** The machine's config file `init` writes outside a repository. */
   | "templates/config.yaml"
   /** The `.review/config.yaml` `init` writes inside one. */
   | "templates/repo-config.yaml"

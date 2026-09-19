@@ -1,39 +1,28 @@
-# code-reviewer -- the catalogue. Every key, with its meaning and default, is
-# documented in the annotated reference the reviewer ships beside this
-# template: templates/config.example.yaml.
+# code-reviewer -- this machine's settings. Every key, with its meaning and
+# default, is documented in the annotated reference the reviewer ships beside
+# this template: templates/config.example.yaml.
 #
-# This reviewer reads LOCAL GIT and reports; it posts nothing and talks to no
-# hosting system. A project is therefore a checkout plus the rules that apply
-# to it. Turning findings into pull-request comments is a CI bot's job,
-# reading the NDJSON the reviewer prints (--out).
+# Two files, one shape. This one says HOW the reviewer runs on this machine:
+# the model, its key's name, the findings' language, how much runs at once.
+# Each repository's .review/config.yaml (written by `reviewer init` inside a
+# checkout) says WHAT is reviewed there -- skills, excludes, caps -- and sits on
+# top of this file: a key restated under its `settings` wins; `llm` merges key
+# by key. What describes the reviewed code (`skills`) cannot be set here.
 #
 # Secrets: llm.api-key takes either the NAME of an environment variable (read
 # from the environment and from the .env beside this file) or the value
 # itself. Naming a variable keeps this file shareable.
 version: 1
 
-# What every project starts from. A project overrides a key by restating it.
-defaults:
+settings:
   llm:
     provider: claude # or: local (any OpenAI-compatible server)
-    model: claude-opus-5
-    api-key: LLM_API_KEY # the variable holding the key, or the key
+    model: claude-sonnet-4-6
+    api-key: ANTHROPIC_API_KEY # the variable holding the key, or the key
     # base-url: http://127.0.0.1:1234/v1
   language: en
-  # The review policy is the reviewer's own and is not configurable. What is
-  # added on top of it goes in two places: prompts/ beside this file (every
-  # *.md in it is read for every reviewed file of every project) and the
-  # skills folder below.
-  skills:
-    path: ~/.config/reviewer/skills/{{project}} # one folder per project
-  exclude: ["**/*.spec.ts", "**/migrations/*.ts"]
-  max-findings-per-file: 3 # the most severe survive; the rest are counted
+  max-concurrent-files: 4 # file reviews in flight at once
 
-projects:
-  example:
-    # The checkout to review. Omit to review the current directory, which is
-    # what a CI job does after actions/checkout.
-    local-path: ~/src/repo
-    skills:
-      mappings: # skill name -> globs it reviews
-        api-routes: ["src/api/**/route.ts"]
+# Standing instructions are not configured: every *.md under prompts/ beside
+# this file is read and appended to the policy for every reviewed file -- but
+# only for a repository whose own .review/prompts/ says nothing.

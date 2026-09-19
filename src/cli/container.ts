@@ -32,16 +32,16 @@ import { systemPrompt } from "../core/review/prompts";
 import { type PerFileVerifier } from "../core/review/review-file";
 import { FindingVerifier } from "../core/review/verify";
 import { SkillRegistry } from "../core/skills/registry";
-import { promptsDirectory, readProjectPrompts } from "../providers/assets/project-prompts";
+import { promptsDirectory, readStandingInstructions } from "../providers/assets/project-prompts";
 import { shippedFile } from "../providers/assets/shipped-files";
-import {
-  configHome,
-  configPath,
-  expandUser,
-  isRepoConfig,
-  repoRootOf,
-} from "../providers/catalog/paths";
 import { loadRunConfig } from "../providers/config/loader";
+import {
+  type ConfigPaths,
+  configHome,
+  configPaths,
+  expandUser,
+  repoRootOf,
+} from "../providers/config/paths";
 import { StreamConsole } from "../providers/console/stream-console";
 import { LocalGitReader, worktree } from "../providers/git/local-git";
 import { builtinModelProviders } from "../providers/llm/builtin";
@@ -65,7 +65,7 @@ export type ReportFormat = string;
 
 /** What the command line asked for, already parsed. */
 export interface RunRequest {
-  readonly project: string | null;
+  /** `--config`: another file for the repository slot, or `null` for the usual lookup. */
   readonly configFile: string | null;
   /** Logging, already settled by the command line. */
   readonly logging: LogSettings;
@@ -99,10 +99,9 @@ export interface RunCradle {
   /** Where the run's records go, as `--format` chose. */
   readonly branchReporter: BranchReviewReporter;
   readonly configHomePath: string;
-  readonly catalogPath: string;
-  /** `prompts/` beside the catalogue. */
-  readonly promptsPath: string;
-  /** The checkout reviewed: `local-path`, else the repository owning a `.review/` catalogue, else cwd. */
+  /** The machine's config file and, when the run is inside a checkout that carries one, the repository's. */
+  readonly configFilePaths: ConfigPaths;
+  /** The checkout reviewed: the repository owning `.review/config.yaml`, else cwd. */
   readonly checkoutRoot: string;
   /** Local git over that checkout. */
   readonly gitReader: GitReader;
@@ -160,7 +159,6 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
     formatProviders: asFunction(() => builtinFormatProviders()).singleton(),
     config: asFunction(({ request: r, modelProviders, logger }: RunCradle) =>
       loadRunConfig({
-        project: r.project,
         configFile: r.configFile,
         overrides: r.overrides,
         requiresModel: r.requiresModel,
@@ -176,11 +174,15 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
           logger,
         }),
     ).singleton(),
-    systemPrompt: asFunction(({ promptsPath, logger }: RunCradle) =>
+    systemPrompt: asFunction(({ configFilePaths: paths, logger }: RunCradle) =>
       systemPrompt(
         shippedFile("prompts/system.md"),
         shippedFile("prompts/output-contract.md"),
-        readProjectPrompts(promptsPath, logger),
+        readStandingInstructions(
+          paths.repo === null ? null : promptsDirectory(paths.repo),
+          promptsDirectory(paths.machine),
+          logger,
+        ),
       ),
     ).singleton(),
     fileReviewer: asFunction(
@@ -200,10 +202,9 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
     branchReporter: asFunction(({ request: r, formatProviders }: RunCradle) =>
       buildBranchReporter(r, formatProviders),
     ).singleton(),
-    checkoutRoot: asFunction(({ config, catalogPath }: RunCradle) => {
-      const fallback = isRepoConfig(catalogPath) ? repoRootOf(catalogPath) : "";
-      return worktree(config.localPath === "" ? fallback : config.localPath);
-    }).singleton(),
+    checkoutRoot: asFunction(({ configFilePaths: paths }: RunCradle) =>
+      worktree(paths.repo === null ? process.cwd() : repoRootOf(paths.repo)),
+    ).singleton(),
     gitReader: asFunction(
       ({ checkoutRoot, logger }: RunCradle) => new LocalGitReader(checkoutRoot, undefined, logger),
     ).singleton(),
@@ -212,9 +213,8 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
       return SkillRegistry.build([skillSource(checkoutRoot, path, logger)], logger, mappings);
     }).singleton(),
     configHomePath: asFunction(() => configHome()).singleton(),
-    catalogPath: asFunction(({ request: r }: RunCradle) => configPath(r.configFile)).singleton(),
-    promptsPath: asFunction(({ catalogPath }: RunCradle) =>
-      promptsDirectory(catalogPath),
+    configFilePaths: asFunction(({ request: r }: RunCradle) =>
+      configPaths(r.configFile),
     ).singleton(),
   });
   return container;

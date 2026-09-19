@@ -5,38 +5,38 @@
 # The reviewer reads LOCAL GIT and reports; it posts nothing. Turning findings
 # into pull-request comments is a CI bot's job (reviewer comment).
 #
-# Secret: llm.api-key names an environment variable. Put the key in
-# ~/.config/reviewer/.env, or in .review/.env (gitignored) -- never here.
+# This file sits on top of the machine's ~/.config/reviewer/config.yaml: a
+# setting restated here wins for this repository; `llm` merges key by key.
 version: 1
 
-defaults:
-  llm:
-    provider: claude # or: local (any OpenAI-compatible server)
-    model: claude-opus-5
-    api-key: ANTHROPIC_API_KEY # the variable holding the key
-    # base-url: http://127.0.0.1:1234/v1
-  language: en
-  # The review policy -- who the reviewer is, what it looks for, what it leaves
-  # alone -- is the reviewer's own and cannot be replaced. What THIS repository
-  # adds to it: prompts/ beside this file for what holds on every file, and
-  # skills/ for what holds on the paths a mapping names.
+# This repository's settings, on top of the machine's.
+settings:
+  # The model is the environment's business, not this file's: on a developer's
+  # machine ~/.config/reviewer/config.yaml names it; on a CI runner the action's
+  # inputs (provider, model, api-key) do. Restate a key here only to pin it for
+  # this repository -- and mind that an LLM_* variable still wins over it.
+  # llm:
+  #   model: claude-opus-4
+
   exclude: ["**/*.spec.ts", "**/*.test.ts", "**/migrations/*.ts"]
   max-findings-per-file: 3 # the most severe survive; the rest are counted
+
+# The review policy -- who the reviewer is, what it looks for, what it leaves
+# alone -- is the reviewer's own and cannot be replaced. What THIS repository
+# adds to it: prompts/ beside this file for what holds on every file, and
+# skills/ below for what holds on the paths a mapping names.
 
 # Standing instructions are not configured: every *.md under .review/prompts/
 # is read, in path order, and appended to the policy for every reviewed file.
 # `reviewer init` leaves prompts/prompts.md there, empty -- fill it in, or add
-# more files beside it; an empty one adds nothing.
+# more files beside it. While every file here is empty, the machine's
+# ~/.config/reviewer/prompts/ is read instead.
 
-projects:
-  # One project: this repository. No local-path -- the reviewer already knows
-  # where it is, because this file is inside it.
-  this-repo:
-    skills:
-      # Every relative path in this catalogue is taken from the catalogue's own
-      # directory (.review/), so this means .review/skills.
-      path: skills
-      # skill name -> globs it reviews; a skill mapped nowhere never applies.
-      # This is where your rules go: map one to ["**/*"] to apply it everywhere.
-      mappings: {}
-      # api-rules: ["src/api/**/*.ts"]
+skills:
+  # Every relative path in this file is taken from its own directory
+  # (.review/), so this means .review/skills.
+  path: skills
+  # skill name -> globs it reviews; a skill mapped nowhere never applies.
+  # This is where your rules go: map one to ["**/*"] to apply it everywhere.
+  mappings: {}
+  # api-rules: ["src/api/**/*.ts"]

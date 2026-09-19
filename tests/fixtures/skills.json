@@ -1385,5 +1385,5 @@
       "expected": "Project/framework standards for this file (apply IN ADDITION to the four lenses):\n\n## dup\nsecond"
     }
   ],
-  "schema": "Skill documents carry no scope: a frontmatter declares `name` (and optionally `description`); which files a skill reviews is the catalogue's skills.mappings. parse/* expectations are regenerated from the parser."
+  "schema": "Skill documents carry no scope: a frontmatter declares `name` (and optionally `description`); which files a skill reviews is the repository config file's skills.mappings. parse/* expectations are regenerated from the parser."
 }

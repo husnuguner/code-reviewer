@@ -1,22 +1,12 @@
 /**
- * Resolves one run's configuration from every layer: command line › environment › catalogue project › default.
- * Pure: the environment, `.env` contents and catalogue arrive as parameters.
+ * Resolves one run's configuration from every layer: command line › environment › repository file › machine file
+ * › default. Pure: the environment, `.env` contents and config files arrive as parameters.
  * @packageDocumentation
  */
 
-import { type Catalog, type ProjectSettings } from "../catalog/catalog";
-import {
-  LLM_SECTION_KEYS,
-  type LlmSectionKey,
-  PROJECT_SETTING_KEYS,
-  type ProjectSettingKey,
-  SKILLS_SECTION_KEYS,
-  type SkillsSectionKey,
-} from "../catalog/schema";
+import { type ConfigFile, type SettingValues, layerSettings } from "../config/config-file";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
-import { CatalogError } from "../util/errors";
 import { isPlainObject } from "../util/json";
-import { show } from "../util/text";
 
 import {
   CONFIG_ALIASES,
@@ -26,23 +16,29 @@ import {
   aliasOf,
   buildConfig,
 } from "./config";
+import {
+  LLM_SECTION_KEYS,
+  type LlmSectionKey,
+  SETTING_KEYS,
+  type SettingKey,
+  SKILLS_SECTION_KEYS,
+  type SkillsSectionKey,
+} from "./schema";
 import { resolveSecret } from "./secret";
 
-/** Scalar catalogue keys → `Config` fields. */
-export const PROJECT_FIELDS: Readonly<
-  Record<Exclude<ProjectSettingKey, "skills" | "llm">, ConfigField>
-> = {
-  language: "reviewLang",
-  verify: "verifyFindings",
-  "local-path": "localPath",
-  exclude: "excludePaths",
-  "max-findings-per-file": "maxFindingsPerFile",
-  "max-file-chars": "maxFileChars",
-  "max-skill-chars": "maxSkillChars",
-  "max-skills-total-chars": "maxSkillsTotalChars",
-  "max-context-chars": "maxContextChars",
-  "max-concurrent-files": "maxConcurrentFiles",
-};
+/** Scalar setting keys → `Config` fields. */
+export const SETTING_FIELDS: Readonly<Record<Exclude<SettingKey, "skills" | "llm">, ConfigField>> =
+  {
+    language: "reviewLang",
+    verify: "verifyFindings",
+    exclude: "excludePaths",
+    "max-findings-per-file": "maxFindingsPerFile",
+    "max-file-chars": "maxFileChars",
+    "max-skill-chars": "maxSkillChars",
+    "max-skills-total-chars": "maxSkillsTotalChars",
+    "max-context-chars": "maxContextChars",
+    "max-concurrent-files": "maxConcurrentFiles",
+  };
 
 /** The `llm` section → model fields. */
 const LLM_FIELDS: Readonly<Record<LlmSectionKey, ConfigField>> = {
@@ -52,27 +48,6 @@ const LLM_FIELDS: Readonly<Record<LlmSectionKey, ConfigField>> = {
   "api-key": "apiKey",
 };
 
-/** The placeholder a shared path may carry for the project's name. */
-const PROJECT_PLACEHOLDER = "{{project}}";
-
-/** Spells `{{project}}` out in a path. */
-function withProjectName(path: string, name: string): string {
-  return path.replaceAll(PROJECT_PLACEHOLDER, () => name);
-}
-
-/** Whether a path names a place on its own: absolute, or under `~`. */
-function isAnchored(path: string): boolean {
-  return path.startsWith("/") || path === "~" || path.startsWith("~/");
-}
-
-/** Anchors a catalogue's relative path to the catalogue's own directory. */
-function besideCatalog(path: string, catalogDirectory: string): string {
-  const trimmed = path.trim();
-  return trimmed === "" || isAnchored(trimmed)
-    ? trimmed
-    : `${catalogDirectory.replace(/\/+$/u, "")}/${trimmed.replace(/^\.\//u, "")}`;
-}
-
 /** The `skills` section → two fields. */
 const SKILLS_FIELDS: Readonly<Record<SkillsSectionKey, ConfigField>> = {
   path: "skillsPath",
@@ -81,6 +56,19 @@ const SKILLS_FIELDS: Readonly<Record<SkillsSectionKey, ConfigField>> = {
 
 /** Fields the file may set as a list but the schema reads as CSV. */
 const LIST_FIELDS: ReadonlySet<ConfigField> = new Set(["excludePaths"]);
+
+/** Whether a path names a place on its own: absolute, or under `~`. */
+function isAnchored(path: string): boolean {
+  return path.startsWith("/") || path === "~" || path.startsWith("~/");
+}
+
+/** Anchors a config file's relative path to the file's own directory. */
+function besideFile(path: string, directory: string): string {
+  const trimmed = path.trim();
+  return trimmed === "" || isAnchored(trimmed)
+    ? trimmed
+    : `${directory.replace(/\/+$/u, "")}/${trimmed.replace(/^\.\//u, "")}`;
+}
 
 /** Name/value pairs from one source; names are matched case-insensitively. */
 export type EnvironmentValues = Readonly<Record<string, string | undefined>>;
@@ -93,23 +81,24 @@ export interface ConfigSources {
   readonly envFiles: readonly EnvironmentValues[];
 }
 
+/** The config files a run found, each `null` when absent. */
+export interface ConfigFiles {
+  readonly machine: ConfigFile | null;
+  readonly repo: ConfigFile | null;
+}
+
 /** What {@link resolveConfig} needs. */
 export interface ResolveOptions extends ConfigOptions {
-  /** The parsed catalogue, or `null` when there is no file. */
-  readonly catalog: Catalog | null;
-  /** The catalogue's directory; the base for every relative path it names. Defaults to `configHome`. */
-  readonly catalogDirectory?: string;
-  /** `--project`, or `null` to pick the only project / run without one. */
-  readonly project: string | null;
+  readonly files: ConfigFiles;
   /** Command-line settings by field; they outrank every other layer. */
   readonly overrides?: Readonly<Partial<Record<ConfigField, unknown>>>;
   readonly sources: ConfigSources;
-  /** Where `config.yaml` and its sibling `.env` live, for messages. */
+  /** Where the machine's `config.yaml` and its sibling `.env` live, for messages. */
   readonly configHome: string;
   readonly logger?: Logger;
 }
 
-/** The uppercased aliases the environment supplies, so a project value cannot shadow them. */
+/** The uppercased aliases the environment supplies, so a file value cannot shadow them. */
 function suppliedAliases(sources: ConfigSources): Set<string> {
   const supplied = new Set<string>();
   for (const source of [sources.processEnv, ...sources.envFiles]) {
@@ -136,45 +125,30 @@ function mergedEnvironment(sources: ConfigSources): Record<string, string> {
   return merged;
 }
 
-/** What {@link projectValues} needs. */
-export interface ProjectValuesOptions {
-  readonly catalog: Catalog;
-  /** `--project`, or `null` to pick the only project. */
-  readonly project: string | null;
-  /** The catalogue's directory; the base for every relative path it names. */
-  readonly catalogDirectory: string;
-  /** The merged environment, for resolving a named secret. */
-  readonly environment: Readonly<Record<string, string>>;
-  /** Where `config.yaml` and its sibling `.env` live, for messages. */
-  readonly configHome: string;
-  /** `false` for a flow that builds no model, so a named key is not demanded. */
-  readonly requiresModel?: boolean;
-  /** Whether the environment already supplies `LLM_API_KEY`, answering the catalogue's name. */
-  readonly hasApiKey?: boolean;
-  readonly logger?: Logger;
-}
-
 /** Field values as they accumulate. */
 type Values = Partial<Record<ConfigField, unknown>>;
 
-/** The scalar settings of a project; lists become CSV. */
-function flattenedSettings(settings: ProjectSettings): Values {
+/** The scalar settings; lists become CSV. */
+function flattenedSettings(settings: SettingValues): Values {
   const values: Values = {};
-  for (const key of PROJECT_SETTING_KEYS) {
+  for (const key of SETTING_KEYS) {
     if (key === "skills" || key === "llm" || !Object.hasOwn(settings, key)) continue;
-    const field = PROJECT_FIELDS[key];
+    const field = SETTING_FIELDS[key];
     const raw = settings[key];
     values[field] = LIST_FIELDS.has(field) && Array.isArray(raw) ? raw.map(String).join(",") : raw;
   }
   return values;
 }
 
-/** The `skills` section as field values. */
-function skillsValues(settings: ProjectSettings): Values {
+/** The `skills` section as field values; a relative `path` is anchored beside the file that set it. */
+function skillsValues(settings: SettingValues, directory: string): Values {
   const skills = isPlainObject(settings.skills) ? settings.skills : {};
   const values: Values = {};
   for (const key of SKILLS_SECTION_KEYS) {
     if (Object.hasOwn(skills, key)) values[SKILLS_FIELDS[key]] = skills[key];
+  }
+  if (typeof values.skillsPath === "string") {
+    values.skillsPath = besideFile(values.skillsPath, directory);
   }
   return values;
 }
@@ -190,7 +164,7 @@ interface SecretContext {
 }
 
 /** The `llm` section as field values; `api-key` is resolved as a secret. */
-function llmValues(settings: ProjectSettings, secret: SecretContext): Values {
+function llmValues(settings: SettingValues, secret: SecretContext): Values {
   const llm = isPlainObject(settings.llm) ? settings.llm : {};
   const values: Values = {};
   for (const key of LLM_SECTION_KEYS) {
@@ -210,89 +184,80 @@ function llmValues(settings: ProjectSettings, secret: SecretContext): Values {
   return values;
 }
 
-/** Spells `{{project}}` out in the paths that may carry it. */
-function withProjectPlaceholders(values: Values, projectName: string): Values {
-  const out: Values = { ...values };
-  for (const field of ["skillsPath", "localPath"] as const) {
-    const path = out[field];
-    if (typeof path === "string") out[field] = withProjectName(path, projectName);
-  }
-  return out;
+/** What {@link fileValues} needs. */
+export interface FileValuesOptions {
+  readonly files: ConfigFiles;
+  /** The merged environment, for resolving a named secret. */
+  readonly environment: Readonly<Record<string, string>>;
+  /** Where the machine's `config.yaml` and its sibling `.env` live, for messages. */
+  readonly configHome: string;
+  /** `false` for a flow that builds no model, so a named key is not demanded. */
+  readonly requiresModel?: boolean;
+  /** Whether the environment already supplies `LLM_API_KEY`, answering the file's name. */
+  readonly hasApiKey?: boolean;
+  readonly logger?: Logger;
 }
 
-/** Anchors the catalogue's relative paths (today: `skills.path`) to its directory. */
-function withAnchoredPaths(values: Values, catalogDirectory: string): Values {
-  const anchored: Values = { ...values };
-  if (typeof anchored.skillsPath === "string") {
-    anchored.skillsPath = besideCatalog(anchored.skillsPath, catalogDirectory);
-  }
-  return anchored;
+/** The directory a config file lives in: the base for its relative paths. */
+function directoryOf(file: ConfigFile): string {
+  const index = file.source.lastIndexOf("/");
+  return index <= 0 ? "." : file.source.slice(0, index);
 }
 
 /**
- * Flattens one project into `Config` field values.
+ * Flattens the config files into `Config` field values, the repository's on top of the machine's.
  *
- * @returns Settings, skills and model values, with placeholders spelled out and paths anchored.
- * @throws {@link CatalogError} when the project is unknown or a required named secret is unset.
+ * @returns Settings, skills and model values, with relative paths anchored beside the file that set them.
+ * @throws {@link ConfigFileError} when a required named secret is unset.
  */
-export function projectValues({
-  catalog,
-  project,
-  catalogDirectory,
+export function fileValues({
+  files,
   environment,
   configHome,
   requiresModel = true,
   hasApiKey = false,
   logger = NULL_LOGGER,
-}: ProjectValuesOptions): Values {
-  const spec = catalog.project(project);
-  const settings = catalog.settingsFor(spec);
-  const merged: Values = {
+}: FileValuesOptions): Values {
+  const settings = layerSettings(files.machine?.values ?? null, files.repo?.values ?? null);
+  // `skills` is repository-only, so its relative path is anchored beside the repository's file.
+  const skillsDirectory = files.repo === null ? configHome : directoryOf(files.repo);
+  const values: Values = {
     ...flattenedSettings(settings),
-    ...skillsValues(settings),
+    ...skillsValues(settings, skillsDirectory),
     ...llmValues(settings, { environment, configHome, requiresModel, hasApiKey }),
   };
-  const values = withAnchoredPaths(withProjectPlaceholders(merged, spec.name), catalogDirectory);
-
-  const where = typeof values.localPath === "string" ? values.localPath : "the current directory";
-  logger.child("config_resolver").info(`Project ${show(spec.name)}: reviewing ${where}.`);
+  const read = [files.machine, files.repo].flatMap((file) => (file === null ? [] : [file.source]));
+  logger.child("config_resolver").info(`Config files, lowest first: ${read.join(" < ")}.`);
   return values;
 }
 
 /**
  * Resolves one run's configuration from every layer.
  *
- * @returns The validated `Config`. Without a catalogue, the environment alone describes the run.
- * @throws {@link CatalogError} when `--project` is given without a catalogue.
+ * @returns The validated `Config`. Without a config file, the environment alone describes the run.
  */
 export function resolveConfig(options: ResolveOptions): Config {
-  const { catalog, project, sources } = options;
+  const { files, sources } = options;
   const environment = mergedEnvironment(sources);
 
-  let fromProject: Partial<Record<ConfigField, unknown>> = {};
-  if (catalog !== null) {
+  let fromFiles: Values = {};
+  if (files.machine !== null || files.repo !== null) {
     const supplied = suppliedAliases(sources);
-    const all = projectValues({
-      catalog,
-      project,
-      catalogDirectory: options.catalogDirectory ?? options.configHome,
+    const all = fileValues({
+      files,
       environment,
       configHome: options.configHome,
       hasApiKey: supplied.has(CONFIG_ALIASES.apiKey),
       ...(options.requiresModel !== undefined && { requiresModel: options.requiresModel }),
       ...(options.logger && { logger: options.logger }),
     });
-    fromProject = Object.fromEntries(
+    fromFiles = Object.fromEntries(
       Object.entries(all).filter(([field]) => !supplied.has(aliasOf(field as ConfigField))),
-    );
-  } else if (project !== null && project !== "") {
-    throw new CatalogError(
-      `--project ${show(project)} needs a catalogue, but none was found at ${options.configHome}/config.yaml. Run 'reviewer init' to create one.`,
     );
   }
 
   const values: Record<string, unknown> = { ...environment };
-  const layered = Object.entries({ ...fromProject, ...options.overrides });
+  const layered = Object.entries({ ...fromFiles, ...options.overrides });
   for (const [field, value] of layered) {
     values[CONFIG_ALIASES[field as ConfigField]] = value;
   }

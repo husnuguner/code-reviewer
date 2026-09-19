@@ -173,12 +173,11 @@ describe("closing whatever the run was given", () => {
 describe("the composition root", () => {
   it("refuses an unwritable --out as the operator's error, not a stack trace", () => {
     // `main` prints one `error:` line and exits 2 for a `ReportFileError`, the
-    // way it does for a catalogue or a git problem; what is checked here is
+    // way it does for a config-file or a git problem; what is checked here is
     // that resolving the reporter is what raises one -- and that it happens
     // when the reporter is built, ahead of the review.
     const path = join(temporaryDirectory(), "no-such-directory", "findings.ndjson");
     const { cradle } = buildContainer({
-      project: null,
       configFile: null,
       logging: resolveLogSettings(),
       overrides: {},

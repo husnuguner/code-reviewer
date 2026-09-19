@@ -205,7 +205,6 @@ describe("--out, whatever the format", () => {
     const directory = mkdtempSync(join(tmpdir(), "reviewer-out-"));
     const path = join(directory, "findings.ndjson");
     const { cradle } = buildContainer({
-      project: null,
       configFile: null,
       logging: resolveLogSettings(),
       overrides: {},

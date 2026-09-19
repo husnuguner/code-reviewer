@@ -1,6 +1,6 @@
 /**
- * The `reviewer` root command: a registry of subcommands (`review` default, `init`, `projects`, `add`,
- * `comment`). `review` holds no hosting token; `comment` builds no model.
+ * The `reviewer` root command: a registry of subcommands (`review` default, `init`, `comment`). `review`
+ * holds no hosting token; `comment` builds no model.
  * @packageDocumentation
  */
 
@@ -17,10 +17,8 @@ import {
   parseCommandLine,
   runCommand,
 } from "./command-line";
-import { ADD } from "./commands/add/command";
 import { COMMENT } from "./commands/comment/command";
 import { INIT } from "./commands/init/command";
-import { PROJECTS } from "./commands/projects/command";
 import { REVIEW } from "./commands/review/command";
 
 export { type Invocation, UsageError, isInvocationOf } from "./command-line";
@@ -29,7 +27,7 @@ export { type Invocation, UsageError, isInvocationOf } from "./command-line";
 const DEFAULT_COMMAND: CliCommand<unknown> = REVIEW;
 
 /** Every command, in `--help` order. */
-const COMMANDS: readonly CliCommand<unknown>[] = [REVIEW, INIT, PROJECTS, ADD, COMMENT];
+const COMMANDS: readonly CliCommand<unknown>[] = [REVIEW, INIT, COMMENT];
 
 /** Attaches one command to the root so its parse hands back a bound invocation. */
 function register(

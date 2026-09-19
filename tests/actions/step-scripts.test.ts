@@ -41,7 +41,6 @@ function reviewEnvironment(overrides: Record<string, string> = {}): Record<strin
     HEAD_REF: "HEAD",
     FAIL_ON: "none",
     OUT_FILE: "code-review.ndjson",
-    PROJECT: "",
     PREVIEW: "false",
     ANNOTATIONS: "false",
     REVIEWER: "/action/src/cli/main.ts",
@@ -116,15 +115,13 @@ describe("actions/review/action.yml, the Review step", () => {
   it("passes the optional flags it is given", () => {
     const step = runStep(run, {
       env: reviewEnvironment({
-        PROJECT: "dfs-backend",
         REVIEWER_CONFIG: ".review/config.yaml",
         ANNOTATIONS: "true",
       }),
       stub: "bun",
     });
 
-    expect(step.calls[0]).toContain("--project");
-    expect(step.calls[0]).toContain("dfs-backend");
+    expect(step.calls[0]).not.toContain("--project");
     expect(step.calls[0]).toContain("--config");
     expect(step.calls[0]).toContain(".review/config.yaml");
     expect(step.exitCode).toBe(0);

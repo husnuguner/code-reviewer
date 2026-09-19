@@ -14,7 +14,7 @@ import { APICallError } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 import { parse as parseYaml } from "yaml";
 
-import { parseCatalog } from "../../../src/core/catalog/parse";
+import { parseConfigFile } from "../../../src/core/config/parse";
 import { resolveConfig } from "../../../src/core/config/resolver";
 import { type LlmSettings } from "../../../src/core/config/settings";
 import { ValueError } from "../../../src/core/util/errors";
@@ -347,8 +347,7 @@ describe("the model provider registry", () => {
     const providers = { names: registry.names(), default: registry.defaultName() };
     const resolve = (environment: Record<string, string>) =>
       resolveConfig({
-        catalog: null,
-        project: null,
+        files: { machine: null, repo: null },
         sources: { processEnv: { LLM_API_KEY: "k", ...environment }, envFiles: [] },
         configHome: "/tmp/none",
         providers,
@@ -378,12 +377,12 @@ describe("the model provider registry", () => {
 });
 
 /**
- * The catalogue is where an operator names a vendor, so the two files that
+ * A config file is where an operator names a vendor, so the two files that
  * show them how (`templates/config.yaml`, which `reviewer init` writes, and
  * `templates/config.example.yaml`, the annotated reference) must name vendors
  * that exist, and what they name must reach that vendor unchanged.
  */
-describe("what the catalogue says about the model", () => {
+describe("what the config files say about the model", () => {
   const ROOT = join(import.meta.dir, "..", "..", "..");
   const registry = builtinModelProviders();
   const providers = { names: registry.names(), default: registry.defaultName() };
@@ -392,28 +391,24 @@ describe("what the catalogue says about the model", () => {
     "%s names only registered vendors, and its llm section reaches one",
     (file) => {
       const path = join(ROOT, file);
-      const catalog = parseCatalog(parseYaml(readFileSync(path, "utf8")), path);
-      for (const project of catalog.projects.values()) {
-        const config = resolveConfig({
-          catalog,
-          project: project.name,
-          sources: { processEnv: { LLM_API_KEY: "k" }, envFiles: [] },
-          configHome: "/tmp/none",
-          providers,
-          cpuCount: 4,
-        });
-        // The merged `llm` section (defaults, then the project's own keys) is
-        // what the run reads: its `provider` is registered, and its `model`
-        // is what the vendor is asked for -- through the registry, the way
-        // the composition root builds it.
-        const llm = catalog.settingsFor(project).llm as { provider?: string; model?: string };
-        expect(config.provider).toBe(llm.provider ?? providers.default);
-        expect(registry.has(config.provider)).toBe(true);
-        expect(config.llmSettings().model).toBe(llm.model ?? null);
-        expect(registry.create(config.provider, config.llmSettings())).toBeInstanceOf(
-          AiSdkChatModel,
-        );
-      }
+      // The example file carries the repository-only `skills` key too, so it is read as a repository's.
+      const home = file.endsWith("config.example.yaml") ? "repo" : "machine";
+      const parsed = parseConfigFile(parseYaml(readFileSync(path, "utf8")), path, home);
+      const config = resolveConfig({
+        files: home === "repo" ? { machine: null, repo: parsed } : { machine: parsed, repo: null },
+        sources: { processEnv: { LLM_API_KEY: "k" }, envFiles: [] },
+        configHome: "/tmp/none",
+        providers,
+        cpuCount: 4,
+      });
+      // The file's `llm` section is what the run reads: its `provider` is
+      // registered, and its `model` is what the vendor is asked for -- through
+      // the registry, the way the composition root builds it.
+      const llm = parsed.values.llm as { provider?: string; model?: string };
+      expect(config.provider).toBe(llm.provider ?? providers.default);
+      expect(registry.has(config.provider)).toBe(true);
+      expect(config.llmSettings().model).toBe(llm.model ?? null);
+      expect(registry.create(config.provider, config.llmSettings())).toBeInstanceOf(AiSdkChatModel);
     },
   );
 });
