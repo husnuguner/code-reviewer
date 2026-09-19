@@ -66,8 +66,8 @@ describe("skill registry", () => {
   // `skills.mappings` gives it one. These scopes pin the registry's
   // behaviour exactly as the fixture was generated.
   const SCOPES = {
-    "medusa-route": ["src/api/**/route.ts", "src/api/**/middlewares.ts"],
-    "medusa-model": ["src/modules/**/models/*.ts"],
+    "http-route": ["src/api/**/route.ts", "src/api/**/middlewares.ts"],
+    "http-model": ["src/modules/**/models/*.ts"],
     bare: ["**/*.ts"],
     spaced: ["**/*.ts"],
     dashes: ["**/*.ts"],

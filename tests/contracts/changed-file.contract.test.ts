@@ -207,14 +207,14 @@ describe("the shared per-file step", () => {
   it("names the skills that were in the prompt", async () => {
     const skills = {
       skillsFor: () => [
-        { name: "medusa-route", globs: ["**"], body: "b", source: "repo", description: "" },
+        { name: "http-route", globs: ["**"], body: "b", source: "repo", description: "" },
       ],
       renderFor: () => "skills-text",
     };
     const { result, reviewer } = await review(new ChangedFile("a.ts", "modified", PATCH), {
       skills,
     });
-    expect(result?.skillNames).toEqual(["medusa-route"]);
+    expect(result?.skillNames).toEqual(["http-route"]);
     expect(reviewer.seen[0]?.skillsText).toBe("skills-text");
   });
 

@@ -18,8 +18,8 @@ import {
 } from "../../../src/providers/skills/sources";
 
 // A skill document carries no scope of its own; the mapping gives it one.
-const ROUTE = "---\nname: medusa-route\n---\nRoute rules.\n";
-const MODEL = "---\nname: medusa-model\n---\nModel rules.\n";
+const ROUTE = "---\nname: http-route\n---\nRoute rules.\n";
+const MODEL = "---\nname: http-model\n---\nModel rules.\n";
 const README = "# Skills\n\nThis directory holds review skills.\n";
 
 /** A throwaway working tree with a nested skills directory. */
@@ -36,7 +36,7 @@ function checkout(): string {
 describe("skills read from the working tree", () => {
   it("reads markdown recursively and skips non-skill documents", async () => {
     const skills = await new WorktreeSkillSource(checkout(), ".review/skills").load();
-    expect(sortedByCodePoint(skills.map((s) => s.name))).toEqual(["medusa-model", "medusa-route"]);
+    expect(sortedByCodePoint(skills.map((s) => s.name))).toEqual(["http-model", "http-route"]);
   });
 
   it("loads nothing for an empty path or a missing directory", async () => {
@@ -53,15 +53,13 @@ describe("skills read from the working tree", () => {
       [new WorktreeSkillSource(checkout(), ".review/skills")],
       undefined,
       {
-        "medusa-route": ["src/api/**/route.ts"],
-        "medusa-model": ["src/modules/**/models/*.ts"],
+        "http-route": ["src/api/**/route.ts"],
+        "http-model": ["src/modules/**/models/*.ts"],
       },
     );
-    expect(registry.skillsFor("src/api/admin/route.ts").map((s) => s.name)).toEqual([
-      "medusa-route",
-    ]);
+    expect(registry.skillsFor("src/api/admin/route.ts").map((s) => s.name)).toEqual(["http-route"]);
     expect(registry.skillsFor("src/modules/a/models/b.ts").map((s) => s.name)).toEqual([
-      "medusa-model",
+      "http-model",
     ]);
     expect(registry.skillsFor("README.md")).toEqual([]);
   });
@@ -80,7 +78,7 @@ describe("skills read from a directory on this machine", () => {
   it("reads the directory itself, wherever it is", async () => {
     const directory = join(checkout(), ".review", "skills");
     const skills = await new DirectorySkillSource(directory).load();
-    expect(sortedByCodePoint(skills.map((s) => s.name))).toEqual(["medusa-model", "medusa-route"]);
+    expect(sortedByCodePoint(skills.map((s) => s.name))).toEqual(["http-model", "http-route"]);
   });
 
   it("loads nothing for an empty or missing directory", async () => {

@@ -60,8 +60,8 @@
               "body": "sec body",
               "example": "",
               "skills": [
-                "medusa-auth",
-                "medusa-route"
+                "http-auth",
+                "http-route"
               ]
             },
             {
@@ -105,7 +105,7 @@
           "unanchored": 1
         }
       },
-      "expected": "\n=== Branch review: feature/x vs main ===\n4 finding(s) across 2 file(s).\nanchors: 1 failed, 1 repaired\n\na.ts  (no line anchor)\n  **[Bug/correctness]** lost body\n\na.ts:2\n  **[Readability]** read body\n\na.ts:9\n  **[Performance]** perf body\n  second line\n  ```\n  fix();\n  more();\n  ```\n\nb.ts:5\n  **[Security]** sec body\n  (skills: medusa-auth, medusa-route)\n\n"
+      "expected": "\n=== Branch review: feature/x vs main ===\n4 finding(s) across 2 file(s).\nanchors: 1 failed, 1 repaired\n\na.ts  (no line anchor)\n  **[Bug/correctness]** lost body\n\na.ts:2\n  **[Readability]** read body\n\na.ts:9\n  **[Performance]** perf body\n  second line\n  ```\n  fix();\n  more();\n  ```\n\nb.ts:5\n  **[Security]** sec body\n  (skills: http-auth, http-route)\n\n"
     },
     {
       "name": "notable_anchors_only_exact_hidden",

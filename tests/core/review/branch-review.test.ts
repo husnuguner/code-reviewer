@@ -202,10 +202,8 @@ describe("what git reports", () => {
 
 describe("skills", () => {
   it("names the skills used for each file on its findings", async () => {
-    const result = await reviewBranch(
-      options(repo(), { skills: new FakeSkills(["medusa-route"]) }),
-    );
-    expect(result.findings.every((f) => f.skills.join(",") === "medusa-route")).toBe(true);
+    const result = await reviewBranch(options(repo(), { skills: new FakeSkills(["http-route"]) }));
+    expect(result.findings.every((f) => f.skills.join(",") === "http-route")).toBe(true);
   });
 
   it("carries no skills without a registry", async () => {

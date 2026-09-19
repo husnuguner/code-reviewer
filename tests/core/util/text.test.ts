@@ -162,7 +162,7 @@ describe("deterministic ordering", () => {
 
 describe("rendering a value for a human", () => {
   it("quotes a string the way an error message wants it", () => {
-    expect(show("medusa")).toBe("'medusa'");
+    expect(show("hello")).toBe("'hello'");
     // Switches quotes rather than escaping, so a path with an apostrophe
     // stays readable in the one line an operator gets.
     expect(show("o'brien")).toBe('"o\'brien"');

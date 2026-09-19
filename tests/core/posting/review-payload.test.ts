@@ -97,7 +97,7 @@ describe("reading a record stream", () => {
 
 describe("building the review", () => {
   it("anchors a finding inline and keeps its skills visible", () => {
-    const stream = ndjson({ type: "finding", ...finding({ skills: ["medusa-route"] }) });
+    const stream = ndjson({ type: "finding", ...finding({ skills: ["http-route"] }) });
     const review = buildReview(parseRecords(stream));
     expect(review.comments).toEqual([
       {
@@ -106,7 +106,7 @@ describe("building the review", () => {
         body: expect.stringContaining("Null check missing.") as string,
       },
     ]);
-    expect(review.comments[0]?.body).toContain("skills: medusa-route");
+    expect(review.comments[0]?.body).toContain("skills: http-route");
   });
 
   it("spans a real multi-line anchor and ignores a fake one", () => {

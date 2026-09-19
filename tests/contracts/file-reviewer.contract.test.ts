@@ -159,7 +159,7 @@ describe("reviewing one file through the model", () => {
       annotatedPatch: "(annotated diff)",
       allowedLines: addedLines(PATCH),
       content: null,
-      skillsText: "## medusa-route\nrules",
+      skillsText: "## http-route\nrules",
     });
     const sent = model.calls[0] ?? [];
     expect(sent.map((m) => [m.role, m.stable ?? false])).toEqual([
@@ -167,9 +167,9 @@ describe("reviewing one file through the model", () => {
       ["user", true],
       ["user", false],
     ]);
-    expect(sent[1]?.content).toBe("## medusa-route\nrules");
+    expect(sent[1]?.content).toBe("## http-route\nrules");
     // The file's text carries no skills of its own any more: they went ahead.
-    expect(sent[2]?.content).not.toContain("medusa-route");
+    expect(sent[2]?.content).not.toContain("http-route");
     expect(sent[2]?.content).toContain("File: a.ts");
   });
 
