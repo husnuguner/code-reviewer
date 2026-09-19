@@ -253,8 +253,9 @@ skills:
     background-jobs: [] # switched off without deleting the file
 ```
 
-Globs use `**` (across directories), `*` (within a segment), `?` and `[...]`
-classes. A skill's frontmatter carries `name` and `description`, nothing about
+Globs use Bun's `Glob` syntax: `**` (across directories), `*` (within a
+segment), `?`, `[...]` classes, `{a,b}` alternatives and `\` to escape a
+wildcard. A skill's frontmatter carries `name` and `description`, nothing about
 paths. A skill mapped nowhere never applies and is warned about; a mapping
 naming a skill that was not loaded is warned about too. A file without valid
 frontmatter (a README in the skills directory) is ignored.

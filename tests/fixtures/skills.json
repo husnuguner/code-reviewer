@@ -231,7 +231,7 @@
         "path": "a/[.ts",
         "pattern": "a/[.ts"
       },
-      "expected": true
+      "expected": false
     },
     {
       "name": "glob/'a/].ts'~'a/[]].ts'",
@@ -407,7 +407,7 @@
         "path": "src/a.ts",
         "pattern": "src/*.{ts,js}"
       },
-      "expected": false
+      "expected": true
     },
     {
       "name": "glob/'src/a.ts'~'src/*.ts*'",
@@ -487,7 +487,7 @@
         "path": "weird\\name.ts",
         "pattern": "weird\\name.ts"
       },
-      "expected": true
+      "expected": false
     },
     {
       "name": "glob/'ünïcode/şehir.ts'~'**/şehir.ts'",
@@ -671,7 +671,7 @@
         "path": "a/b.ts",
         "pattern": "a/[^b].ts"
       },
-      "expected": true
+      "expected": false
     },
     {
       "name": "glob/'a/^.ts'~'a/[^b].ts'",

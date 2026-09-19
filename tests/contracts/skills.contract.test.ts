@@ -11,7 +11,7 @@ import { caseNamed, casesUnder, loadFixture } from "./fixtures";
 
 const cases = loadFixture("skills");
 
-describe("glob matching with PurePosixPath.full_match semantics", () => {
+describe("glob matching with Bun.Glob semantics", () => {
   it.each(casesUnder<{ path: string; pattern: string }, boolean>(cases, "glob"))(
     "$name",
     ({ input, expected }) => {
@@ -20,7 +20,7 @@ describe("glob matching with PurePosixPath.full_match semantics", () => {
   );
 });
 
-describe("glob literals JavaScript treats differently from Python", () => {
+describe("glob hyphens: literal outside a class, a range inside one", () => {
   it("matches a hyphen outside a character class", () => {
     expect(
       isGlobMatch("src/modules/x/y-module-service.ts", "src/modules/**/*-module-service.ts"),
