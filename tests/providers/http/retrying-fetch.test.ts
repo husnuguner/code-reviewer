@@ -14,6 +14,7 @@ import { type ITimer } from "../../../src/lib/resilience/index";
 import { type FetchLike } from "../../../src/providers/http/fetch-like";
 import { serverAskedForMs } from "../../../src/providers/http/retry-after-backoff";
 import { withRetry } from "../../../src/providers/http/retrying-fetch";
+import { causeCode } from "../../../src/providers/http/transient-failures";
 import { recordingLogger } from "../../helpers/logging";
 
 const URL_ = new URL("https://api.github.com/repos/a/b/pulls/1/reviews");
@@ -79,6 +80,14 @@ function answer(status: number, headers: Record<string, string> = {}): Response 
 /** A rejected `fetch`, as undici spells one. */
 function networkError(code?: string): TypeError {
   return new TypeError("fetch failed", code === undefined ? undefined : { cause: { code } });
+}
+
+/** A rejected `fetch`, as Bun spells one: the code on the error itself, and no `cause`. */
+function bunNetworkError(code: string): TypeError {
+  return Object.assign(
+    new TypeError("Unable to connect. Is the computer able to access the url?"),
+    { code },
+  );
 }
 
 describe("an idempotent request", () => {
@@ -186,6 +195,28 @@ describe("a POST, which posting a review twice would be the cost of", () => {
   it("is surrendered on a reset socket, which proves nothing either way", async () => {
     for (const code of ["ECONNRESET", "UND_ERR_SOCKET", undefined]) {
       const recorder = scripted([networkError(code), answer(200)]);
+      const attempt = wrap(recorder)(URL_, { method: "POST" });
+      await expect(attempt).rejects.toBeInstanceOf(TypeError);
+      expect({ code, calls: recorder.calls() }).toEqual({ code, calls: 1 });
+    }
+  });
+
+  it("is repeated for a pre-connection failure in Bun's spelling as well", async () => {
+    // Bun's `fetch` carries the code on the error itself, not under `cause`;
+    // read only the undici shape, a refused POST was surrendered for no reason.
+    for (const code of ["ConnectionRefused", "FailedToOpenSocket", "ENOTFOUND"]) {
+      const recorder = scripted([bunNetworkError(code), answer(200)]);
+      await wrap(recorder)(URL_, { method: "POST" });
+      expect({ code, calls: recorder.calls() }).toEqual({ code, calls: 2 });
+    }
+  });
+
+  it("is surrendered on Bun's post-connection failures, the same ambiguity again", async () => {
+    // `ECONNRESET` is how Bun spells a connection closed after the request
+    // went out; `ETIMEDOUT` is its socket timeout, which may fire while the
+    // answer is awaited.
+    for (const code of ["ECONNRESET", "ETIMEDOUT"]) {
+      const recorder = scripted([bunNetworkError(code), answer(200)]);
       const attempt = wrap(recorder)(URL_, { method: "POST" });
       await expect(attempt).rejects.toBeInstanceOf(TypeError);
       expect({ code, calls: recorder.calls() }).toEqual({ code, calls: 1 });
@@ -346,11 +377,35 @@ describe("what it says while doing it", () => {
     expect(lines[0]).toContain("failed (ENOTFOUND)");
   });
 
+  it("names a Bun-shaped failure by its code too, not by its long message", async () => {
+    const lines: string[] = [];
+    const recorder = scripted([bunNetworkError("ConnectionRefused"), answer(200)]);
+    await wrap(recorder, { logger: recordingLogger(lines) })(URL_, { method: "GET" });
+    expect(lines[0]).toContain("failed (ConnectionRefused)");
+  });
+
   it("says nothing at all when nothing had to be repeated", async () => {
     const lines: string[] = [];
     const recorder = scripted([answer(200)]);
     await wrap(recorder, { logger: recordingLogger(lines) })(URL_, { method: "GET" });
     expect(lines).toEqual([]);
+  });
+});
+
+describe("the code a failed fetch carries", () => {
+  it("is read from the error itself or from underneath it, whichever runtime threw", () => {
+    expect(causeCode(bunNetworkError("ConnectionRefused"))).toBe("ConnectionRefused");
+    expect(causeCode(networkError("ECONNREFUSED"))).toBe("ECONNREFUSED");
+    expect(causeCode(networkError())).toBeNull();
+    expect(causeCode(new TypeError("fetch failed", { cause: { code: 7 } }))).toBeNull();
+    expect(causeCode(null)).toBeNull();
+  });
+
+  it("prefers the error's own code when both shapes are present", () => {
+    const both = Object.assign(new TypeError("fetch failed", { cause: { code: "ECONNRESET" } }), {
+      code: "ConnectionRefused",
+    });
+    expect(causeCode(both)).toBe("ConnectionRefused");
   });
 });
 
