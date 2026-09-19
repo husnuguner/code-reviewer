@@ -26,7 +26,7 @@ export interface LoggingArguments {
 }
 
 /**
- * Settles the logging flags against the process environment and whether stderr is a terminal.
+ * Settles the logging flags against the process environment.
  *
  * @remarks Resolved here, at the edge, so the container receives a decision and stays testable.
  */
@@ -37,10 +37,10 @@ export function logSettingsFrom(arguments_: LoggingArguments): LogSettings {
       quiet: arguments_.quiet,
       level: arguments_.logLevel,
       format: arguments_.logFormat,
-      // Only the negation is a statement; `true` leaves colour to the terminal.
+      // Only the negation is a statement; `true` leaves colour to picocolors.
       color: arguments_.color ? null : false,
     },
-    { environment: process.env, isTTY: process.stderr.isTTY },
+    { environment: process.env },
   );
 }
 

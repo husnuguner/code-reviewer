@@ -195,12 +195,14 @@ parenthesis after `tokens in` is what a cached prefix saved (`cached`) or cost
 | `REVIEWER_LOG_LEVEL`                 | The default level; `-v`, `-q` and `--log-level` outrank it.                                          |
 | `REVIEWER_LOG_FORMAT`                | The default format, as `--log-format`.                                                               |
 | `NO_COLOR`                           | Set to anything non-empty: no colour. Outranks `FORCE_COLOR` ([no-color.org](https://no-color.org)). |
-| `FORCE_COLOR`, `CLICOLOR_FORCE`      | Colour even when stderr is not a terminal.                                                           |
-| `TERM=dumb`, `CLICOLOR=0`            | No colour.                                                                                           |
+| `FORCE_COLOR`                        | Set to anything non-empty (even `0`): colour even when stdout is not a terminal.                     |
+| `TERM=dumb`                          | No colour off a terminal that cannot show it.                                                        |
+| `CI`                                 | Set to anything non-empty: colour, as CI logs render ANSI.                                           |
 | `RUNNER_DEBUG`, `ACTIONS_STEP_DEBUG` | Set by a GitHub job re-run with debug logging: the run switches to DEBUG by itself.                  |
 | `GITHUB_ACTIONS`                     | Makes `--log-format auto` resolve to `github`.                                                       |
 
-Colour is decided against **stderr**, not stdout.
+Colour is [picocolors](https://github.com/alexeyraspopov/picocolors)' verdict, decided once at
+start-up against **stdout** (Windows always colours). `--no-color` outranks all of it.
 
 ### Secrets never reach a log line
 

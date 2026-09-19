@@ -1,8 +1,11 @@
 /**
- * Resolves what the operator asked of the logs (level, format, colour) from flags, environment and
- * terminal, once, in one pure function. Follows clig.dev, no-color.org and the GitHub runner's conventions.
+ * Resolves what the operator asked of the logs (level, format, colour) from flags and environment,
+ * once, in one pure function. Follows clig.dev and the GitHub runner's conventions; colour support
+ * is picocolors' verdict (no-color.org, `FORCE_COLOR`, `TERM=dumb`, TTY, CI).
  * @packageDocumentation
  */
+
+import pc from "picocolors";
 
 /** How much a run says, loudest first; `silent` says nothing. */
 export const LOG_LEVELS = ["debug", "info", "warn", "error", "silent"] as const;
@@ -99,21 +102,16 @@ export function parseFormatName(value: string | undefined): LogFormatChoice | nu
 }
 
 /**
- * Whether log lines may be coloured.
+ * Whether log lines may be coloured: only `text`, the flag if given, else `isColorSupported`.
  *
- * @remarks Only `text` is coloured. Flag › `NO_COLOR` › `FORCE_COLOR`/`CLICOLOR_FORCE` › `TERM=dumb`/`CLICOLOR=0` › TTY.
+ * @remarks `isColorSupported` defaults to picocolors' constant of that name, fixed once at import from the
+ * process: `!(NO_COLOR || argv has --no-color) && (FORCE_COLOR || argv has --color || win32 ||
+ * (stdout.isTTY && TERM !== "dumb") || CI)`, every variable read as a non-empty string (so
+ * `FORCE_COLOR=0` forces colour on and `NO_COLOR=""` is unset). `--no-color` on argv is thus
+ * honoured twice, by commander through the flag and by picocolors; the flag is consulted first.
  */
-function shouldColor(
-  flags: LoggingFlags,
-  environment: Environment,
-  format: LogFormat,
-  isTTY: boolean,
-): boolean {
-  if (format !== "text") return false;
-  if (flags.color != null) return flags.color;
-  if (isSet(environment["NO_COLOR"])) return false;
-  if (isTruthy(environment["FORCE_COLOR"]) || isTruthy(environment["CLICOLOR_FORCE"])) return true;
-  return environment["TERM"] === "dumb" || environment["CLICOLOR"] === "0" ? false : isTTY;
+function shouldColor(flags: LoggingFlags, format: LogFormat, isColorSupported: boolean): boolean {
+  return format === "text" ? (flags.color ?? isColorSupported) : false;
 }
 
 /** Variable names that say they hold a credential. */
@@ -150,11 +148,11 @@ export function redact(text: string, secrets: readonly string[]): string {
 /** Options for {@link resolveLogSettings}. */
 export interface ResolveOptions {
   readonly environment?: Environment;
-  /** Whether the log's own stream is a terminal; `false` when not stated. */
-  readonly isTTY?: boolean;
+  /** Whether the process may colour its output; picocolors' verdict when not stated. */
+  readonly isColorSupported?: boolean;
 }
 
-/** Settles every logging question from the flags, the environment and the terminal. */
+/** Settles every logging question from the flags, the environment and the process's colour support. */
 export function resolveLogSettings(
   flags: LoggingFlags = {},
   options: ResolveOptions = {},
@@ -165,7 +163,7 @@ export function resolveLogSettings(
   return {
     level,
     format,
-    color: shouldColor(flags, environment, format, options.isTTY ?? false),
+    color: shouldColor(flags, format, options.isColorSupported ?? pc.isColorSupported),
     detailed: level === "debug",
     secrets: secretsFrom(environment),
   };

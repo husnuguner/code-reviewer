@@ -4,7 +4,7 @@
  * the others.
  */
 
-import { describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import {
   type LoggingFlags,
@@ -15,13 +15,13 @@ import {
   secretsFrom,
 } from "../../../src/providers/logging/log-settings";
 
-/** Settings from flags and an environment, off a terminal unless said. */
+/** Settings from flags and an environment, without colour support unless said. */
 function settle(
   flags: LoggingFlags = {},
   environment: Record<string, string | undefined> = {},
-  isTTY = false,
+  isColorSupported = false,
 ): ReturnType<typeof resolveLogSettings> {
-  return resolveLogSettings(flags, { environment, isTTY });
+  return resolveLogSettings(flags, { environment, isColorSupported });
 }
 
 describe("how loud a run is", () => {
@@ -89,36 +89,68 @@ describe("the shape of a line", () => {
 });
 
 describe("colour", () => {
-  it("follows the terminal when nothing says otherwise", () => {
+  it("follows what the process supports when nothing says otherwise", () => {
     expect(settle({}, {}, true).color).toBe(true);
     expect(settle({}, {}, false).color).toBe(false);
   });
 
-  it("honours NO_COLOR whatever its value, and TERM=dumb", () => {
-    expect(settle({}, { NO_COLOR: "1" }, true).color).toBe(false);
-    expect(settle({}, { NO_COLOR: "0" }, true).color).toBe(false);
-    // Empty is unset, which is what no-color.org asks for.
-    expect(settle({}, { NO_COLOR: "" }, true).color).toBe(true);
-    expect(settle({}, { TERM: "dumb" }, true).color).toBe(false);
-  });
-
-  it("lets FORCE_COLOR and CLICOLOR_FORCE demand colour off a terminal", () => {
-    expect(settle({}, { FORCE_COLOR: "1" }, false).color).toBe(true);
-    expect(settle({}, { CLICOLOR_FORCE: "1" }, false).color).toBe(true);
-    expect(settle({}, { FORCE_COLOR: "0" }, false).color).toBe(false);
-  });
-
-  it("keeps NO_COLOR above FORCE_COLOR, so a preference is not overridden by a build image", () => {
-    expect(settle({}, { NO_COLOR: "1", FORCE_COLOR: "1" }, true).color).toBe(false);
-  });
-
-  it("lets --no-color outrank every variable, including FORCE_COLOR", () => {
-    expect(settle({ color: false }, { FORCE_COLOR: "1" }, true).color).toBe(false);
+  it("lets --no-color and --color outrank what the process supports", () => {
+    expect(settle({ color: false }, {}, true).color).toBe(false);
+    expect(settle({ color: true }, {}, false).color).toBe(true);
   });
 
   it("never colours a shape that is parsed or coloured by someone else", () => {
-    expect(settle({ format: "json" }, { FORCE_COLOR: "1" }, true).color).toBe(false);
-    expect(settle({ format: "github" }, { FORCE_COLOR: "1" }, true).color).toBe(false);
+    expect(settle({ format: "json" }, {}, true).color).toBe(false);
+    expect(settle({ format: "github" }, {}, true).color).toBe(false);
+  });
+});
+
+/** The variables picocolors reads; cleared before each case and restored after. */
+const COLOR_VARIABLES = ["NO_COLOR", "FORCE_COLOR", "TERM", "CI"] as const;
+
+describe("picocolors' verdict, which colour follows by default", () => {
+  const saved: Partial<Record<(typeof COLOR_VARIABLES)[number], string | undefined>> = {};
+  let generation = 0;
+
+  beforeEach(() => {
+    for (const name of COLOR_VARIABLES) {
+      saved[name] = process.env[name];
+      Reflect.deleteProperty(process.env, name);
+    }
+  });
+
+  afterEach(() => {
+    for (const name of COLOR_VARIABLES) {
+      if (saved[name] === undefined) Reflect.deleteProperty(process.env, name);
+      else process.env[name] = saved[name];
+    }
+  });
+
+  /** Whether colour is on for `process.env` as it stands, picocolors re-evaluated by a cache-busting import. */
+  async function isColored(environment: Record<string, string>): Promise<boolean> {
+    Object.assign(process.env, environment);
+    const fresh = (await import(`picocolors?case=${++generation}`)) as {
+      default: { isColorSupported: boolean };
+    };
+    return settle({}, {}, fresh.default.isColorSupported).color;
+  }
+
+  it("honours NO_COLOR when non-empty, above FORCE_COLOR", async () => {
+    expect(await isColored({ NO_COLOR: "1", FORCE_COLOR: "1" })).toBe(false);
+    expect(await isColored({ NO_COLOR: "0", FORCE_COLOR: "1" })).toBe(false);
+    // Empty is unset, which is what no-color.org asks for.
+    expect(await isColored({ NO_COLOR: "", FORCE_COLOR: "1" })).toBe(true);
+  });
+
+  it("reads any non-empty FORCE_COLOR, even 0, as forcing colour on", async () => {
+    expect(await isColored({ FORCE_COLOR: "1" })).toBe(true);
+    expect(await isColored({ FORCE_COLOR: "0" })).toBe(true);
+  });
+
+  it("refuses a dumb terminal unless colour is forced or the run is on CI", async () => {
+    expect(await isColored({ TERM: "dumb" })).toBe(false);
+    expect(await isColored({ TERM: "dumb", FORCE_COLOR: "1" })).toBe(true);
+    expect(await isColored({ TERM: "dumb", CI: "true" })).toBe(true);
   });
 });
 
