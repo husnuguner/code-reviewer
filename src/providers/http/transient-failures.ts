@@ -67,10 +67,12 @@ export function isNetworkFailure(error: unknown): boolean {
 
 /** Whether the response is a rate limit: `429`, or GitHub's `403` with rate-limit headers. */
 export function isRateLimited(response: Response): boolean {
-  if (response.status === 429) return true;
-  return response.status === 403
-    ? response.headers.has("retry-after") || response.headers.get("x-ratelimit-remaining") === "0"
-    : false;
+  return (
+    response.status === 429 ||
+    (response.status === 403 &&
+      (response.headers.has("retry-after") ||
+        response.headers.get("x-ratelimit-remaining") === "0"))
+  );
 }
 
 /** Whether this response, for this method, is worth retrying. */

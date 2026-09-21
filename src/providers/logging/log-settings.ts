@@ -96,7 +96,7 @@ function resolveFormat(flags: LoggingFlags, environment: Environment): LogFormat
  * honoured twice, by commander through the flag and by picocolors; the flag is consulted first.
  */
 function shouldColor(flags: LoggingFlags, format: LogFormat, isColorSupported: boolean): boolean {
-  return format === "text" ? (flags.color ?? isColorSupported) : false;
+  return format === "text" && (flags.color ?? isColorSupported);
 }
 
 /** Variable names that say they hold a credential. */

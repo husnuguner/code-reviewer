@@ -37,7 +37,8 @@ export function logSettingsFrom(arguments_: LoggingArguments): LogSettings {
       quiet: arguments_.quiet,
       level: arguments_.logLevel,
       format: arguments_.logFormat,
-      // Only the negation is a statement; `true` leaves colour to picocolors.
+      // Only the negation is a statement; `true` leaves colour to picocolors (`null`).
+      // eslint-disable-next-line unicorn/prefer-logical-operator-over-ternary -- `color && null` would read as a slip, not a tri-state
       color: arguments_.color ? null : false,
     },
     { environment: process.env },

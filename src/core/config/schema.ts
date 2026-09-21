@@ -79,7 +79,8 @@ function addFormats(): void {
         if (typeof value !== "string") return value;
         const word = value.trim().toLowerCase();
         if (TRUE_WORDS.has(word)) return true;
-        return FALSE_WORDS.has(word) ? false : value;
+        if (FALSE_WORDS.has(word)) return false;
+        return value; // left as written, for validate() to name
       },
       validate: (value: unknown) => {
         if (typeof value !== "boolean") {

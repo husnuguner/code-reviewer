@@ -62,7 +62,8 @@ export function hasContent(value: unknown): boolean {
   if (typeof value === "boolean") return value;
   if (typeof value === "bigint") return value !== 0n;
   if (Array.isArray(value)) return value.length > 0;
-  return typeof value === "object" ? Object.keys(value).length > 0 : true;
+  // What is left: an object, empty or not; or a function/symbol, which is something.
+  return typeof value !== "object" || Object.keys(value).length > 0;
 }
 
 /** The value's type name as a message should spell it: `null`, `array`, or `typeof`. */
