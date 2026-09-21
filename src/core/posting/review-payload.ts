@@ -56,7 +56,7 @@ const MAX_LISTED = 50;
 /**
  * Reads a record stream.
  *
- * @param text - NDJSON as `reviewer --out` wrote it.
+ * @param text - NDJSON as `reviewer review --out` wrote it.
  * @returns The findings, the summary, and how many lines could not be read. A bad line costs only itself.
  */
 export function parseRecords(text: string): ReviewRecords {

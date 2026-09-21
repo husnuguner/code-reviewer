@@ -92,7 +92,7 @@ export const COMMENT = defineCommand<CommentArguments & { logging: LogSettings }
   name: "comment",
   description:
     "Post the findings of a review run to a pull request, reading the NDJSON that " +
-    "`reviewer --out` writes. Calls no language model: this is the half of the split that " +
+    "`reviewer review --out` writes. Calls no language model: this is the half of the split that " +
     "holds a repository token.",
   options: commentOptions,
   arguments: (options) => ({

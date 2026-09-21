@@ -114,7 +114,7 @@ Keys are kebab-case. Everything under `settings` may be set in either file;
 | `settings.llm.provider`           | `local`          |    ✓    |  ✓   | `local` (any OpenAI-compatible endpoint) or `claude` (Anthropic).                           |
 | `settings.llm.model`              | provider default |    ✓    |  ✓   | `local` → `gpt-4.1`, `claude` → `claude-sonnet-4-6`.                                        |
 | `settings.llm.base-url`           | —                |    ✓    |  ✓   | Endpoint URL including the API prefix, e.g. `http://localhost:11434/v1`.                    |
-| `settings.llm.api-key`            | _required_       |    ✓    |  ✓   | The **name** of an environment variable, or the key itself. See below.                      |
+| `settings.llm.api-key`            | _required_       |    ✓    |  ✓   | The key, or `${VARIABLE}` to read it from the environment. See below.                       |
 | `settings.language`               | `en`             |    ✓    |  ✓   | Language of each finding's body. Accepted: `en`, `tr`; anything else falls back to English. |
 | `settings.verify`                 | `true`           |    ✓    |  ✓   | Run the [verification pass](how-it-works.md#verification).                                  |
 | `settings.exclude`                | `[]`             |    ✓    |  ✓   | Globs never sent to the model; a list or one comma-separated string.                        |

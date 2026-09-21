@@ -22,9 +22,9 @@ scope, without calling a model.
 | exit 2, `... declares schema version N ... up to 1`                | A config file from a newer build; upgrade the reviewer or lower `version`.                                                     |
 | The model is not the one I set                                     | Two files and the environment speak; `-v` logs which files were read, and `LLM_*` variables (a CI input among them) beat both. |
 | exit 3                                                             | Not an error: a finding matched `--fail-on`.                                                                                   |
-| exit 1 with a usage message                                        | Bad flag; see `--help`.                                                                                                        |
+| exit 1 with a usage message                                        | Bad flag, or no command named (`reviewer review …`); see `--help`.                                                             |
 | `No merge-base for 'X' and 'Y'`                                    | Unrelated refs, or a shallow clone. CI needs `fetch-depth: 0`.                                                                 |
-| `0 changed file(s)` with work in `git status`                      | The work is not committed, or the branch is already merged. Use `reviewer --uncommitted`.                                      |
+| `0 changed file(s)` with work in `git status`                      | The work is not committed, or the branch is already merged. Use `reviewer review --uncommitted`.                               |
 | 0 findings and `files_reviewed=0`                                  | Everything was skipped; `--preview` says why, per file.                                                                        |
 | `Skill ... has no entry in the project's skills.mappings`          | A loaded skill nobody scoped. Map it, or switch it off with `[]`.                                                              |
 | `Skill mapping for '…' matches no loaded skill`                    | The mapping names a skill that is not in `skills.path`; almost always a typo.                                                  |
@@ -34,7 +34,7 @@ scope, without calling a model.
 The changed-file set is the three-dot diff `base...branch`. If your work is
 still uncommitted, or the branch has already been merged into the base so the
 merge-base _is_ `HEAD`, that diff is empty and the run correctly reports
-`0 changed file(s)`. `git status` shows the work; `reviewer --uncommitted`
+`0 changed file(s)`. `git status` shows the work; `reviewer review --uncommitted`
 reviews it.
 
 ## A run is slow

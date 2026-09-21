@@ -162,7 +162,7 @@ info: Loaded 3 skill(s): api-conventions, error-handling, tests
 warn: No merge-base for 'HEAD' and 'main'; comparing against 'main' directly.
 
 $ reviewer review --base main -v
-11:12:59.341  debug  reviewer.config: Read repo config file .review/config.yaml: 3 setting(s).
+11:12:59.341  debug  reviewer.config: Read repo config file .review/config.yaml: 3 key(s).
 11:12:59.342  info   reviewer.skills: Loaded 3 skill(s): api-conventions, error-handling, tests
 11:13:41.902  debug  reviewer.review.file_reviewer: src/api/users/handler.ts: the model answered in 77.7s (attempt 1 of 2; 9,445 tokens in (7,650 cached), 2,410 out, 31 tokens/s).
 11:14:00.017  debug  reviewer.review.verify: src/api/users/handler.ts: the verifier answered in 18.1s for 9 finding(s) (3,210 tokens in, 181 out, 10 tokens/s).
@@ -186,7 +186,7 @@ parenthesis after `tokens in` is what a cached prefix saved (`cached`) or cost
 | -------- | ---------------------------------------------------------------------- | ------------------------------------- |
 | `text`   | `warn: No merge-base for 'HEAD' and 'main'`                            | A person.                             |
 | `json`   | `{"level":"warn","name":"reviewer.review","msg":"…","time":"2026-…Z"}` | A log collector; one record per line. |
-| `github` | `::debug::Read repo config file .review/config.yaml: 3 setting(s).`    | A GitHub runner.                      |
+| `github` | `::debug::Read repo config file .review/config.yaml: 3 key(s).`        | A GitHub runner.                      |
 
 ### Environment
 
