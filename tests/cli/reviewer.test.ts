@@ -115,6 +115,19 @@ describe("the review flags", () => {
     expect(review(["--no-verify"]).verify).toBe(false);
   });
 
+  it("refuse --uncommitted beside --base or --branch, which it would otherwise silently ignore", () => {
+    // One question or the other: the working tree against HEAD, or a branch
+    // against a base. A base named with --uncommitted was never used, and a
+    // flag that does nothing is a flag the operator misread.
+    expect(() => parseArguments(["--uncommitted", "--base", "develop"])).toThrow(UsageError);
+    expect(() => parseArguments(["--uncommitted", "--base", "develop"])).toThrow(
+      /'--uncommitted' cannot be used with option '--base/u,
+    );
+    expect(() => parseArguments(["--uncommitted", "--branch", "feat"])).toThrow(UsageError);
+    // The defaults of --base and --branch do not count as naming them.
+    expect(review(["--uncommitted"]).base).toBe("main");
+  });
+
   it("name the config file, the language, the skills and the exclusions", () => {
     const arguments_ = review([
       "--config",

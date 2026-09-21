@@ -49,10 +49,15 @@ function reviewOptions(command: Command): Command {
         DEFAULT_BRANCH,
       )
       .option("--base <name>", "Base branch to compare against.", "main")
-      .option(
-        "--uncommitted",
-        "Review the working tree against HEAD instead of a branch: staged and unstaged changes to tracked files, plus untracked files git is not ignoring. --base and --branch are not used.",
-        false,
+      // One question or the other: the working tree against HEAD, or a branch against a base. Naming
+      // a base or branch alongside --uncommitted is refused rather than ignored; the defaults do not count.
+      .addOption(
+        new Option(
+          "--uncommitted",
+          "Review the working tree against HEAD instead of a branch: staged and unstaged changes to tracked files, plus untracked files git is not ignoring. Cannot be combined with --base or --branch.",
+        )
+          .default(false)
+          .conflicts(["base", "branch"]),
       )
       .option(
         "--format <format>",
