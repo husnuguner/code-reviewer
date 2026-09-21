@@ -222,7 +222,6 @@ whole run.
 | `REVIEW_EXCLUDE_PATHS`          | —                | Comma-separated globs skipped entirely.                                     |
 | `REVIEW_MAX_FINDINGS_PER_FILE`  | `3`              | Per-file cap; `0` = uncapped.                                               |
 | `REVIEW_SKILLS_PATH`            | —                | Directory of review skills inside the reviewed repo; empty disables skills. |
-| `REVIEW_SKILL_DEFAULTS`         | `[]`             | The repository's `skills.defaults` as JSON.                                 |
 | `REVIEW_SKILL_MAPPINGS`         | `{}`             | The repository's `skills.mappings` as JSON.                                 |
 | `REVIEW_VERIFY`                 | `true`           | Run the verification pass. `--no-verify` wins.                              |
 | `REVIEW_MAX_SKILL_CHARS`        | `10000`          | Per-skill body cap.                                                         |
@@ -233,8 +232,13 @@ whole run.
 | `REVIEWER_CONFIG`               | —                | A repository `config.yaml` in place of the nearest `.review/config.yaml`.   |
 | `XDG_CONFIG_HOME`               | `~/.config`      | Base of the machine's config home.                                          |
 
-Logging variables (`REVIEWER_LOG_LEVEL`, `REVIEWER_LOG_FORMAT`, `NO_COLOR`,
-…) are listed in [Output → Logging](output.md#logging).
+`skills.defaults` has no variable: a repository's baseline is part of that
+repository and is written in its `config.yaml` only.
+
+Logging is set by flags (`-v`, `-q`, `--log-level`, `--log-format`,
+`--no-color`), not by any `REVIEWER_*` variable; the conventions other tools
+own (`NO_COLOR`, `RUNNER_DEBUG`, …) are listed in
+[Output → Logging](output.md#logging).
 
 ## Standing instructions
 

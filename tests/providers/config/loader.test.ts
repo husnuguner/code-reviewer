@@ -469,18 +469,16 @@ describe("the environment and the command line", () => {
     expect(config.skillSettings().mappings).toEqual({ models: ["a/**"] });
   });
 
-  it("reads the skills baseline from the environment as JSON, one bare string becoming a list", () => {
+  it("reads no skills baseline from the environment: skills.defaults is the repository file's alone", () => {
+    // A repository's baseline is part of that repository; a shell variable of a would-be name is
+    // not a setting the schema knows, and is ignored like any other.
     const s = scratchWithBoth();
     const config = load(s, {
       env: cleanEnvironment(s, {
-        REVIEW_SKILL_DEFAULTS:
-          '[{"globs": [" **/*.ts ", ""], "skills": ["typescript-base"]}, {"globs": "**/*", "skills": "house-rules"}]',
+        REVIEW_SKILL_DEFAULTS: '[{"globs": "**/*.ts", "skills": "typescript-base"}]',
       }),
     });
-    expect(config.skillSettings().defaults).toEqual([
-      { globs: ["**/*.ts"], skills: ["typescript-base"] },
-      { globs: ["**/*"], skills: ["house-rules"] },
-    ]);
+    expect(config.skillSettings().defaults).toEqual([]);
   });
 
   it("refuses a skills map that is not an object", () => {

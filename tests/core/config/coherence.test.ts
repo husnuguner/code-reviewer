@@ -11,10 +11,16 @@ import { type Config, buildConfig } from "../../../src/core/config/config";
 
 const PROVIDERS = { names: ["local", "claude"], default: "local" };
 
-/** A configuration from the environment alone: no file, no disk. */
-function configOf(environment: Record<string, string>): Config {
+/** A configuration from the environment and, when given, one repository file's values: no disk. */
+function configOf(
+  environment: Record<string, string>,
+  repoValues?: Record<string, unknown>,
+): Config {
   return buildConfig({
     environment: { LLM_API_KEY: "k", ...environment },
+    ...(repoValues && {
+      files: [{ source: ".review/config.yaml", home: "repo", values: repoValues }],
+    }),
     providers: PROVIDERS,
     cpuCount: 4,
   });
@@ -40,10 +46,11 @@ describe("a configuration that agrees with itself", () => {
 
 describe("the skills tables against the skills path", () => {
   it("warns when the tables scope skills that no path loads", () => {
-    const config = configOf({
-      REVIEW_SKILL_MAPPINGS: '{"api-rules": ["src/api/**"]}',
-      REVIEW_SKILL_DEFAULTS: '[{"globs": "**/*.ts", "skills": "typescript-base"}]',
-    });
+    // The baseline has no environment alias; it comes from the repository's file.
+    const config = configOf(
+      { REVIEW_SKILL_MAPPINGS: '{"api-rules": ["src/api/**"]}' },
+      { skills: { defaults: [{ globs: "**/*.ts", skills: "typescript-base" }] } },
+    );
     const [line] = configIncoherences(config);
     expect(line).toContain("skills.path is empty");
     expect(line).toContain("scope 2 entries");

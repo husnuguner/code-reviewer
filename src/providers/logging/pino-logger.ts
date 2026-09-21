@@ -21,8 +21,6 @@ export {
   type LogLevel,
   type LogSettings,
   type LoggingFlags,
-  parseFormatName,
-  parseLogLevel,
   resolveLogSettings,
 } from "./log-settings";
 

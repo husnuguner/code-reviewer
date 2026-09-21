@@ -225,7 +225,6 @@ runs:
         set_if_given REVIEW_EXCLUDE_PATHS "${IN_EXCLUDE}"
         set_if_given REVIEW_MAX_FINDINGS_PER_FILE "${IN_MAX_FINDINGS}"
         set_if_given REVIEW_VERIFY "${IN_VERIFY}"
-        set_if_given REVIEWER_LOG_LEVEL "${IN_LOG_LEVEL}"
         args=(
           review
           --base "origin/${BASE_REF}"
@@ -233,6 +232,9 @@ runs:
           --fail-on "${FAIL_ON}"
         )
         args+=(--log-format github)
+        if [ -n "${IN_LOG_LEVEL}" ]; then
+          args+=(--log-level "${IN_LOG_LEVEL}")
+        fi
         if [ "${PREVIEW}" = "true" ]; then
           args+=(--preview)
         elif [ "${ANNOTATIONS}" = "false" ]; then

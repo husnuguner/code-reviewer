@@ -118,6 +118,7 @@ describe("actions/review/action.yml, the Review step", () => {
       env: reviewEnvironment({
         REVIEWER_CONFIG: ".review/config.yaml",
         ANNOTATIONS: "true",
+        IN_LOG_LEVEL: "debug",
       }),
       stub: "bun",
     });
@@ -125,6 +126,9 @@ describe("actions/review/action.yml, the Review step", () => {
     expect(step.calls[0]).not.toContain("--project");
     expect(step.calls[0]).toContain("--config");
     expect(step.calls[0]).toContain(".review/config.yaml");
+    // The level travels as a flag: the reviewer reads no REVIEWER_LOG_LEVEL.
+    expect(step.calls[0]).toContain("--log-level");
+    expect(step.calls[0]).toContain("debug");
     expect(step.exitCode).toBe(0);
   });
 

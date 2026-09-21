@@ -9,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import {
   type LoggingFlags,
   SECRET_MASK,
-  parseLogLevel,
   redact,
   resolveLogSettings,
   secretsFrom,
@@ -43,13 +42,9 @@ describe("how loud a run is", () => {
     expect(settle({ verbose: true, quiet: true }).level).toBe("warn");
   });
 
-  it("falls back to REVIEWER_LOG_LEVEL, which a flag still outranks", () => {
-    expect(settle({}, { REVIEWER_LOG_LEVEL: "error" }).level).toBe("error");
-    expect(settle({ verbose: true }, { REVIEWER_LOG_LEVEL: "error" }).level).toBe("debug");
-  });
-
-  it("ignores a level nobody defined rather than failing the run", () => {
-    expect(settle({}, { REVIEWER_LOG_LEVEL: "chatty" }).level).toBe("info");
+  it("reads no REVIEWER_LOG_LEVEL: the level is the command line's to say", () => {
+    // A variable of that name is not a convention this tool owns; it is ignored like any other.
+    expect(settle({}, { REVIEWER_LOG_LEVEL: "error" }).level).toBe("info");
   });
 
   it("takes a runner's own debug switch as the request for debug that it is", () => {
@@ -66,25 +61,19 @@ describe("how loud a run is", () => {
   });
 });
 
-describe("parseLogLevel", () => {
-  it("forgives case and accepts the name a Python-shaped log uses", () => {
-    expect(parseLogLevel(" DEBUG ")).toBe("debug");
-    expect(parseLogLevel("warning")).toBe("warn");
-    expect(parseLogLevel("")).toBeNull();
-    expect(parseLogLevel(undefined)).toBeNull();
-  });
-});
-
 describe("the shape of a line", () => {
   it("is text off a runner and workflow commands on one", () => {
     expect(settle().format).toBe("text");
     expect(settle({}, { GITHUB_ACTIONS: "true" }).format).toBe("github");
   });
 
-  it("lets the flag and the environment override what was inferred", () => {
+  it("lets the flag override what was inferred", () => {
     expect(settle({ format: "json" }, { GITHUB_ACTIONS: "true" }).format).toBe("json");
-    expect(settle({}, { REVIEWER_LOG_FORMAT: "json" }).format).toBe("json");
     expect(settle({ format: "text" }, { GITHUB_ACTIONS: "true" }).format).toBe("text");
+  });
+
+  it("reads no REVIEWER_LOG_FORMAT: the shape is the flag's or the surroundings'", () => {
+    expect(settle({}, { REVIEWER_LOG_FORMAT: "json" }).format).toBe("text");
   });
 });
 

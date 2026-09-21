@@ -142,25 +142,14 @@ function addFormats(): void {
       },
     },
     /**
-     * The baseline: a list of `{ globs, skills }` entries; from the environment, that list as JSON text. A
-     * list and not an object keyed by glob because convict reads a key as a dotted path and every useful
-     * glob carries a dot.
+     * The baseline: a list of `{ globs, skills }` entries. A list and not an object keyed by glob because
+     * convict reads a key as a dotted path and every useful glob carries a dot. Read from the files only:
+     * a repository's baseline is part of that repository, not of the shell that runs the reviewer.
      */
     "skill-defaults": {
-      coerce: (value: unknown) => {
-        if (typeof value !== "string") return value;
-        if (value.trim() === "") return [];
-        try {
-          return JSON.parse(value) as unknown;
-        } catch {
-          return value;
-        }
-      },
       validate: (value: unknown) => {
         if (!Array.isArray(value)) {
-          throw new TypeError(
-            "must be a list of { globs, skills } entries (as JSON, from the environment)",
-          );
+          throw new TypeError("must be a list of { globs, skills } entries");
         }
         for (const [index, entry] of value.entries()) validateDefault(entry, index);
       },
@@ -213,31 +202,8 @@ function addProviderFormat(providers: RegisteredProviders): void {
 
 // -- the schema ---------------------------------------------------------------
 
-/** Field → the environment alias that overrides it, for documentation and messages. */
-export const CONFIG_ALIASES = {
-  provider: "LLM_PROVIDER",
-  model: "LLM_MODEL",
-  apiKey: "LLM_API_KEY",
-  baseUrl: "LLM_BASE_URL",
-  reviewLang: "REVIEW_LANG",
-  verifyFindings: "REVIEW_VERIFY",
-  excludeGlobs: "REVIEW_EXCLUDE_PATHS",
-  maxFindingsPerFile: "REVIEW_MAX_FINDINGS_PER_FILE",
-  maxFileChars: "REVIEW_MAX_FILE_CHARS",
-  maxSkillChars: "REVIEW_MAX_SKILL_CHARS",
-  maxSkillsTotalChars: "REVIEW_MAX_SKILLS_TOTAL_CHARS",
-  maxContextChars: "REVIEW_MAX_CONTEXT_CHARS",
-  maxConcurrentFiles: "REVIEW_MAX_CONCURRENT_FILES",
-  skillsPath: "REVIEW_SKILLS_PATH",
-  skillDefaults: "REVIEW_SKILL_DEFAULTS",
-  skillMappings: "REVIEW_SKILL_MAPPINGS",
-} as const;
-
-/** A setting's field name on the `Config` facade. */
-export type ConfigField = keyof typeof CONFIG_ALIASES;
-
 /** Field → its path in the file (`settings.llm.api-key`), for `set()` and for messages. */
-export const FIELD_PATHS: Readonly<Record<ConfigField, string>> = {
+export const FIELD_PATHS = {
   provider: "settings.llm.provider",
   model: "settings.llm.model",
   apiKey: "settings.llm.api-key",
@@ -254,7 +220,32 @@ export const FIELD_PATHS: Readonly<Record<ConfigField, string>> = {
   skillsPath: "skills.path",
   skillDefaults: "skills.defaults",
   skillMappings: "skills.mappings",
-};
+} as const;
+
+/** A setting's field name on the `Config` facade. */
+export type ConfigField = keyof typeof FIELD_PATHS;
+
+/**
+ * Field → the environment alias that overrides it, for documentation and messages. Not every field has
+ * one: `skills.defaults` is a repository's own table, set in its file and nowhere else.
+ */
+export const CONFIG_ALIASES = {
+  provider: "LLM_PROVIDER",
+  model: "LLM_MODEL",
+  apiKey: "LLM_API_KEY",
+  baseUrl: "LLM_BASE_URL",
+  reviewLang: "REVIEW_LANG",
+  verifyFindings: "REVIEW_VERIFY",
+  excludeGlobs: "REVIEW_EXCLUDE_PATHS",
+  maxFindingsPerFile: "REVIEW_MAX_FINDINGS_PER_FILE",
+  maxFileChars: "REVIEW_MAX_FILE_CHARS",
+  maxSkillChars: "REVIEW_MAX_SKILL_CHARS",
+  maxSkillsTotalChars: "REVIEW_MAX_SKILLS_TOTAL_CHARS",
+  maxContextChars: "REVIEW_MAX_CONTEXT_CHARS",
+  maxConcurrentFiles: "REVIEW_MAX_CONCURRENT_FILES",
+  skillsPath: "REVIEW_SKILLS_PATH",
+  skillMappings: "REVIEW_SKILL_MAPPINGS",
+} as const satisfies Partial<Record<ConfigField, string>>;
 
 /**
  * The schema, for one run's registered providers.
@@ -361,10 +352,9 @@ export function configSchema(providers: RegisteredProviders): convict.Schema<Con
         env: CONFIG_ALIASES.skillsPath,
       },
       defaults: {
-        doc: "Glob → the skills every file it matches is held to, whatever mappings add; from the environment, as JSON.",
+        doc: "Glob → the skills every file it matches is held to, whatever mappings add. From the files only; no environment alias.",
         format: "skill-defaults",
         default: [],
-        env: CONFIG_ALIASES.skillDefaults,
       },
       mappings: {
         doc: "Skill name → the globs only it reviews, added to what defaults gave it; from the environment, as JSON.",

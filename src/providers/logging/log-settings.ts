@@ -1,7 +1,9 @@
 /**
  * Resolves what the operator asked of the logs (level, format, colour) from flags and environment,
- * once, in one pure function. Follows clig.dev and the GitHub runner's conventions; colour support
- * is picocolors' verdict (no-color.org, `FORCE_COLOR`, `TERM=dumb`, TTY, CI).
+ * once, in one pure function. The flags are the reviewer's own; the environment is only read for the
+ * conventions other tools own (`RUNNER_DEBUG`, `GITHUB_ACTIONS`, no-color.org) -- there is no
+ * `REVIEWER_LOG_*` variable, so a log setting is always visible on the command line that asked for it.
+ * Colour support is picocolors' verdict (no-color.org, `FORCE_COLOR`, `TERM=dumb`, TTY, CI).
  * @packageDocumentation
  */
 
@@ -62,21 +64,11 @@ function isTruthy(value: string | undefined): boolean {
   return folded !== "0" && folded !== "false";
 }
 
-/** Parses a level name (`warning` reads as `warn`), or `null`. */
-export function parseLogLevel(value: string | undefined): LogLevel | null {
-  if (!isSet(value)) return null;
-  const folded = value.trim().toLowerCase();
-  const name = folded === "warning" ? "warn" : folded;
-  return (LOG_LEVELS as readonly string[]).includes(name) ? (name as LogLevel) : null;
-}
-
-/** The threshold: `--log-level` › `-q` › `-v` › `REVIEWER_LOG_LEVEL` › `RUNNER_DEBUG` › `info`. */
+/** The threshold: `--log-level` › `-q` › `-v` › `RUNNER_DEBUG` › `info`. */
 function resolveLevel(flags: LoggingFlags, environment: Environment): LogLevel {
   if (flags.level != null) return flags.level;
   if (flags.quiet === true) return "warn";
   if (flags.verbose === true) return "debug";
-  const fromEnvironment = parseLogLevel(environment["REVIEWER_LOG_LEVEL"]);
-  if (fromEnvironment !== null) return fromEnvironment;
   return isTruthy(environment["RUNNER_DEBUG"]) || isTruthy(environment["ACTIONS_STEP_DEBUG"])
     ? "debug"
     : "info";
@@ -87,18 +79,11 @@ function isGitHubRunner(environment: Environment): boolean {
   return isTruthy(environment["GITHUB_ACTIONS"]);
 }
 
-/** The line shape: the flag, else `REVIEWER_LOG_FORMAT`, else `auto` resolved by the surroundings. */
+/** The line shape: the flag, else `auto` resolved by the surroundings. */
 function resolveFormat(flags: LoggingFlags, environment: Environment): LogFormat {
-  const asked = flags.format ?? parseFormatName(environment["REVIEWER_LOG_FORMAT"]) ?? "auto";
+  const asked = flags.format ?? "auto";
   if (asked !== "auto") return asked;
   return isGitHubRunner(environment) ? "github" : "text";
-}
-
-/** Parses a format name, or `null`. */
-export function parseFormatName(value: string | undefined): LogFormatChoice | null {
-  if (!isSet(value)) return null;
-  const folded = value.trim().toLowerCase();
-  return (LOG_FORMATS as readonly string[]).includes(folded) ? (folded as LogFormatChoice) : null;
 }
 
 /**

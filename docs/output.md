@@ -193,10 +193,12 @@ parenthesis after `tokens in` is what a cached prefix saved (`cached`) or cost
 
 ### Environment
 
+The reviewer defines no logging variable of its own: level and format are the
+flags' to say, so a run's log settings are always visible on the command line
+that asked for them. What it reads are the conventions other tools own:
+
 | Variable                             | Effect                                                                                               |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `REVIEWER_LOG_LEVEL`                 | The default level; `-v`, `-q` and `--log-level` outrank it.                                          |
-| `REVIEWER_LOG_FORMAT`                | The default format, as `--log-format`.                                                               |
 | `NO_COLOR`                           | Set to anything non-empty: no colour. Outranks `FORCE_COLOR` ([no-color.org](https://no-color.org)). |
 | `FORCE_COLOR`                        | Set to anything non-empty (even `0`): colour even when stdout is not a terminal.                     |
 | `TERM=dumb`                          | No colour off a terminal that cannot show it.                                                        |

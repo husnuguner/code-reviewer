@@ -131,7 +131,9 @@ export function buildConfig(options: BuildConfigOptions): Config {
   for (const file of files) config.load(file.values);
   const overrides = Object.entries(options.overrides ?? {});
   for (const [field, value] of overrides) {
-    if (value !== undefined) config.set(FIELD_PATHS[field as ConfigField], value);
+    // Widened to `string`: the override is untyped, so convict's loose `set` is the one meant.
+    const path: string = FIELD_PATHS[field as ConfigField];
+    if (value !== undefined) config.set(path, value);
   }
   try {
     // The report is thrown, not printed: a run's stderr is the logger's, and the error carries every line.

@@ -72,7 +72,7 @@ function loggingOptions(program: Command): Command {
     )
     .option(
       "--log-level <level>",
-      `How much reaches stderr: ${LOG_LEVELS.join(", ")}. Outranks -v and -q; falls back to REVIEWER_LOG_LEVEL.`,
+      `How much reaches stderr: ${LOG_LEVELS.join(", ")}. Outranks -v and -q.`,
       choice(LOG_LEVELS, { label: "levels", caseInsensitive: true }),
     )
     .option(
