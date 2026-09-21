@@ -50,7 +50,6 @@ settings:
     - "src/scripts/**"
 
   max-findings-per-file: 3 # the most severe survive; 0 = no cap. Default 3
-  max-file-chars: 8000 # per-file cap on diff + content. Default 8000
   max-skill-chars: 10000 # per-skill body cap. Default 10000
   max-skills-total-chars: 18000 # cap for one file's skills block. Default 18000
   # Cap on the pre-context (imported signatures, related diffs) read from the

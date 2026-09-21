@@ -34,7 +34,6 @@ export interface ConfigShape {
     verify: boolean;
     exclude: string[];
     "max-findings-per-file": number;
-    "max-file-chars": number;
     "max-skill-chars": number;
     "max-skills-total-chars": number;
     "max-context-chars": number;
@@ -213,7 +212,6 @@ export const FIELD_PATHS = {
   verifyFindings: "settings.verify",
   excludeGlobs: "settings.exclude",
   maxFindingsPerFile: "settings.max-findings-per-file",
-  maxFileChars: "settings.max-file-chars",
   maxSkillChars: "settings.max-skill-chars",
   maxSkillsTotalChars: "settings.max-skills-total-chars",
   maxContextChars: "settings.max-context-chars",
@@ -239,7 +237,6 @@ export const CONFIG_ALIASES = {
   verifyFindings: "REVIEW_VERIFY",
   excludeGlobs: "REVIEW_EXCLUDE_PATHS",
   maxFindingsPerFile: "REVIEW_MAX_FINDINGS_PER_FILE",
-  maxFileChars: "REVIEW_MAX_FILE_CHARS",
   maxSkillChars: "REVIEW_MAX_SKILL_CHARS",
   maxSkillsTotalChars: "REVIEW_MAX_SKILLS_TOTAL_CHARS",
   maxContextChars: "REVIEW_MAX_CONTEXT_CHARS",
@@ -313,12 +310,6 @@ export function configSchema(providers: RegisteredProviders): convict.Schema<Con
         format: "count",
         default: 3,
         env: CONFIG_ALIASES.maxFindingsPerFile,
-      },
-      "max-file-chars": {
-        doc: "Per-file cap on the diff shown; a longer diff is cut at a hunk boundary.",
-        format: "count",
-        default: 8000,
-        env: CONFIG_ALIASES.maxFileChars,
       },
       "max-skill-chars": {
         doc: "Cap on one skill's body.",

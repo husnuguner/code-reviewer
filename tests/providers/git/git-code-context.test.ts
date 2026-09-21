@@ -216,7 +216,7 @@ describe("pre-context in a branch review", () => {
       base: "main",
       reviewer,
       git: new LocalGitReader(root),
-      settings: { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: 100_000 },
+      settings: DEFAULT_FILE_REVIEW_SETTINGS,
       skills: null,
       maxConcurrentFiles: 2,
       codeContext: new GitCodeContext(root, HEAD),

@@ -104,10 +104,9 @@ kind and handing an instance to the registry, never by editing the core.
   reads the flat config; `fileReviewSettings()`, `reportPolicy()` and
   `concurrency()` hand it typed setting groups.
 - **Nothing is dropped in silence.** Refuted, capped, mislabelled, unanchored,
-  failed, truncated, skipped: each is counted or listed.
+  failed, skipped: each is counted or listed.
 - **What the model may comment on is what the model was shown.** The annotated
-  diff, the allowed lines and the anchor haystack are one value (`patchView`),
-  cut together at a hunk boundary.
+  diff, the allowed lines and the anchor haystack are one value (`patchView`).
 - **Reporting is the end of the line.** The reviewer writes to a stream; what
   becomes a comment is decided downstream, by something that cannot call a
   model.
@@ -126,6 +125,11 @@ The choices with a real trade-off behind them, and what was given up:
   contents and the pre-context then come from one tree, and cannot disagree
   about which commit is under review. Given up: reviewing a ref without
   checking it out.
+- **A file is reviewed whole or not at all.** Nothing shown to the model is
+  cut: an oversized diff is skipped as `too_large` and said so, never trimmed
+  to fit. Given up: a partial review of a very large file; the ceiling is a
+  constant, not a setting, because a cap the project can raise is a cap the
+  project will raise until the review is half a review.
 - **Skills belong to the reviewed repository, not to the reviewer.** They are
   that repository's conventions, versioned with its code. The reviewer ships
   none.

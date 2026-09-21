@@ -119,7 +119,6 @@ Keys are kebab-case. Everything under `settings` may be set in either file;
 | `settings.verify`                 | `true`           |    ✓    |  ✓   | Run the [verification pass](how-it-works.md#verification).                                  |
 | `settings.exclude`                | `[]`             |    ✓    |  ✓   | Globs never sent to the model; a list or one comma-separated string.                        |
 | `settings.max-findings-per-file`  | `3`              |    ✓    |  ✓   | Per-file cap; the most severe survive. `0` = no cap.                                        |
-| `settings.max-file-chars`         | `8000`           |    ✓    |  ✓   | Per-file cap on the diff shown; a longer diff is cut at a hunk boundary.                    |
 | `settings.max-skill-chars`        | `10000`          |    ✓    |  ✓   | Cap on one skill's body.                                                                    |
 | `settings.max-skills-total-chars` | `18000`          |    ✓    |  ✓   | Cap on one file's whole skills block.                                                       |
 | `settings.max-context-chars`      | `6000`           |    ✓    |  ✓   | Cap on the [pre-context](how-it-works.md#pre-context) block; `0` switches it off.           |
@@ -227,7 +226,6 @@ whole run.
 | `REVIEW_MAX_SKILL_CHARS`        | `10000`          | Per-skill body cap.                                                         |
 | `REVIEW_MAX_SKILLS_TOTAL_CHARS` | `18000`          | Per-file cap for the whole skills block.                                    |
 | `REVIEW_MAX_CONTEXT_CHARS`      | `6000`           | Cap on the pre-context block; `0` switches it off.                          |
-| `REVIEW_MAX_FILE_CHARS`         | `8000`           | Per-file diff cap.                                                          |
 | `REVIEW_MAX_CONCURRENT_FILES`   | CPU-derived      | Simultaneous file reviews.                                                  |
 | `REVIEWER_CONFIG`               | —                | A repository `config.yaml` in place of the nearest `.review/config.yaml`.   |
 | `XDG_CONFIG_HOME`               | `~/.config`      | Base of the machine's config home.                                          |

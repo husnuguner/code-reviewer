@@ -104,11 +104,10 @@ describe("what git reports", () => {
     expect(files[0]?.patch).toContain("+three = 3");
   });
 
-  it("reads a changed file's current text, capped", async () => {
+  it("reads a changed file's current text, whole", async () => {
     const reader = new LocalGitReader(repo());
-    expect(await reader.readFile("a.py", 100_000)).toBe("one = 1\ntwo = 2\nthree = 3\n");
-    expect(await reader.readFile("a.py", 7)).toBe("one = 1");
-    expect(await reader.readFile("gone.py", 100)).toBeNull();
+    expect(await reader.readFile("a.py")).toBe("one = 1\ntwo = 2\nthree = 3\n");
+    expect(await reader.readFile("gone.py")).toBeNull();
   });
 
   it("reports no files when the branch is the base", async () => {

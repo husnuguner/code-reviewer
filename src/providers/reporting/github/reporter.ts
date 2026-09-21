@@ -73,7 +73,6 @@ export function summaryFor(
     lines.push(
       `<sub>${summary.files_reviewed} of ${summary.files_changed} changed file(s) reviewed against \`${summary.base}\`` +
         (summary.failed > 0 ? `; ${summary.failed} could not be reviewed` : "") +
-        (summary.truncated > 0 ? `; ${summary.truncated} with a diff shown in part only` : "") +
         (summary.refuted > 0 ? `; ${summary.refuted} finding(s) refuted by verification` : "") +
         (summary.capped > 0 ? `; ${summary.capped} withheld by max-findings-per-file` : "") +
         (summary.mislabelled > 0

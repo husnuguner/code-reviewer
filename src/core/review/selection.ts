@@ -9,15 +9,23 @@ import { type NewSideEntry, addedLines, patchView } from "../diff/patch-view";
 import { ChangedFile, type ChangedFileRecord, SKIP_STATUSES } from "../domain/changed-file";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { isGlobMatch } from "../skills/glob";
-import { asText } from "../util/text";
+import { asText, formatCount } from "../util/text";
 
 import { isBinaryPatch, isSecretPath } from "./guards";
+
+/**
+ * A safety ceiling on the annotated diff, in code points: a generated or minified file that nobody
+ * excluded is skipped, not sent to a model (~50k tokens). A constant, not a setting; the fix is
+ * `exclude` or splitting the change.
+ */
+export const MAX_DIFF_CHARS = 200_000;
 
 /**
  * Why a file is, or is not, reviewed. `none` means reviewed.
  *
  * @remarks Asked in {@link GATES} order; `secret` and `binary` are settled before any configuration.
- * There is no `too_large`: an oversized diff is cut, not dropped, and recorded as `truncated`.
+ * A diff is never cut: one over {@link MAX_DIFF_CHARS} is skipped as `too_large`, and that is the last
+ * question asked, so a huge credential file still reads `secret`.
  */
 export type SelectionReason =
   | "none"
@@ -32,7 +40,9 @@ export type SelectionReason =
   /** Matched an `exclude` glob. */
   | "excluded"
   /** No added lines to anchor a comment to. */
-  | "no_added_lines";
+  | "no_added_lines"
+  /** The annotated diff is over {@link MAX_DIFF_CHARS}. */
+  | "too_large";
 
 /** Every reason but `none`. */
 export type SkipReason = Exclude<SelectionReason, "none">;
@@ -41,16 +51,14 @@ export type SkipReason = Exclude<SelectionReason, "none">;
 interface DecisionFields {
   readonly path: string;
   readonly status: string;
-  /** The line-numbered diff the model is shown, already cut to the cap. */
+  /** The line-numbered diff the model is shown, whole. */
   readonly annotatedPatch: string;
-  /** New-file line numbers a finding may anchor to, as shown. */
+  /** New-file line numbers a finding may anchor to. */
   readonly addedLines: ReadonlySet<number>;
-  /** The shown diff's new side: the anchor haystack. */
+  /** The diff's new side: the anchor haystack. */
   readonly newSide: readonly NewSideEntry[];
-  /** Length of the annotated diff before the cap. */
+  /** Length of the annotated diff in code points; for `too_large`, the size that was refused. */
   readonly diffChars: number;
-  /** Whether `annotatedPatch` is a cut-down view. */
-  readonly truncated: boolean;
 }
 
 /** A decision to review. */
@@ -74,7 +82,7 @@ export function isSelected(decision: FileDecision): decision is SelectedFile {
   return decision.reason === "none";
 }
 
-function skipped(path: string, status: string, reason: SkipReason): SkippedFile {
+function skipped(path: string, status: string, reason: SkipReason, diffChars = 0): SkippedFile {
   return {
     path,
     status,
@@ -83,14 +91,13 @@ function skipped(path: string, status: string, reason: SkipReason): SkippedFile 
     annotatedPatch: "",
     addedLines: new Set(),
     newSide: [],
-    diffChars: 0,
-    truncated: false,
+    diffChars,
   };
 }
 
 /** One skip question asked of a parsed file. */
 interface SelectionGate {
-  readonly reason: Exclude<SkipReason, "no_patch" | "no_added_lines">;
+  readonly reason: Exclude<SkipReason, "no_patch" | "no_added_lines" | "too_large">;
   readonly rejects: (file: ChangedFile, settings: FileReviewSettings) => boolean;
 }
 
@@ -105,9 +112,12 @@ const GATES: readonly SelectionGate[] = [
   },
 ];
 
-/** The decision to review, with the diff the model will be shown. */
-function reviewed(file: ChangedFile, settings: FileReviewSettings): SelectedFile {
-  const view = patchView(file.patch, settings.maxFileChars);
+/** The decision on a file every gate passed: reviewed whole, or `too_large`. */
+function reviewed(file: ChangedFile): FileDecision {
+  const view = patchView(file.patch);
+  if (view.chars > MAX_DIFF_CHARS) {
+    return skipped(file.path, file.status, "too_large", view.chars);
+  }
   return {
     path: file.path,
     status: file.status,
@@ -117,7 +127,6 @@ function reviewed(file: ChangedFile, settings: FileReviewSettings): SelectedFile
     addedLines: view.addedLines,
     newSide: view.newSide,
     diffChars: view.chars,
-    truncated: view.clipped,
   };
 }
 
@@ -125,7 +134,7 @@ function reviewed(file: ChangedFile, settings: FileReviewSettings): SelectedFile
  * Decides one changed file. Pure.
  *
  * @param entry - The record as the diff source reported it.
- * @returns The decision. A skipped file's diff is never parsed.
+ * @returns The decision. A file a gate skipped never has its diff parsed.
  */
 export function decideFile(entry: ChangedFileRecord, settings: FileReviewSettings): FileDecision {
   const file = ChangedFile.fromEntry(entry);
@@ -138,7 +147,7 @@ export function decideFile(entry: ChangedFileRecord, settings: FileReviewSetting
 
   return addedLines(file.patch).size === 0
     ? skipped(file.path, file.status, "no_added_lines")
-    : reviewed(file, settings);
+    : reviewed(file);
 }
 
 /** Decides a whole change set, in the order it was reported. */
@@ -176,20 +185,31 @@ const SKIP_LABELS: Readonly<Record<SkipReason, string>> = {
   status: "status",
   excluded: "excluded",
   no_added_lines: "no added lines",
+  too_large: "too large",
 };
 
-/** Why this file was skipped, in a few words; `status` names the status. */
+/** Why this file was skipped, in a few words; `status` names the status, `too_large` the size and the fix. */
 export function skipDetail(decision: SkippedFile): string {
   const label = SKIP_LABELS[decision.reason];
-  return decision.reason === "status" ? `${label}=${decision.status}` : label;
+  if (decision.reason === "status") return `${label}=${decision.status}`;
+  return decision.reason === "too_large"
+    ? `${label} (${formatCount(decision.diffChars)} chars; exclude it or split the change)`
+    : label;
 }
 
-/** Logs one line per skipped file: a withheld credential at INFO, everything else at DEBUG. */
+/**
+ * Logs one line per skipped file. A withheld credential and a `too_large` file at INFO, because the
+ * operator must act on them; everything else at DEBUG.
+ */
 export function logSkips(decisions: readonly FileDecision[], logger?: Logger): void {
   const log = (logger ?? NULL_LOGGER).child("review.selection");
   for (const decision of skippedFiles(decisions)) {
     if (decision.reason === "secret") {
       log.info(`skip ${decision.path}: names a credential file; its contents are never sent.`);
+      continue;
+    }
+    if (decision.reason === "too_large") {
+      log.info(`skip ${decision.path} (${skipDetail(decision)}).`);
       continue;
     }
     log.debug(`skip ${decision.path} (${skipDetail(decision)}).`);

@@ -35,7 +35,7 @@ const MACHINE = {
   settings: {
     llm: { provider: "claude", model: "claude-opus-5", "api-key": "${ANTHROPIC_API_KEY}" },
     language: "en",
-    "max-file-chars": 4000,
+    "max-context-chars": 4000,
     "max-concurrent-files": 3,
   },
 };
@@ -351,10 +351,10 @@ describe("the repository's file on top of the machine's", () => {
     expect(config.excludeGlobs).toEqual(["**/*.spec.ts", "**/migrations/*.ts"]);
     expect(config.maxFindingsPerFile).toBe(2);
     // Said only in the machine's.
-    expect(config.maxFileChars).toBe(4000);
+    expect(config.maxContextChars).toBe(4000);
     expect(config.concurrency()).toEqual({ files: 3 });
     // Said in neither: the built-in default.
-    expect(config.maxContextChars).toBe(6000);
+    expect(config.maxSkillChars).toBe(10_000);
   });
 
   it("merges llm key by key, so a repository pins the model and keeps the machine's provider and key", () => {
@@ -521,12 +521,12 @@ describe("the environment and the command line", () => {
     // The repository's .env sits beside its config.yaml, so it is found only when that file is.
     const s = scratchWithBoth();
     writeFileSync(join(s.deep, ".env"), "REVIEW_LANG=en\nREVIEW_SKILLS_PATH=from-cwd\n", "utf8");
-    writeFileSync(s.machineEnvFile, "REVIEW_LANG=tr\nREVIEW_MAX_FILE_CHARS=1\n", "utf8");
-    touch(s.repoEnvFile, "REVIEW_MAX_FILE_CHARS=2\n");
+    writeFileSync(s.machineEnvFile, "REVIEW_LANG=tr\nREVIEW_MAX_CONTEXT_CHARS=1\n", "utf8");
+    touch(s.repoEnvFile, "REVIEW_MAX_CONTEXT_CHARS=2\n");
     const config = load(s, { env: environmentOnly(s) });
     expect(config.reviewLang).toBe("Turkish");
     expect(config.skillsPath).toBe("from-cwd");
-    expect(config.maxFileChars).toBe(2);
+    expect(config.maxContextChars).toBe(2);
   });
 
   it("lets the real environment override every .env file", () => {
@@ -561,7 +561,6 @@ function snapshot(config: Config): Record<string, unknown> {
     model_name: config.model,
     api_key: config.apiKey,
     base_url: config.baseUrl,
-    max_file_chars: config.maxFileChars,
     skills_path: config.skillsPath,
     max_skill_chars: config.maxSkillChars,
     max_skills_total_chars: config.maxSkillsTotalChars,
@@ -643,7 +642,6 @@ describe("the setting groups", () => {
       REVIEW_LANG: "tr",
       REVIEW_EXCLUDE_PATHS: "docs/**, *.lock",
       REVIEW_MAX_FINDINGS_PER_FILE: "3",
-      REVIEW_MAX_FILE_CHARS: "4000",
       REVIEW_MAX_SKILL_CHARS: "1000",
       REVIEW_MAX_SKILLS_TOTAL_CHARS: "2000",
       REVIEW_MAX_CONCURRENT_FILES: "5",
@@ -655,7 +653,6 @@ describe("the setting groups", () => {
     expect(config.fileReviewSettings(["*.min.js"])).toEqual({
       exclude: ["docs/**", "*.lock", "*.min.js"],
       language: "Turkish",
-      maxFileChars: 4000,
       maxSkillChars: 1000,
       maxSkillsTotalChars: 2000,
       maxContextChars: 6000,

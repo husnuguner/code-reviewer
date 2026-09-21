@@ -411,6 +411,21 @@
       }
     },
     {
+      "name": "build/max_file_chars_removed",
+      "input": {
+        "machine": {
+          "settings": {
+            "max-file-chars": 8000
+          }
+        },
+        "repo": null
+      },
+      "expected": {
+        "error": "ConfigError",
+        "message": "configuration param 'settings.max-file-chars' not declared in the schema"
+      }
+    },
+    {
       "name": "build/skills_inside_settings",
       "input": {
         "machine": null,

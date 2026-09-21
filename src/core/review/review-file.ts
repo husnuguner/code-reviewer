@@ -12,7 +12,7 @@ import { type Finding } from "../domain/finding";
 import { type CodeContext } from "../ports/code-context";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { type RenderedSkills, type SkillMatcher } from "../ports/skill-matcher";
-import { show } from "../util/text";
+import { countCodePoints, formatCount, show } from "../util/text";
 import { type Clock, SYSTEM_CLOCK, seconds, stopwatch } from "../util/timing";
 
 export { DEFAULT_FILE_REVIEW_SETTINGS, type FileReviewSettings } from "../config/settings";
@@ -26,6 +26,13 @@ import { type VerifyInput, type Verdict, keepAll } from "./verify";
 
 /** Reads a file's full text for prompt context: `(path, status) → text`, or `null` when unavailable. */
 export type ContentReader = (path: string, status: string) => Promise<string | null>;
+
+/**
+ * A safety ceiling on the file text attached as context, in code points. A file over it is attached
+ * whole or not at all, never as a prefix: a head-of-file cut hides the code around the change. A
+ * constant, not a setting.
+ */
+export const MAX_CONTENT_CHARS = 200_000;
 
 /** What the per-file step needs from the model-backed reviewer. */
 export interface PerFileReviewer {
@@ -110,12 +117,7 @@ export async function reviewChangedFile(
   const now = options.now ?? SYSTEM_CLOCK;
 
   const { verdict, timings, skillNames } = await limit(async () => {
-    // An added file's patch is the whole file; content is fetched only for modified files.
-    const readContent = options.readContent ?? null;
-    const content =
-      readContent !== null && file.status !== "added"
-        ? await readContent(file.path, file.status)
-        : null;
+    const content = await contentOf(file, options, log);
     const rendered: RenderedSkills =
       skills === null
         ? { text: "", applied: [] }
@@ -159,6 +161,29 @@ export async function reviewChangedFile(
     `review ${file.path}: +${allowed.size} line(s), skills=${show(skillNames)}, ${verdict.kept.length} finding(s)${checked} (${describeTimings(timings)}).`,
   );
   return { path: file.path, findings: verdict.kept, skillNames, refuted };
+}
+
+/**
+ * The file's full text for the prompt, or `null`.
+ *
+ * @remarks An added file's patch is the whole file, so content is fetched only for modified files. Text
+ * over {@link MAX_CONTENT_CHARS} is withheld whole and said so at INFO; the diff alone is reviewed.
+ */
+async function contentOf(
+  file: ChangedFile,
+  options: ReviewChangedFileOptions,
+  log: Logger,
+): Promise<string | null> {
+  const readContent = options.readContent ?? null;
+  if (readContent === null || file.status === "added") return null;
+  const content = await readContent(file.path, file.status);
+  if (content === null) return null;
+  const chars = countCodePoints(content);
+  if (chars <= MAX_CONTENT_CHARS) return content;
+  log.info(
+    `content ${file.path}: ${formatCount(chars)} chars exceeds the ${formatCount(MAX_CONTENT_CHARS)} ceiling; the diff alone was reviewed.`,
+  );
+  return null;
 }
 
 /** The pre-context block for one file, or `""`. Failure here never fails the review. */

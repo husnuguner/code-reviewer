@@ -36,22 +36,23 @@ Which files a run reviews is decided once, before anything is prompted
 (`src/core/review/selection.ts`). Every file that is not reviewed carries a
 reason:
 
-| Reason           | Meaning                                                       |
-| ---------------- | ------------------------------------------------------------- |
-| `secret`         | The path names a credential file. Never read, never prompted. |
-| `binary`         | Git could not express the patch as text.                      |
-| `status`         | `removed` or `renamed`: nothing to comment on.                |
-| `excluded`       | Matched one of the project's `exclude` globs.                 |
-| `no_added_lines` | The patch adds no lines, so no comment could be anchored.     |
-| `no_patch`       | The record carried no path or no patch.                       |
+| Reason           | Meaning                                                                                      |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| `secret`         | The path names a credential file. Never read, never prompted.                                |
+| `binary`         | Git could not express the patch as text.                                                     |
+| `status`         | `removed` or `renamed`: nothing to comment on.                                               |
+| `excluded`       | Matched one of the project's `exclude` globs.                                                |
+| `no_added_lines` | The patch adds no lines, so no comment could be anchored.                                    |
+| `no_patch`       | The record carried no path or no patch.                                                      |
+| `too_large`      | The diff is over the built-in ceiling (200,000 chars). Exclude the file or split the change. |
 
 The gates are asked in that order and the first one that answers wins, so a
 credential the project also excluded is still reported as a credential.
 
-A diff over `max-file-chars` is **cut, not dropped**. The cut falls on a hunk
-boundary, never mid-line, and what is shown always contains at least one
-commentable line. The summary's `truncated` counts how many files were shown
-in part.
+Nothing is cut. A file is reviewed whole or skipped as `too_large`; the
+ceiling is a constant, not a setting. The file's full text is attached whole
+too, or, past the same ceiling, not at all -- the log says so and the diff
+alone is reviewed.
 
 `--preview` runs the same function and prints the decisions:
 
@@ -198,10 +199,10 @@ A quote spanning several added lines becomes a multi-line anchor
 (`start_line`..`line`); one that caught context lines is narrowed to the added
 lines inside it.
 
-Both signals are read against the diff the model was shown, never the whole
-patch. The allowed line numbers, the quote matcher's haystack and the
-annotated diff come out of one decision (`patchView`), so a file whose diff
-was cut cannot be told it may comment on a line it was never sent.
+Both signals are read against the diff the model was shown. The allowed line
+numbers, the quote matcher's haystack and the annotated diff come out of one
+decision (`patchView`), so the model cannot be told it may comment on a line
+it was never sent.
 
 The line wins a `conflict` because it is copied from a marker printed beside
 the code, whereas a quote can match a repeated idiom elsewhere by luck. Every
@@ -262,7 +263,6 @@ behind:
 | ------------- | ----------------------------------------------------------------- |
 | `skipped`     | Files not reviewed, by reason.                                    |
 | `failed`      | Files selected for review whose review threw.                     |
-| `truncated`   | Files whose diff was shown in part.                               |
 | `refuted`     | Findings the verification pass removed.                           |
 | `capped`      | Findings the volume policy withheld.                              |
 | `mislabelled` | Reported findings re-rated because the model invented a severity. |

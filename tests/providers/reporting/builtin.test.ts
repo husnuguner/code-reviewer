@@ -27,7 +27,6 @@ const SUMMARY: SummaryRecord = {
   files_changed: 2,
   files_reviewed: 1,
   failed: 0,
-  truncated: 0,
   findings: 1,
   files_with_findings: 1,
   anchors: { exact: 1 },

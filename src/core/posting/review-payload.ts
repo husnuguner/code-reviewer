@@ -138,7 +138,6 @@ function toSummary(record: JsonObject): SummaryRecord {
     files_changed: count(record["files_changed"]),
     files_reviewed: count(record["files_reviewed"]),
     failed: count(record["failed"]),
-    truncated: count(record["truncated"]),
     findings: count(record["findings"]),
     files_with_findings: count(record["files_with_findings"]),
     anchors: {},

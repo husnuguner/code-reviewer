@@ -32,10 +32,9 @@ export interface GitReader {
   worktreeFiles(): Promise<ChangedFileEntry[]>;
 
   /**
-   * A file's current text from the working tree.
+   * A file's current text from the working tree, whole.
    *
-   * @param limit - Maximum characters returned.
    * @returns The text, or `null` when it cannot be read as text.
    */
-  readFile(path: string, limit: number): Promise<string | null>;
+  readFile(path: string): Promise<string | null>;
 }

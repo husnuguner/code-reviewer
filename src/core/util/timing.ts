@@ -5,6 +5,8 @@
 
 import { type ChatUsage } from "../ports/chat-model";
 
+import { formatCount } from "./text";
+
 /** Milliseconds from an arbitrary origin; only differences are meaningful. */
 export type Clock = () => number;
 
@@ -32,11 +34,6 @@ export function stopwatch(now: Clock = SYSTEM_CLOCK): () => number {
   return () => now() - started;
 }
 
-/** Formats a count with thousands separators: `7036` → `7,036`. */
-function count(n: number): string {
-  return n.toLocaleString("en-US");
-}
-
 /**
  * Describes what one model call cost.
  *
@@ -50,11 +47,11 @@ export function describeUsage(usage: ChatUsage | undefined, elapsedMs: number): 
   const { inputTokens, outputTokens } = usage;
   const rate =
     outputTokens !== null && elapsedMs > 0
-      ? `${count(Math.round(outputTokens / (elapsedMs / 1000)))} tokens/s`
+      ? `${formatCount(Math.round(outputTokens / (elapsedMs / 1000)))} tokens/s`
       : null;
   return [
-    inputTokens === null ? null : `${count(inputTokens)} tokens in${describeCache(usage)}`,
-    outputTokens === null ? null : `${count(outputTokens)} out`,
+    inputTokens === null ? null : `${formatCount(inputTokens)} tokens in${describeCache(usage)}`,
+    outputTokens === null ? null : `${formatCount(outputTokens)} out`,
     rate,
   ]
     .filter((part) => part !== null)
@@ -66,8 +63,8 @@ function describeCache(usage: ChatUsage): string {
   const read = usage.cacheReadTokens ?? 0;
   const written = usage.cacheWriteTokens ?? 0;
   const parts = [
-    read > 0 ? `${count(read)} cached` : null,
-    written > 0 ? `${count(written)} cache written` : null,
+    read > 0 ? `${formatCount(read)} cached` : null,
+    written > 0 ? `${formatCount(written)} cache written` : null,
   ].filter((part) => part !== null);
   return parts.length === 0 ? "" : ` (${parts.join(", ")})`;
 }

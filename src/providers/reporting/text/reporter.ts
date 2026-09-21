@@ -19,7 +19,6 @@ export class TextReporter extends CollectingReporter {
       findings: this.findings,
       anchors: summary.anchors,
       failed: summary.failed,
-      truncated: summary.truncated,
     });
     for (const line of lines) this.write(line);
   }

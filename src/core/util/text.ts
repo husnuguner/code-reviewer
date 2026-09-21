@@ -56,6 +56,11 @@ export function countCodePoints(text: string): number {
   return ASTRAL_PATTERN.test(text) ? [...text].length : text.length;
 }
 
+/** Formats a count with thousands separators: `7036` → `7,036`. */
+export function formatCount(n: number): string {
+  return n.toLocaleString("en-US");
+}
+
 /**
  * Takes the first `maxLength` code points, never splitting a surrogate pair.
  *

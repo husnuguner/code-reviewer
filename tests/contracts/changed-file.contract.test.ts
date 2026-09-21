@@ -7,6 +7,7 @@ import { type Finding, finding } from "../../src/core/domain/finding";
 import { type ReviewFileInput } from "../../src/core/review/file-reviewer";
 import {
   DEFAULT_FILE_REVIEW_SETTINGS,
+  MAX_CONTENT_CHARS,
   type PerFileReviewer,
   countAnchors,
   reviewChangedFile,
@@ -19,9 +20,6 @@ import { caseNamed, loadFixture } from "./fixtures";
 const helpers = loadFixture("changed_file_helpers");
 
 const PATCH = "@@ -1 +1,2 @@\n old\n+added line\n";
-/** Two hunks, each adding a line: what a cap has to choose between. */
-const TWO_HUNKS =
-  "@@ -1,2 +1,3 @@\n alpha\n+beta\n gamma\n@@ -20,2 +21,3 @@\n delta\n+epsilon\n zeta\n";
 
 /** Reports one finding per file, on that file's first added line; records inputs. */
 class FakeReviewer implements PerFileReviewer {
@@ -179,6 +177,29 @@ describe("the shared per-file step", () => {
     expect(reads).toEqual(["a.ts"]);
   });
 
+  it("attaches a file's text whole or not at all, and says when it withheld it", async () => {
+    // A prefix of the file would hide the code around the change and look
+    // like the file; past the ceiling the diff alone is reviewed, and the log
+    // says so once.
+    const lines: string[] = [];
+    const atCeiling = "x".repeat(MAX_CONTENT_CHARS);
+    const fits = await review(new ChangedFile("a.ts", "modified", PATCH), {
+      readContent: () => Promise.resolve(atCeiling),
+      logger: recordingLogger(lines),
+    });
+    expect(fits.reviewer.seen[0]?.content).toBe(atCeiling);
+    expect(lines.filter((line) => line.startsWith("INFO content"))).toEqual([]);
+
+    const over = await review(new ChangedFile("src/x.ts", "modified", PATCH), {
+      readContent: () => Promise.resolve(`${atCeiling}x`),
+      logger: recordingLogger(lines),
+    });
+    expect(over.reviewer.seen[0]?.content).toBeNull();
+    expect(lines.filter((line) => line.startsWith("INFO content"))).toEqual([
+      "INFO content src/x.ts: 200,001 chars exceeds the 200,000 ceiling; the diff alone was reviewed.",
+    ]);
+  });
+
   it("hands the reviewer the annotated diff, the allowed lines and the anchor index", async () => {
     const { result, reviewer } = await review(new ChangedFile("a.ts", "modified", PATCH));
     const input = reviewer.seen[0];
@@ -213,33 +234,5 @@ describe("the shared per-file step", () => {
     });
     expect(result?.skillNames).toEqual(["http-route"]);
     expect(reviewer.seen[0]?.skillsText).toBe("skills-text");
-  });
-
-  it("cuts an oversized diff at a hunk boundary, and allows only what it shows", async () => {
-    const firstHunk = "@@ -1,2 +1,3 @@\n alpha\n[L2] +beta\n gamma";
-    const { reviewer } = await review(new ChangedFile("a.ts", "modified", TWO_HUNKS), {
-      // Room for the first hunk and not a character more.
-      settings: { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: firstHunk.length },
-    });
-    const input = reviewer.seen[0];
-    // A whole hunk, not a mid-line cut: the text stays a diff whose `[L<n>]`
-    // markers mean what they say.
-    expect(input?.annotatedPatch).toBe(firstHunk);
-    // And the two derived answers describe that text and nothing else -- the
-    // model is never told it may comment on a line it was not shown, and the
-    // quote matcher never searches text nobody sent.
-    expect([...(input?.allowedLines ?? [])]).toEqual([2]);
-    expect(input?.anchorIndex?.map(([line]) => line)).toEqual([1, 2, 3]);
-  });
-
-  it("shows one commentable line however small the cap", async () => {
-    // The cap cannot leave a file with a prompt it could not answer: a diff
-    // with nothing commentable in it would ask the model to invent a line.
-    const { reviewer } = await review(new ChangedFile("a.ts", "modified", TWO_HUNKS), {
-      settings: { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: 1 },
-    });
-    const input = reviewer.seen[0];
-    expect([...(input?.allowedLines ?? [])]).toEqual([2]);
-    expect(input?.annotatedPatch).toContain("[L2] +beta");
   });
 });

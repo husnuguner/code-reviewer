@@ -19,8 +19,6 @@ export interface FileReviewSettings {
   readonly exclude: readonly string[];
   /** Language of each finding's body. */
   readonly language: string;
-  /** Per-file cap on the diff shown to the model. */
-  readonly maxFileChars: number;
   /** Per-skill body cap. */
   readonly maxSkillChars: number;
   /** Per-file cap for the whole skills block. */
@@ -33,7 +31,6 @@ export interface FileReviewSettings {
 export const DEFAULT_FILE_REVIEW_SETTINGS: FileReviewSettings = {
   exclude: [],
   language: "English",
-  maxFileChars: 8000,
   maxSkillChars: 10_000,
   maxSkillsTotalChars: 18_000,
   maxContextChars: 6000,

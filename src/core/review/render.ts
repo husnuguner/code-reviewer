@@ -18,14 +18,9 @@ export function textBody(severity: string, body: string): string {
  *
  * @param title - The scope, e.g. `branch HEAD vs main`.
  * @param decisions - The selection.
- * @param maxFileChars - The diff cap, for the truncation note.
  * @returns Files to review first, then skipped ones, each block by path; closes with "No model was called."
  */
-export function previewReport(
-  title: string,
-  decisions: readonly FileDecision[],
-  maxFileChars: number,
-): string {
+export function previewReport(title: string, decisions: readonly FileDecision[]): string {
   const ordered = [...decisions].toSorted(
     (a, b) => Number(isSelected(b)) - Number(isSelected(a)) || compareCodePoints(a.path, b.path),
   );
@@ -34,9 +29,7 @@ export function previewReport(
 
   const rows = ordered.map((decision) => {
     const verb = isSelected(decision) ? "review" : "skipped";
-    const detail = isSelected(decision)
-      ? `+${decision.addedLines.size}${decision.truncated ? ` (diff cut at ${maxFileChars} of ${decision.diffChars} chars)` : ""}`
-      : skipDetail(decision);
+    const detail = isSelected(decision) ? `+${decision.addedLines.size}` : skipDetail(decision);
     return `  ${verb.padEnd(8)} ${decision.path.padEnd(width)}  ${detail}`.trimEnd();
   });
   const skips = [...skipCounts(decisions)]

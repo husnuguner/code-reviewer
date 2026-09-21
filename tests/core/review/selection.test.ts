@@ -11,6 +11,7 @@ import { describe, expect, it } from "bun:test";
 import { DEFAULT_FILE_REVIEW_SETTINGS } from "../../../src/core/config/settings";
 import { previewReport } from "../../../src/core/review/render";
 import {
+  MAX_DIFF_CHARS,
   type SelectionReason,
   decideFile,
   isSelected,
@@ -25,9 +26,18 @@ import { recordingLogger } from "../../helpers/logging";
 
 const PATCH = "@@ -1 +1,2 @@\n old\n+added line\n";
 const BINARY = "diff --git a/x.png b/x.png\nBinary files a/x.png and b/x.png differ\n";
-/** Two hunks, each adding a line: what a cap has to choose between. */
+/** Two hunks, each adding a line. */
 const TWO_HUNKS =
   "@@ -1,2 +1,3 @@\n alpha\n+beta\n gamma\n@@ -20,2 +21,3 @@\n delta\n+epsilon\n zeta\n";
+
+/** One hunk adding lines of `x` until the annotated diff is exactly `chars` code points long. */
+function patchOfSize(chars: number): string {
+  const header = "@@ -1,0 +1,1 @@";
+  const line = "[L1] +";
+  const filler = chars - header.length - 1 - line.length;
+  if (filler < 0) throw new Error(`no patch is ${chars} chars long`);
+  return `${header}\n+${"x".repeat(filler)}\n`;
+}
 
 function reasonFor(
   filename: string,
@@ -50,7 +60,7 @@ describe("deciding which files are reviewed", () => {
     expect(decision.file?.path).toBe("src/a.ts");
     expect([...decision.addedLines]).toEqual([2]);
     expect(decision.annotatedPatch).toBe("@@ -1,1 +1,2 @@\n old\n[L2] +added line");
-    expect(decision.truncated).toBe(false);
+    expect(decision.diffChars).toBe(decision.annotatedPatch.length);
   });
 
   it("names a reason for every file it does not review", () => {
@@ -83,49 +93,58 @@ describe("deciding which files are reviewed", () => {
     expect(reasonFor(".env", "removed", PATCH)).toBe("secret");
   });
 
-  it("cuts an oversized diff at a hunk boundary instead of skipping the file", () => {
-    const firstHunk = "@@ -1,2 +1,3 @@\n alpha\n[L2] +beta\n gamma";
+  it("shows the whole diff, and allows exactly the lines it contains", () => {
+    // Every line a finding may anchor to is a line the model was shown, and
+    // the quote matcher's haystack is that same text: the three come from one
+    // value, and nothing is cut out of it.
     const decision = decideFile(
       { filename: "a.ts", status: "modified", patch: TWO_HUNKS },
-      { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: firstHunk.length },
+      DEFAULT_FILE_REVIEW_SETTINGS,
     );
-    expect(decision.reason).toBe("none");
-    expect(decision.annotatedPatch).toBe(firstHunk);
-    expect(decision.truncated).toBe(true);
+    if (!isSelected(decision)) throw new Error(`expected a.ts to be selected`);
+    expect(decision.annotatedPatch).toBe(
+      "@@ -1,2 +1,3 @@\n alpha\n[L2] +beta\n gamma\n@@ -20,2 +21,3 @@\n delta\n[L22] +epsilon\n zeta",
+    );
     expect(decision.diffChars).toBe(86);
+    const shown = decision.annotatedPatch
+      .split("\n")
+      .map((line) => /^\[L(\d+)\]/u.exec(line)?.[1])
+      .filter((line): line is string => line !== undefined)
+      .map(Number);
+    expect([...decision.addedLines].toSorted((a, b) => a - b)).toEqual(shown);
+    expect(decision.newSide.map(([line]) => line)).toEqual([1, 2, 3, 21, 22, 23]);
   });
 
-  it("allows only the lines the diff it shows contains", () => {
-    // The invariant the cut exists to protect: every line a finding may
-    // anchor to is a line the model was shown, and the quote matcher's
-    // haystack is that same text. Taken from the whole patch instead, both
-    // would describe a diff nobody sent.
-    const decision = decideFile(
-      { filename: "a.ts", status: "modified", patch: TWO_HUNKS },
-      { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: 40 },
+  it("skips a diff over the ceiling as too large instead of cutting it, and says what to do", () => {
+    // Whole or not at all: a diff one character over the ceiling is not sent
+    // in part, it is not sent. The detail names the size and the fix.
+    const over = decideFile(
+      { filename: "dist/bundle.js", status: "modified", patch: patchOfSize(MAX_DIFF_CHARS + 1) },
+      DEFAULT_FILE_REVIEW_SETTINGS,
     );
-    if (!isSelected(decision)) throw new Error(`expected a.ts to be selected`);
-    const shown = new Set(
-      decision.annotatedPatch
-        .split("\n")
-        .map((line) => /^\[L(\d+)\]/u.exec(line)?.[1])
-        .filter((line): line is string => line !== undefined)
-        .map(Number),
+    expect(over.reason).toBe("too_large");
+    expect(over.file).toBeNull();
+    expect(over.annotatedPatch).toBe("");
+    expect(over.diffChars).toBe(MAX_DIFF_CHARS + 1);
+    if (isSelected(over)) throw new Error("expected dist/bundle.js to be skipped");
+    expect(skipDetail(over)).toBe("too large (200,001 chars; exclude it or split the change)");
+
+    const under = decideFile(
+      { filename: "dist/bundle.js", status: "modified", patch: patchOfSize(MAX_DIFF_CHARS) },
+      DEFAULT_FILE_REVIEW_SETTINGS,
     );
-    expect([...decision.addedLines].toSorted((a, b) => a - b)).toEqual([...shown]);
-    expect(decision.newSide.every(([line]) => line <= 3)).toBe(true);
+    expect(under.reason).toBe("none");
+    expect(under.diffChars).toBe(MAX_DIFF_CHARS);
+    expect(under.annotatedPatch.length).toBe(MAX_DIFF_CHARS);
   });
 
-  it("shows one commentable line however small the cap", () => {
-    const decision = decideFile(
-      { filename: "a.ts", status: "modified", patch: TWO_HUNKS },
-      { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: 0 },
-    );
-    if (!isSelected(decision)) throw new Error(`expected a.ts to be selected`);
-    // A cap of zero is still "cut, not dropped": the file is reviewed, and
-    // what it is reviewed on has something to comment on.
-    expect([...decision.addedLines]).toEqual([2]);
-    expect(decision.truncated).toBe(true);
+  it("asks whether a diff is too large last", () => {
+    // A credential that is also huge must still read `secret`, and an
+    // excluded one `excluded`: the reasons an operator acts on come first.
+    const huge = patchOfSize(MAX_DIFF_CHARS + 1);
+    expect(reasonFor(".env", "modified", huge)).toBe("secret");
+    expect(reasonFor("dist/bundle.js", "modified", huge, ["dist/**"])).toBe("excluded");
+    expect(reasonFor("gone.js", "removed", huge)).toBe("status");
   });
 
   it("keeps the reported order and counts the skips by reason", () => {
@@ -186,6 +205,28 @@ describe("deciding which files are reviewed", () => {
       "DEBUG skip gone.ts (status=removed).",
     ]);
   });
+
+  it("says which file was too large without verbose logging", () => {
+    // The operator has to act on it (exclude, or split the change), so it is
+    // not buried at DEBUG like a skip the run's arithmetic explains.
+    const lines: string[] = [];
+    logSkips(
+      selectFiles(
+        [
+          {
+            filename: "dist/bundle.js",
+            status: "modified",
+            patch: patchOfSize(MAX_DIFF_CHARS + 1),
+          },
+        ],
+        DEFAULT_FILE_REVIEW_SETTINGS,
+      ),
+      recordingLogger(lines),
+    );
+    expect(lines).toEqual([
+      "INFO skip dist/bundle.js (too large (200,001 chars; exclude it or split the change)).",
+    ]);
+  });
 });
 
 describe("the preview report", () => {
@@ -200,7 +241,7 @@ describe("the preview report", () => {
   );
 
   it("lists the files to review first, then the skipped ones with their reason", () => {
-    const report = previewReport("PR #7 @ aa61df6", decisions, 8000);
+    const report = previewReport("PR #7 @ aa61df6", decisions);
     expect(report.split("\n")).toEqual([
       "",
       "=== [PREVIEW] PR #7 @ aa61df6 ===",
@@ -216,16 +257,29 @@ describe("the preview report", () => {
     ]);
   });
 
-  it("says that a cut diff was cut, and by how much", () => {
-    const cut = selectFiles([{ filename: "a.ts", status: "modified", patch: TWO_HUNKS }], {
-      ...DEFAULT_FILE_REVIEW_SETTINGS,
-      maxFileChars: 40,
-    });
-    expect(previewReport("branch x vs main", cut, 40)).toContain("+1 (diff cut at 40 of 86 chars)");
+  it("names a file too large to review, with its size and the fix", () => {
+    const large = selectFiles(
+      [
+        { filename: "src/a.ts", status: "modified", patch: PATCH },
+        { filename: "dist/bundle.js", status: "modified", patch: patchOfSize(MAX_DIFF_CHARS + 1) },
+      ],
+      DEFAULT_FILE_REVIEW_SETTINGS,
+    );
+    expect(previewReport("HEAD vs main", large).split("\n")).toEqual([
+      "",
+      "=== [PREVIEW] HEAD vs main ===",
+      "2 changed file(s); 1 to review, 1 skipped.",
+      "",
+      "  review   src/a.ts        +1",
+      "  skipped  dist/bundle.js  too large (200,001 chars; exclude it or split the change)",
+      "",
+      "skipped: too_large=1",
+      "No model was called.",
+    ]);
   });
 
   it("reports an empty change set without pretending a review happened", () => {
-    expect(previewReport("PR #9 @ abc1234", [], 8000).split("\n")).toEqual([
+    expect(previewReport("PR #9 @ abc1234", []).split("\n")).toEqual([
       "",
       "=== [PREVIEW] PR #9 @ abc1234 ===",
       "0 changed file(s); 0 to review, 0 skipped.",

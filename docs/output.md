@@ -44,8 +44,7 @@ The `(skills: …)` line names the skills that were in the prompt for that file
 [per-file budget](configuration.md#review-skills) left out is not among them,
 and a warning names it instead. A finding that could not be anchored is listed
 with `(no line anchor)`.
-When files failed or were shown in part, the header says so before the
-findings.
+When files failed, the header says so before the findings.
 
 ## NDJSON contract
 
@@ -89,7 +88,6 @@ Then exactly one `summary` record:
   "files_changed": 6,
   "files_reviewed": 4,
   "failed": 0,
-  "truncated": 1,
   "findings": 3,
   "files_with_findings": 2,
   "anchors": { "exact": 2, "repaired": 1 },
@@ -101,21 +99,20 @@ Then exactly one `summary` record:
 }
 ```
 
-| Field                 | Meaning                                                                                                 |
-| --------------------- | ------------------------------------------------------------------------------------------------------- |
-| `base`, `branch`      | What was compared: `--base` and `"HEAD"`. An `--uncommitted` run reports `"HEAD"` and `"working tree"`. |
-| `files_changed`       | Files in the change set.                                                                                |
-| `files_reviewed`      | Files whose review came back.                                                                           |
-| `failed`              | Files selected for review whose review threw.                                                           |
-| `truncated`           | Files whose diff was cut at `max-file-chars`.                                                           |
-| `findings`            | Findings reported.                                                                                      |
-| `files_with_findings` | Distinct paths among them.                                                                              |
-| `anchors`             | Reported findings by anchor outcome.                                                                    |
-| `unanchored`          | Reported findings with `line: null`.                                                                    |
-| `refuted`             | Findings the verification pass removed before they were reported.                                       |
-| `capped`              | Findings `max-findings-per-file` withheld.                                                              |
-| `mislabelled`         | Reported findings whose severity the model spelled outside the vocabulary (kept under the mildest one). |
-| `skipped`             | Files not reviewed, by reason: `secret`, `binary`, `status`, `excluded`, `no_added_lines`, `no_patch`.  |
+| Field                 | Meaning                                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `base`, `branch`      | What was compared: `--base` and `"HEAD"`. An `--uncommitted` run reports `"HEAD"` and `"working tree"`.             |
+| `files_changed`       | Files in the change set.                                                                                            |
+| `files_reviewed`      | Files whose review came back.                                                                                       |
+| `failed`              | Files selected for review whose review threw.                                                                       |
+| `findings`            | Findings reported.                                                                                                  |
+| `files_with_findings` | Distinct paths among them.                                                                                          |
+| `anchors`             | Reported findings by anchor outcome.                                                                                |
+| `unanchored`          | Reported findings with `line: null`.                                                                                |
+| `refuted`             | Findings the verification pass removed before they were reported.                                                   |
+| `capped`              | Findings `max-findings-per-file` withheld.                                                                          |
+| `mislabelled`         | Reported findings whose severity the model spelled outside the vocabulary (kept under the mildest one).             |
+| `skipped`             | Files not reviewed, by reason: `secret`, `binary`, `status`, `excluded`, `no_added_lines`, `no_patch`, `too_large`. |
 
 The counters close:
 

@@ -60,8 +60,8 @@ conflict and failure with the line the model claimed and the code it quoted.
 In order of likelihood:
 
 1. The file was skipped: `--preview` names the reason.
-2. The diff was cut at `max-file-chars` (`truncated` in the summary): raise
-   the cap or split the change.
+2. The file was skipped as `too_large`: `--preview` names it. Exclude it or
+   split the change.
 3. Verification removed it (`refuted` in the summary): `-v` logs the ground;
    `--no-verify` shows what the reviewer said before the pass.
 4. The cap withheld it (`capped` in the summary): raise

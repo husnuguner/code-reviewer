@@ -27,6 +27,7 @@ import {
 import { type ReviewFileInput } from "../../../src/core/review/file-reviewer";
 import {
   DEFAULT_FILE_REVIEW_SETTINGS,
+  MAX_CONTENT_CHARS,
   type PerFileReviewer,
 } from "../../../src/core/review/review-file";
 import { type Verdict, type VerifyInput } from "../../../src/core/review/verify";
@@ -107,7 +108,7 @@ function options<R extends PerFileReviewer = FakeReviewer>(
   return {
     base: "main",
     git: new LocalGitReader(root),
-    settings: { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: 100_000 },
+    settings: DEFAULT_FILE_REVIEW_SETTINGS,
     skills: null,
     maxConcurrentFiles: 4,
     ...overrides,
@@ -134,6 +135,34 @@ describe("what git reports", () => {
     // Its diff already is the whole file, so attaching it again would only
     // duplicate it in the prompt.
     expect(o.reviewer.contents.get("new.py")).toBeNull();
+  });
+
+  it("attaches a modified file's content whole, or past the ceiling not at all", async () => {
+    // Two files changed on the branch: one just under the ceiling, one just
+    // over. The first arrives whole; the second is reviewed on its diff alone
+    // rather than on a prefix that hides the code around the change.
+    const root = repo();
+    const line = "x = 1\n";
+    const fits = `${line.repeat(33_330)}last = 1\n`;
+    const huge = `${line.repeat(33_335)}last = 1\n`;
+    expect(fits.length).toBeLessThanOrEqual(MAX_CONTENT_CHARS);
+    expect(huge.length).toBeGreaterThan(MAX_CONTENT_CHARS);
+    writeFileSync(join(root, "fits.py"), fits.replace("last = 1\n", ""));
+    writeFileSync(join(root, "huge.py"), huge.replace("last = 1\n", ""));
+    git(root, "add", "-A");
+    git(root, "commit", "-qm", "large files");
+    git(root, "checkout", "-q", "main");
+    git(root, "merge", "-q", "--ff-only", "feature");
+    git(root, "checkout", "-q", "-b", "widen");
+    writeFileSync(join(root, "fits.py"), fits);
+    writeFileSync(join(root, "huge.py"), huge);
+    git(root, "commit", "-qam", "one line more");
+    const o = options(root);
+    const result = await reviewBranch(o);
+    expect(sortedByCodePoint(o.reviewer.seen)).toEqual(["fits.py", "huge.py"]);
+    expect(o.reviewer.contents.get("fits.py")).toBe(fits);
+    expect(o.reviewer.contents.get("huge.py")).toBeNull();
+    expect(result.files_reviewed).toBe(2);
   });
 
   it("builds the anchor index from the git diff", async () => {
@@ -480,10 +509,9 @@ describe("streaming", () => {
   });
 
   it("says nothing was found without claiming the run was clean", () => {
-    const lines = branchReviewText("main", "feature", { findings: [], failed: 2, truncated: 1 });
+    const lines = branchReviewText("main", "feature", { findings: [], failed: 2 });
     expect(lines).toContain("No issues found.");
     expect(lines).toContain("2 file(s) could not be reviewed; the log says why.");
-    expect(lines.some((line) => line.includes("too large to show in full"))).toBe(true);
   });
 });
 

@@ -31,8 +31,6 @@ export interface SummaryRecord {
   readonly files_reviewed: number;
   /** Files selected for review whose review threw. */
   readonly failed: number;
-  /** Files whose diff was cut at `max-file-chars`. */
-  readonly truncated: number;
   readonly findings: number;
   readonly files_with_findings: number;
   /** Reported findings by anchor outcome, sorted by name. */

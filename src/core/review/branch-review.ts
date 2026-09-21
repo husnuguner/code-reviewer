@@ -93,7 +93,7 @@ export async function* iterBranchReview(
       settings: options.settings,
       skills: options.skills,
       limit,
-      readContent: (path) => git.readFile(path, options.settings.maxFileChars),
+      readContent: (path) => git.readFile(path),
       codeContext: options.codeContext ?? null,
       changeSet,
       maxFindingsPerFile: options.maxFindingsPerFile ?? 0,
@@ -164,7 +164,6 @@ export async function* iterBranchReview(
     files_changed: files.length,
     files_reviewed: filesReviewed,
     failed,
-    truncated: selected.filter((decision) => decision.truncated).length,
     findings: totalFindings,
     files_with_findings: filesWithFindings.size,
     anchors: Object.fromEntries([...anchors].toSorted(([a], [b]) => compareCodePoints(a, b))),
@@ -256,7 +255,7 @@ export async function previewBranch(
   const decisions = selectFiles(files, options.settings);
   return {
     decisions,
-    report: previewReport(scopeTitle(options), decisions, options.settings.maxFileChars),
+    report: previewReport(scopeTitle(options), decisions),
   };
 }
 
@@ -267,8 +266,6 @@ export interface BranchReviewResult {
   readonly files_reviewed: number;
   /** Files selected for review whose review did not finish. */
   readonly failed: number;
-  /** Files whose diff was shown in part only. */
-  readonly truncated: number;
   readonly anchors: Readonly<Record<string, number>>;
   readonly unanchored: number;
   readonly refuted: number;
@@ -305,7 +302,6 @@ function collect(
     files_changed: summary?.files_changed ?? 0,
     files_reviewed: summary?.files_reviewed ?? 0,
     failed: summary?.failed ?? 0,
-    truncated: summary?.truncated ?? 0,
     anchors: summary?.anchors ?? {},
     unanchored: summary?.unanchored ?? 0,
     refuted: summary?.refuted ?? 0,
@@ -344,24 +340,12 @@ export interface TextReportInput {
   readonly anchors?: Readonly<Record<string, number>>;
   /** Files selected for review whose review did not finish. */
   readonly failed?: number;
-  /** Files whose diff was shown in part only. */
-  readonly truncated?: number;
 }
 
-/** What a reader must know before believing the findings: failed and truncated files. */
+/** What a reader must know before believing the findings: the files whose review failed. */
 function caveats(result: TextReportInput): string[] {
-  const notes: string[] = [];
   const failed = result.failed ?? 0;
-  const truncated = result.truncated ?? 0;
-  if (failed > 0) {
-    notes.push(`${failed} file(s) could not be reviewed; the log says why.`);
-  }
-  if (truncated > 0) {
-    notes.push(
-      `${truncated} file(s) had a diff too large to show in full; only what was shown was reviewed.`,
-    );
-  }
-  return notes;
+  return failed > 0 ? [`${failed} file(s) could not be reviewed; the log says why.`] : [];
 }
 
 /**

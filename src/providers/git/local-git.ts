@@ -14,7 +14,7 @@ import { type ChangedFileEntry } from "../../core/domain/changed-file";
 import { type GitReader } from "../../core/ports/git-reader";
 import { type Logger, NULL_LOGGER } from "../../core/ports/logger";
 import { GitError, errorMessage } from "../../core/util/errors";
-import { compareCodePoints, cutToLength, show } from "../../core/util/text";
+import { compareCodePoints, show } from "../../core/util/text";
 import { expandUser } from "../config/paths";
 
 /** Options for one git invocation. */
@@ -151,11 +151,10 @@ export class LocalGitReader implements GitReader {
   }
 
   /** The file's text from the working tree, or `null` when unreadable (binary, deleted). */
-  async readFile(path: string, limit: number): Promise<string | null> {
+  async readFile(path: string): Promise<string | null> {
     try {
       const bytes = await readFile(join(this.root, path));
-      const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-      return cutToLength(text, limit);
+      return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
     } catch (error) {
       const detail = errorMessage(error);
       this.log.debug(`No worktree content for ${path}: ${detail}`);

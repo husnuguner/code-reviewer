@@ -79,7 +79,6 @@ export interface ConfigValues {
   readonly verifyFindings: boolean;
   readonly excludeGlobs: readonly string[];
   readonly maxFindingsPerFile: number;
-  readonly maxFileChars: number;
   readonly maxSkillChars: number;
   readonly maxSkillsTotalChars: number;
   readonly maxContextChars: number;
@@ -201,7 +200,6 @@ function valuesFrom(
     verifyFindings: shape.settings.verify,
     excludeGlobs: shape.settings.exclude,
     maxFindingsPerFile: shape.settings["max-findings-per-file"],
-    maxFileChars: shape.settings["max-file-chars"],
     maxSkillChars: shape.settings["max-skill-chars"],
     maxSkillsTotalChars: shape.settings["max-skills-total-chars"],
     maxContextChars: shape.settings["max-context-chars"],
@@ -246,7 +244,6 @@ function withViews(values: ConfigValues): Config {
     fileReviewSettings: (extraExclude: readonly string[] = []) => ({
       exclude: [...values.excludeGlobs, ...extraExclude],
       language: values.reviewLang,
-      maxFileChars: values.maxFileChars,
       maxSkillChars: values.maxSkillChars,
       maxSkillsTotalChars: values.maxSkillsTotalChars,
       maxContextChars: values.maxContextChars,
