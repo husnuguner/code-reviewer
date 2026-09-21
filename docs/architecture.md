@@ -180,14 +180,16 @@ the checkout under review.
 
 ## Releasing
 
+With `X.Y.Z` the version being released:
+
 ```bash
-bun pm version 0.0.6 --no-git-tag-version  # package.json
-git commit -am "release: v0.0.6"
-git tag -a v0.0.6 -m "v0.0.6"
-git tag -f v0 v0.0.6                        # move the major tag
-git push origin main v0.0.6 && git push -f origin v0
+bun pm version X.Y.Z --no-git-tag-version  # package.json
+git commit -am "release: vX.Y.Z"
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git tag -f vX vX.Y.Z                        # move the major tag
+git push origin main vX.Y.Z && git push -f origin vX
 ```
 
 Update the `@vX.Y.Z` references in the README and `docs/github-action.md` in
 the same commit. A tag is not a GitHub Release; publish one separately
-(`gh release create v0.0.6 --verify-tag --notes-file …`).
+(`gh release create vX.Y.Z --verify-tag --notes-file …`).
