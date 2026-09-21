@@ -7,12 +7,10 @@
 import { type ConfigField } from "../../../core/config/config";
 import {
   type BranchReviewResult,
-  WORKTREE_BASE,
   previewBranch,
   streamBranchReview,
 } from "../../../core/review/branch-review";
 import { severityGate } from "../../../core/review/severity";
-import { GitCodeContext } from "../../../providers/git/git-code-context";
 import { closeReporter } from "../../../providers/reporting/closable";
 import { type RunCradle, type RunRequest, buildContainer } from "../../container";
 import { logSettingsFrom } from "../../options/logging";
@@ -48,11 +46,6 @@ export function hasFailingFinding(
   return result.findings.some((finding) => isGated(finding.severity));
 }
 
-/** The ref pre-context is read at: `HEAD` for an uncommitted review, else `--branch`. */
-function contextReference(arguments_: ReviewArguments): string {
-  return arguments_.uncommitted ? WORKTREE_BASE : arguments_.branch;
-}
-
 /** The container request from the parsed arguments; a preview needs no model. */
 function requestFrom(arguments_: ReviewArguments): RunRequest {
   return {
@@ -72,11 +65,10 @@ function requestFrom(arguments_: ReviewArguments): RunRequest {
  * in `finally` so no record is left in a buffer.
  */
 async function runBranchReview(arguments_: ReviewArguments, cradle: RunCradle): Promise<number> {
-  const { config, logger, checkoutRoot, gitReader } = cradle;
+  const { config, logger, gitReader } = cradle;
   const reporter = cradle.branchReporter;
   const options = {
     base: arguments_.base,
-    branch: arguments_.branch,
     uncommitted: arguments_.uncommitted,
     reviewer: cradle.fileReviewer,
     verifier: cradle.verifier,
@@ -85,8 +77,7 @@ async function runBranchReview(arguments_: ReviewArguments, cradle: RunCradle): 
     skills: await cradle.skills,
     maxConcurrentFiles: config.concurrency().files,
     maxFindingsPerFile: config.reportPolicy().maxFindingsPerFile,
-    // Built here rather than in the container: bound to the ref only the arguments know.
-    codeContext: new GitCodeContext(checkoutRoot, contextReference(arguments_), undefined, logger),
+    codeContext: cradle.codeContext,
     logger,
   };
 
@@ -104,7 +95,6 @@ async function runPreview(arguments_: ReviewArguments, cradle: RunCradle): Promi
   const { config, logger, gitReader } = cradle;
   const { report } = await previewBranch({
     base: arguments_.base,
-    branch: arguments_.branch,
     uncommitted: arguments_.uncommitted,
     git: gitReader,
     settings: config.fileReviewSettings(arguments_.exclude),

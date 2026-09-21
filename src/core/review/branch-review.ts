@@ -1,6 +1,10 @@
 /**
  * The review flow: read local git, select, review in parallel, cap, stream records. Reporting is where
  * it stops; posting is another run's job.
+ *
+ * The reviewed side is always the checkout: `HEAD` against a base, or the working tree against `HEAD`.
+ * There is no reviewing a ref without checking it out, so the diff, the file contents and the
+ * pre-context are one tree.
  * @packageDocumentation
  */
 
@@ -42,9 +46,9 @@ import { capPerFile } from "./volume";
 
 /** Options for {@link iterBranchReview} and its wrappers. */
 export interface BranchReviewOptions {
+  /** What the checkout is compared against. */
   readonly base: string;
-  readonly branch: string;
-  /** Review the working tree against `HEAD`; `base` and `branch` are then not consulted. */
+  /** Review the working tree against `HEAD`; `base` is then not consulted. */
   readonly uncommitted?: boolean;
   readonly reviewer: PerFileReviewer;
   /** `null` reports every finding. */
@@ -56,13 +60,13 @@ export interface BranchReviewOptions {
   readonly maxConcurrentFiles: number;
   /** Per-file cap; the most severe survive, the rest count as `capped`. `0` reports all. */
   readonly maxFindingsPerFile?: number;
-  /** Reads the repository beyond the diff at `branch`; `null` gathers no pre-context. */
+  /** Reads the repository beyond the diff at `HEAD`; `null` gathers no pre-context. */
   readonly codeContext?: CodeContext | null;
   readonly logger?: Logger;
 }
 
 /**
- * Streams review records for `base...branch` (or the working tree).
+ * Streams review records for `base...HEAD` (or the working tree).
  *
  * @returns One `finding` record per finding as each file completes, then a single `summary`.
  * @remarks The change set handed to pre-context is the selected set, so an excluded or credential file
@@ -188,53 +192,51 @@ function withGuarded(
 }
 
 /** The two sides a review names. */
-type ReviewScope = Pick<BranchReviewOptions, "base" | "branch" | "uncommitted">;
+type ReviewScope = Pick<BranchReviewOptions, "base" | "uncommitted">;
 
-/** What the working tree is reviewed against. */
-export const WORKTREE_BASE = "HEAD";
+/** The reviewed side: the checkout. Also what the working tree is reviewed against. */
+export const HEAD = "HEAD";
 /** How the summary names the working tree. */
 export const WORKING_TREE = "working tree";
 
 /** The two sides a run actually compared; an uncommitted review reports `HEAD` and `working tree`. */
 function reviewedReferences(options: ReviewScope): { base: string; branch: string } {
   return options.uncommitted === true
-    ? { base: WORKTREE_BASE, branch: WORKING_TREE }
-    : { base: options.base, branch: options.branch };
+    ? { base: HEAD, branch: WORKING_TREE }
+    : { base: options.base, branch: HEAD };
 }
 
-/** How a report titles the scope it covered. */
+/** How a report titles the scope it covered: `HEAD vs main`, or `working tree vs HEAD`. */
 function scopeTitle(options: ReviewScope): string {
   const { base, branch } = reviewedReferences(options);
-  return options.uncommitted === true ? `${branch} vs ${base}` : `branch ${branch} vs ${base}`;
+  return `${branch} vs ${base}`;
 }
 
-/** The changed files of the run's scope: the three-dot diff, or the uncommitted change set. */
+/** The changed files of the run's scope: the three-dot diff `base...HEAD`, or the uncommitted change set. */
 async function changedFilesOf(
   options: ReviewScope & Pick<BranchReviewOptions, "git">,
   log: Logger,
 ): Promise<ChangedFileEntry[]> {
-  const { base, branch, git } = options;
+  const { base, git } = options;
   if (options.uncommitted === true) {
     const dirty = await git.worktreeFiles();
-    log.info(
-      `Working tree vs ${WORKTREE_BASE} in ${git.root}: ${dirty.length} uncommitted file(s).`,
-    );
+    log.info(`Working tree vs ${HEAD} in ${git.root}: ${dirty.length} uncommitted file(s).`);
     return dirty;
   }
-  const forkPoint = await git.mergeBase(base, branch);
+  const forkPoint = await git.mergeBase(base, HEAD);
   if (forkPoint === null) {
-    log.warn(`No merge-base for '${branch}' and '${base}'; comparing against '${base}' directly.`);
+    log.warn(`No merge-base for '${HEAD}' and '${base}'; comparing against '${base}' directly.`);
   }
-  const files = await git.changedFiles(forkPoint ?? base, branch);
-  log.info(`Branch '${branch}' vs '${base}' in ${git.root}: ${files.length} changed file(s).`);
+  const files = await git.changedFiles(forkPoint ?? base, HEAD);
+  log.info(`${HEAD} vs '${base}' in ${git.root}: ${files.length} changed file(s).`);
   return files;
 }
 
 /** Options for {@link previewBranch}: local git and the settings, no model. */
 export interface BranchPreviewOptions {
+  /** What the checkout is compared against. */
   readonly base: string;
-  readonly branch: string;
-  /** Preview the uncommitted change set instead of a branch's. */
+  /** Preview the uncommitted change set instead of the checkout's. */
   readonly uncommitted?: boolean;
   readonly git: GitReader;
   readonly settings: FileReviewSettings;

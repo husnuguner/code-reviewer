@@ -11,8 +11,10 @@ local git ──▶ select ──▶ per file: context ▸ model ▸ anchor ▸ 
               (pure)      (parallel, bounded)                             (stream)
 ```
 
-1. **Read the change set** from local git: the three-dot diff `base...branch`
-   (or the working tree against `HEAD` with `--uncommitted`).
+1. **Read the change set** from local git: the three-dot diff `base...HEAD`
+   (or the working tree against `HEAD` with `--uncommitted`). The reviewed
+   side is always the checkout: the diff, the file contents and the
+   pre-context are read from one tree.
 2. **Select** which files are reviewed and why the others are not. One pure
    function; `--preview` prints its output and stops.
 3. **Review each selected file** (in parallel, bounded by
@@ -54,7 +56,7 @@ in part.
 `--preview` runs the same function and prints the decisions:
 
 ```text
-=== [PREVIEW] branch feature/rate-limit vs main ===
+=== [PREVIEW] HEAD vs main ===
 4 changed file(s); 1 to review, 3 skipped.
 
   review   src/api/users/handler.ts  +37

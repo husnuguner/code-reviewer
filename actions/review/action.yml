@@ -17,10 +17,6 @@ inputs:
       which is what `pull_request` events carry.
     required: false
     default: ""
-  head-ref:
-    description: "The ref to review. Defaults to the checked-out commit (HEAD)."
-    required: false
-    default: "HEAD"
   api-key:
     description: "The LLM key. Pass a secret; never a literal."
     required: true
@@ -200,7 +196,6 @@ runs:
         IN_VERIFY: ${{ inputs.verify }}
         IN_LOG_LEVEL: ${{ inputs.log-level }}
         REVIEWER_CONFIG: ${{ inputs.config }}
-        HEAD_REF: ${{ inputs.head-ref }}
         FAIL_ON: ${{ inputs.fail-on }}
         OUT_FILE: ${{ inputs.out }}
         PREVIEW: ${{ inputs.preview }}
@@ -225,10 +220,10 @@ runs:
         set_if_given REVIEW_EXCLUDE_PATHS "${IN_EXCLUDE}"
         set_if_given REVIEW_MAX_FINDINGS_PER_FILE "${IN_MAX_FINDINGS}"
         set_if_given REVIEW_VERIFY "${IN_VERIFY}"
+        # The reviewed side is the checkout: what actions/checkout put here.
         args=(
           review
           --base "origin/${BASE_REF}"
-          --branch "${HEAD_REF}"
           --fail-on "${FAIL_ON}"
         )
         args+=(--log-format github)

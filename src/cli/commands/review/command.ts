@@ -16,14 +16,10 @@ import { severityList } from "../../options/severity";
 
 import { runReview } from "./run";
 
-/** What `--branch` means when not given: `HEAD`, since a CI build sits on a detached commit. */
-export const DEFAULT_BRANCH = "HEAD";
-
 /** The parsed `review` command line. */
 export interface ReviewArguments extends ConfigArguments {
-  readonly branch: string;
   readonly base: string;
-  /** Review the working tree; `--branch` and `--base` are then not used. */
+  /** Review the working tree; `--base` is then not used. */
   readonly uncommitted: boolean;
   readonly format: ReportFormat;
   /** `--out`, or `null`. */
@@ -43,21 +39,16 @@ export interface ReviewArguments extends ConfigArguments {
 function reviewOptions(command: Command): Command {
   return (
     configOptions(command)
-      .option(
-        "--branch <name>",
-        "Branch or commit to review against --base; unset, the current checkout.",
-        DEFAULT_BRANCH,
-      )
-      .option("--base <name>", "Base branch to compare against.", "main")
-      // One question or the other: the working tree against HEAD, or a branch against a base. Naming
-      // a base or branch alongside --uncommitted is refused rather than ignored; the defaults do not count.
+      .option("--base <name>", "Base branch the checkout is compared against.", "main")
+      // One question or the other: the working tree against HEAD, or the checkout against a base. Naming
+      // a base alongside --uncommitted is refused rather than ignored; the default does not count.
       .addOption(
         new Option(
           "--uncommitted",
-          "Review the working tree against HEAD instead of a branch: staged and unstaged changes to tracked files, plus untracked files git is not ignoring. Cannot be combined with --base or --branch.",
+          "Review the working tree against HEAD instead of the checkout against a base: staged and unstaged changes to tracked files, plus untracked files git is not ignoring. Cannot be combined with --base.",
         )
           .default(false)
-          .conflicts(["base", "branch"]),
+          .conflicts(["base"]),
       )
       .option(
         "--format <format>",
@@ -118,7 +109,7 @@ const isReviewOperatorError = instanceOfAny(
 export const REVIEW = defineCommand<ReviewArguments>({
   name: "review",
   description:
-    "Review a branch against a base from local git and report the findings " +
+    "Review the checkout against a base from local git and report the findings " +
     "(bug/security/performance/readability). Nothing is posted: " +
     "the findings go to stdout as text, NDJSON or GitHub Actions annotations, and " +
     "`reviewer comment` reads them from there.",

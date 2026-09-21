@@ -35,7 +35,7 @@ scope, without calling a model.
 
 ## A branch with no commits of its own reviews nothing
 
-The changed-file set is the three-dot diff `base...branch`. If your work is
+The changed-file set is the three-dot diff `base...HEAD`. If your work is
 still uncommitted, or the branch has already been merged into the base so the
 merge-base _is_ `HEAD`, that diff is empty and the run correctly reports
 `0 changed file(s)`. `git status` shows the work; `reviewer review --uncommitted`

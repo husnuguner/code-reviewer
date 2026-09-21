@@ -18,6 +18,7 @@ import {
 
 import { type Config, type ConfigField } from "../core/config/config";
 import { type ChatModel } from "../core/ports/chat-model";
+import { type CodeContext } from "../core/ports/code-context";
 import { type ConsoleOutput } from "../core/ports/console";
 import { type GitReader } from "../core/ports/git-reader";
 import { type Logger } from "../core/ports/logger";
@@ -27,6 +28,7 @@ import {
   type SummaryWriter,
 } from "../core/ports/review-reporter";
 import { type SkillMatcher } from "../core/ports/skill-matcher";
+import { HEAD } from "../core/review/branch-review";
 import { FileReviewer } from "../core/review/file-reviewer";
 import { systemPrompt } from "../core/review/prompts";
 import { type PerFileVerifier } from "../core/review/review-file";
@@ -43,6 +45,7 @@ import {
   repoRootOf,
 } from "../providers/config/paths";
 import { StreamConsole } from "../providers/console/stream-console";
+import { GitCodeContext } from "../providers/git/git-code-context";
 import { LocalGitReader, worktree } from "../providers/git/local-git";
 import { builtinModelProviders } from "../providers/llm/builtin";
 import { type ModelProviderRegistry } from "../providers/llm/model-provider";
@@ -105,6 +108,8 @@ export interface RunCradle {
   readonly checkoutRoot: string;
   /** Local git over that checkout. */
   readonly gitReader: GitReader;
+  /** The checkout beyond the diff, read at `HEAD`, for pre-context. */
+  readonly codeContext: CodeContext;
   /** The project's skills, loaded and scoped by its mappings; resolved once per run. */
   readonly skills: Promise<SkillMatcher>;
 }
@@ -207,6 +212,10 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
     ).singleton(),
     gitReader: asFunction(
       ({ checkoutRoot, logger }: RunCradle) => new LocalGitReader(checkoutRoot, undefined, logger),
+    ).singleton(),
+    codeContext: asFunction(
+      ({ checkoutRoot, logger }: RunCradle) =>
+        new GitCodeContext(checkoutRoot, HEAD, undefined, logger),
     ).singleton(),
     skills: asFunction(({ config, checkoutRoot, logger }: RunCradle) => {
       const { path, defaults, mappings } = config.skillSettings();

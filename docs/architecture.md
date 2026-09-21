@@ -121,6 +121,11 @@ The choices with a real trade-off behind them, and what was given up:
 - **The reviewer reads local git and posts nothing.** A job that feeds
   untrusted diff text to a model must not hold a write credential. Given up:
   reading a PR's existing comments to avoid repeating them.
+- **The reviewed side is always the checkout.** `HEAD` against a base, or the
+  working tree against `HEAD`; there is no `--branch`. The diff, the file
+  contents and the pre-context then come from one tree, and cannot disagree
+  about which commit is under review. Given up: reviewing a ref without
+  checking it out.
 - **Skills belong to the reviewed repository, not to the reviewer.** They are
   that repository's conventions, versioned with its code. The reviewer ships
   none.

@@ -1,7 +1,8 @@
 # GitHub Action
 
-Reviewing a pull request means checking it out and reviewing the branch — no
-API, no token. Two composite actions under [`actions/`](../actions) split the
+Reviewing a pull request means checking it out and reviewing the checkout —
+what `actions/checkout` put in the workspace is what is reviewed. No API, no
+token. Two composite actions under [`actions/`](../actions) split the
 work:
 
 - [`actions/review`](../actions/review/action.yml) runs the model with
@@ -108,8 +109,7 @@ of a model that read untrusted text. That word stays a human's to give.
 | Input                   | Default                              | Meaning                                                                                     |
 | ----------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------- |
 | `api-key`               | _required_                           | The LLM key. Pass a secret.                                                                 |
-| `base-ref`              | the PR's base branch                 | What to compare against. The action fetches it before reviewing.                            |
-| `head-ref`              | `HEAD`                               | What to review.                                                                             |
+| `base-ref`              | the PR's base branch                 | What the checkout is compared against. The action fetches it before reviewing.              |
 | `provider`              | the checkout's config, else `local`  | `claude`, or `local` for an OpenAI-compatible server. Set it: a runner has no machine file. |
 | `model` / `base-url`    | provider default                     | Model name; endpoint for `local` (or a Claude proxy).                                       |
 | `language`              | `en`                                 | Language of the findings' text.                                                             |

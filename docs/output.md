@@ -19,7 +19,7 @@ bot that posts comments, and a model call is too expensive to make twice.
 ### Text
 
 ````text
-=== Branch review: feature/rate-limit vs main ===
+=== Branch review: HEAD vs main ===
 3 finding(s) across 2 file(s).
 anchors: 1 repaired
 
@@ -103,7 +103,7 @@ Then exactly one `summary` record:
 
 | Field                 | Meaning                                                                                                 |
 | --------------------- | ------------------------------------------------------------------------------------------------------- |
-| `base`, `branch`      | What was compared. An `--uncommitted` run reports `"HEAD"` and `"working tree"`.                        |
+| `base`, `branch`      | What was compared: `--base` and `"HEAD"`. An `--uncommitted` run reports `"HEAD"` and `"working tree"`. |
 | `files_changed`       | Files in the change set.                                                                                |
 | `files_reviewed`      | Files whose review came back.                                                                           |
 | `failed`              | Files selected for review whose review threw.                                                           |

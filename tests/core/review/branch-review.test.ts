@@ -16,8 +16,8 @@ import { type BranchReviewRecord } from "../../../src/core/ports/review-reporter
 import { type SkillMatcher } from "../../../src/core/ports/skill-matcher";
 import {
   type BranchReviewOptions,
+  HEAD,
   WORKING_TREE,
-  WORKTREE_BASE,
   branchReviewText,
   iterBranchReview,
   previewBranch,
@@ -38,6 +38,7 @@ import { git } from "../../helpers/git";
 /**
  * A repository with `main` and a `feature` branch that changed things:
  * feature modifies a.py, adds new.py, deletes gone.py, leaves same.py alone.
+ * The checkout is left on `feature`: the reviewed side is always the checkout.
  */
 function repo(): string {
   const root = mkdtempSync(join(tmpdir(), "reviewer-branch-"));
@@ -105,7 +106,6 @@ function options<R extends PerFileReviewer = FakeReviewer>(
   const reviewer = overrides.reviewer ?? (new FakeReviewer() as PerFileReviewer as R);
   return {
     base: "main",
-    branch: "feature",
     git: new LocalGitReader(root),
     settings: { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: 100_000 },
     skills: null,
@@ -165,13 +165,16 @@ describe("what git reports", () => {
     git(root, "checkout", "-q", "-b", "unpushed");
     writeFileSync(join(root, "a.py"), "one = 1\ntwo = 2\nfour = 4\n");
     git(root, "commit", "-qam", "more");
-    const o = options(root, { branch: "unpushed" });
+    const o = options(root);
     await reviewBranch(o);
     expect(o.reviewer.seen).toContain("a.py");
   });
 
   it("makes no model call when nothing changed", async () => {
-    const o = options(repo(), { branch: "main" });
+    // The checkout is the base itself.
+    const root = repo();
+    git(root, "checkout", "-q", "main");
+    const o = options(root);
     const result = await reviewBranch(o);
     expect(o.reviewer.seen).toEqual([]);
     expect(result.findings).toEqual([]);
@@ -185,9 +188,7 @@ describe("what git reports", () => {
     writeFileSync(join(root, "island.py"), "alone = True\n");
     git(root, "add", "-A");
     git(root, "commit", "-qm", "unrelated history");
-    await expect(reviewBranch(options(root, { branch: "island" }))).rejects.toThrow(
-      /no merge base/u,
-    );
+    await expect(reviewBranch(options(root))).rejects.toThrow(/no merge base/u);
   });
 });
 
@@ -288,15 +289,13 @@ describe("reviewing what is not committed", () => {
     expect(byPath.get("a.py")?.anchor).toBe("exact");
   });
 
-  it("says what it compared, whatever --base and --branch hold", async () => {
+  it("says what it compared, whatever --base holds", async () => {
     // A summary naming `main` here would describe a diff this run never took.
-    const stream = iterBranchReview(
-      options(stillWorking(), { uncommitted: true, base: "main", branch: "feature" }),
-    );
+    const stream = iterBranchReview(options(stillWorking(), { uncommitted: true, base: "main" }));
     const records: BranchReviewRecord[] = await Array.fromAsync(stream);
     expect(records.at(-1)).toMatchObject({
       type: "summary",
-      base: WORKTREE_BASE,
+      base: HEAD,
       branch: WORKING_TREE,
       files_changed: 2,
     });
@@ -312,7 +311,6 @@ describe("reviewing what is not committed", () => {
   it("previews the uncommitted change set under its own title", async () => {
     const { decisions, report } = await previewBranch({
       base: "main",
-      branch: "feature",
       uncommitted: true,
       git: new LocalGitReader(stillWorking()),
       settings: DEFAULT_FILE_REVIEW_SETTINGS,
@@ -331,7 +329,6 @@ describe("previewing a branch", () => {
     const reviewer = new FakeReviewer();
     const { decisions, report } = await previewBranch({
       base: "main",
-      branch: "feature",
       git: new LocalGitReader(root),
       settings: { ...DEFAULT_FILE_REVIEW_SETTINGS, exclude: ["new.py"] },
     });
@@ -340,7 +337,7 @@ describe("previewing a branch", () => {
       "a.py",
       "none",
     ]);
-    expect(report).toContain("=== [PREVIEW] branch feature vs main ===");
+    expect(report).toContain("=== [PREVIEW] HEAD vs main ===");
     expect(report).toContain("review   a.py");
     expect(report).toContain("skipped  new.py");
     expect(report).toContain("excluded");
@@ -352,7 +349,6 @@ describe("previewing a branch", () => {
     const settings = { ...DEFAULT_FILE_REVIEW_SETTINGS, exclude: ["new.py"] };
     const { decisions } = await previewBranch({
       base: "main",
-      branch: "feature",
       git: new LocalGitReader(root),
       settings,
     });

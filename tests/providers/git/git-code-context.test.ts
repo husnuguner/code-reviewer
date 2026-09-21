@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { type Finding } from "../../../src/core/domain/finding";
-import { reviewBranch } from "../../../src/core/review/branch-review";
+import { HEAD, reviewBranch } from "../../../src/core/review/branch-review";
 import { type ReviewFileInput } from "../../../src/core/review/file-reviewer";
 import { type PerFileReviewer } from "../../../src/core/review/review-file";
 import { DEFAULT_FILE_REVIEW_SETTINGS } from "../../../src/core/review/review-file";
@@ -202,7 +202,9 @@ describe("what the code context asks git", () => {
 
 describe("pre-context in a branch review", () => {
   it("gives the model the imported module's signature and the symbol's other users", async () => {
+    // The reviewed side is the checkout, so the branch is checked out first.
     const root = repo();
+    git(root, "checkout", "-q", "feature");
     const prompts = new Map<string, string>();
     const reviewer: PerFileReviewer = {
       reviewFile: (input: ReviewFileInput): Promise<Finding[]> => {
@@ -212,15 +214,14 @@ describe("pre-context in a branch review", () => {
     };
     await reviewBranch({
       base: "main",
-      branch: "feature",
       reviewer,
       git: new LocalGitReader(root),
       settings: { ...DEFAULT_FILE_REVIEW_SETTINGS, maxFileChars: 100_000 },
       skills: null,
       maxConcurrentFiles: 2,
-      codeContext: new GitCodeContext(root, "feature"),
+      codeContext: new GitCodeContext(root, HEAD),
     });
-    // route.ts imports ../service: its exported signature (at the branch) is context.
+    // route.ts imports ../service: its exported signature (at the checkout) is context.
     const route = prompts.get("src/api/route.ts") ?? "";
     expect(route).toContain("--- src/service.ts (imported as ../service)");
     expect(route).toContain("export function total(items: number[], tax: number): number {");
@@ -232,6 +233,7 @@ describe("pre-context in a branch review", () => {
 
   it("gathers nothing when the cap is zero or no context is wired", async () => {
     const root = repo();
+    git(root, "checkout", "-q", "feature");
     const seen: string[] = [];
     const reviewer: PerFileReviewer = {
       reviewFile: (input: ReviewFileInput): Promise<Finding[]> => {
@@ -241,7 +243,6 @@ describe("pre-context in a branch review", () => {
     };
     const base = {
       base: "main",
-      branch: "feature",
       reviewer,
       git: new LocalGitReader(root),
       skills: null,
@@ -250,7 +251,7 @@ describe("pre-context in a branch review", () => {
     await reviewBranch({
       ...base,
       settings: { ...DEFAULT_FILE_REVIEW_SETTINGS, maxContextChars: 0 },
-      codeContext: new GitCodeContext(root, "feature"),
+      codeContext: new GitCodeContext(root, HEAD),
     });
     await reviewBranch({ ...base, settings: DEFAULT_FILE_REVIEW_SETTINGS });
     expect(seen.every((text) => text === "")).toBe(true);

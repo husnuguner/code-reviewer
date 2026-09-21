@@ -97,11 +97,8 @@ describe("the review flags", () => {
       logFormat: "auto",
       // Commander's shape for `--no-color`: on until the flag is given.
       color: true,
-      // The current checkout: a CI build sits on a detached commit, so the
-      // common case must not need a branch name.
-      branch: "HEAD",
       base: "main",
-      // A branch review until a run asks for the working tree instead.
+      // The checkout against the base until a run asks for the working tree instead.
       uncommitted: false,
       format: "text",
       out: null,
@@ -121,17 +118,20 @@ describe("the review flags", () => {
     expect(review(["--no-verify"]).verify).toBe(false);
   });
 
-  it("refuse --uncommitted beside --base or --branch, which it would otherwise silently ignore", () => {
-    // One question or the other: the working tree against HEAD, or a branch
+  it("refuse --uncommitted beside --base, which it would otherwise silently ignore", () => {
+    // One question or the other: the working tree against HEAD, or the checkout
     // against a base. A base named with --uncommitted was never used, and a
     // flag that does nothing is a flag the operator misread.
     expect(() => review(["--uncommitted", "--base", "develop"])).toThrow(UsageError);
     expect(() => review(["--uncommitted", "--base", "develop"])).toThrow(
       /'--uncommitted' cannot be used with option '--base/u,
     );
-    expect(() => review(["--uncommitted", "--branch", "feat"])).toThrow(UsageError);
-    // The defaults of --base and --branch do not count as naming them.
+    // The default of --base does not count as naming it.
     expect(review(["--uncommitted"]).base).toBe("main");
+  });
+
+  it("know no --branch: the reviewed side is always the checkout", () => {
+    expect(() => review(["--branch", "feature/x"])).toThrow(UsageError);
   });
 
   it("name the config file, the language, the skills and the exclusions", () => {
@@ -153,10 +153,8 @@ describe("the review flags", () => {
     expect(arguments_.exclude).toEqual(["**/*.md", "**/*.lock"]);
   });
 
-  it("name the refs, the format and the record file", () => {
+  it("name the base, the format and the record file", () => {
     const arguments_ = review([
-      "--branch",
-      "feature/x",
       "--base",
       "develop",
       "--format",
@@ -164,7 +162,6 @@ describe("the review flags", () => {
       "--out",
       "findings.ndjson",
     ]);
-    expect(arguments_.branch).toBe("feature/x");
     expect(arguments_.base).toBe("develop");
     expect(arguments_.format).toBe("ndjson");
     expect(arguments_.out).toBe("findings.ndjson");
