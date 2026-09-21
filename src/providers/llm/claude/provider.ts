@@ -33,4 +33,12 @@ export class ClaudeProvider extends AiSdkProvider {
   protected override stablePrefix(): ProviderOptions {
     return ANTHROPIC_STABLE_PREFIX;
   }
+
+  /**
+   * Anthropic's JSON output wants a schema; asked for the schema-less kind, the SDK ignores it and warns
+   * on every call. The reviewer's own parser reads the answer either way, so nothing is asked.
+   */
+  protected override supportsJsonMode(): boolean {
+    return false;
+  }
 }

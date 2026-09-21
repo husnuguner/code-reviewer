@@ -234,6 +234,19 @@ describe("AI SDK chat model adapter", () => {
     expect(model.doGenerateCalls[0]?.responseFormat).toBeUndefined();
   });
 
+  it("asks for no format from a vendor without a schema-less JSON mode, even when the caller wants JSON", async () => {
+    // Anthropic's JSON output wants a schema; asked for the schema-less kind
+    // the SDK ignores it and warns on every call. The answer is read by the
+    // reviewer's own parser either way, so the request is simply not made.
+    const model = mockModel('{"findings": []}');
+    const response = await new AiSdkChatModel(model, { supportsJsonMode: false }).generate(
+      [{ role: "user", content: "u" }],
+      { responseFormat: "json" },
+    );
+    expect(model.doGenerateCalls[0]?.responseFormat).toBeUndefined();
+    expect(response.text).toBe('{"findings": []}');
+  });
+
   it("hands up an answer that is not JSON as text, leaving the retry to the caller", async () => {
     // The SDK parses a JSON-mode answer itself and throws when it cannot.
     // The reviewer has a tolerant parser and its own malformed-JSON retry,
@@ -310,6 +323,33 @@ describe("the model provider registry", () => {
       { role: "user", content: "FILE" },
     ]);
     expect(local.model.doGenerateCalls[0]?.prompt[0]?.providerOptions).toBeUndefined();
+  });
+
+  it("asks a local endpoint for JSON mode and Anthropic for none, which it would only warn about", async () => {
+    // Same wiring, other capability: the vendor class says whether a
+    // schema-less JSON mode exists, and the adapter it builds asks accordingly.
+    class ClaudeProbe extends ClaudeProvider {
+      readonly model = mockModel("{}");
+      protected override languageModel(): MockLanguageModelV3 {
+        return this.model;
+      }
+    }
+    class LocalProbe extends AiSdkProvider {
+      readonly name = "probe";
+      readonly description = "an OpenAI-compatible vendor";
+      readonly defaultModel = "m";
+      readonly model = mockModel("{}");
+      protected languageModel(): MockLanguageModelV3 {
+        return this.model;
+      }
+    }
+    const claude = new ClaudeProbe();
+    const local = new LocalProbe();
+    const ask = { responseFormat: "json" } as const;
+    await claude.create(choice()).generate([{ role: "user", content: "FILE" }], ask);
+    await local.create(choice()).generate([{ role: "user", content: "FILE" }], ask);
+    expect(claude.model.doGenerateCalls[0]?.responseFormat).toBeUndefined();
+    expect(local.model.doGenerateCalls[0]?.responseFormat).toEqual({ type: "json" });
   });
 
   it("refuses an unknown provider by name, listing the known ones", () => {

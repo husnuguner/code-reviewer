@@ -29,17 +29,25 @@ export type ProviderOptions = Record<string, JSONObject>;
 export interface AiSdkChatModelOptions {
   /** Attached to every `stable` message; `undefined` leaves the flag without effect. */
   readonly stablePrefix?: ProviderOptions;
+  /**
+   * Whether the vendor has a schema-less JSON mode to ask for (`response_format: json_object`). `false`
+   * for a vendor that would ignore the request and warn -- Anthropic wants a schema -- so the answer is
+   * left to the caller's tolerant parser, as it is anyway. Default `true`.
+   */
+  readonly supportsJsonMode?: boolean;
 }
 
 /** Adapts an AI SDK `LanguageModel` to the `ChatModel` port. */
 export class AiSdkChatModel implements ChatModel {
   private readonly stablePrefix: ProviderOptions | undefined;
+  private readonly supportsJsonMode: boolean;
 
   constructor(
     private readonly model: LanguageModel,
     options: AiSdkChatModelOptions = {},
   ) {
     this.stablePrefix = options.stablePrefix;
+    this.supportsJsonMode = options.supportsJsonMode ?? true;
   }
 
   /**
@@ -64,7 +72,8 @@ export class AiSdkChatModel implements ChatModel {
         messages: conversation,
         maxRetries: 0,
         ...(options.signal !== undefined && { abortSignal: options.signal }),
-        ...(options.responseFormat === "json" && { output: Output.json() }),
+        ...(options.responseFormat === "json" &&
+          this.supportsJsonMode && { output: Output.json() }),
       });
       // `result.text` is the raw generated text whether or not an output format was asked for.
       return { text: result.text, usage: toUsage(result.usage) };

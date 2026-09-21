@@ -18,6 +18,7 @@ export abstract class AiSdkProvider extends ModelProvider {
     const stablePrefix = this.stablePrefix();
     return new AiSdkChatModel(this.languageModel(request), {
       ...(stablePrefix !== undefined && { stablePrefix }),
+      supportsJsonMode: this.supportsJsonMode(),
     });
   }
 
@@ -28,6 +29,15 @@ export abstract class AiSdkProvider extends ModelProvider {
    */
   protected stablePrefix(): ProviderOptions | undefined {
     return undefined;
+  }
+
+  /**
+   * Whether the vendor has a schema-less JSON mode (`response_format: json_object`) worth asking for.
+   *
+   * @returns `true` by default, the OpenAI-compatible answer; a vendor that would ignore the request overrides this.
+   */
+  protected supportsJsonMode(): boolean {
+    return true;
   }
 
   /** The SDK model for one request; `request.model` is already settled. */
