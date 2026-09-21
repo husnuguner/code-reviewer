@@ -32,7 +32,7 @@ jobs:
         with:
           fetch-depth: 0 # the reviewer diffs locally and needs the merge-base
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: husnuguner/code-reviewer/actions/review@v0.0.7
+      - uses: husnuguner/code-reviewer/actions/review@v0.0.8
         with:
           provider: claude # the workflow names the model: a runner has no ~/.config/reviewer
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -52,7 +52,7 @@ jobs:
         id: findings
         with: { name: code-review-findings }
         continue-on-error: true
-      - uses: husnuguner/code-reviewer/actions/comment@v0.0.7 # same version as the review job
+      - uses: husnuguner/code-reviewer/actions/comment@v0.0.8 # same version as the review job
         if: ${{ steps.findings.outcome == 'success' }} # skipped, not green, when there is nothing to post
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -185,7 +185,7 @@ Releases follow GitHub's action convention: an immutable `vX.Y.Z` tag per
 release and a moving major tag (`v0`) that points at the latest `v0.*`.
 
 ```yaml
-- uses: husnuguner/code-reviewer/actions/review@v0.0.7 # this exact release; recommended while 0.x
+- uses: husnuguner/code-reviewer/actions/review@v0.0.8 # this exact release; recommended while 0.x
 - uses: husnuguner/code-reviewer/actions/review@v0 # latest 0.x
 - uses: husnuguner/code-reviewer/actions/review@<full-sha> # what a hardened workflow pins
 ```
