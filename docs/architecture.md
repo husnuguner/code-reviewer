@@ -172,6 +172,10 @@ Toolchain: Bun (pinned in `.bun-version`; package manager, test runner and
 runtime, no build step) · TypeScript 6 · ESLint 10 with type-aware rules ·
 Prettier.
 
+The gate is `bun run check` (typecheck, lint, format:check, test); the
+`Check` workflow (`.github/workflows/check.yml`) runs the same command on
+every push to `main` and every pull request, on the pinned Bun.
+
 Bun reads a working directory's `.env` by default. This repository turns that
 off (`bunfig.toml`, `env = false`) and the executable carries `--no-env-file`
 in its shebang: the reviewer reads `.env` files itself in a stated order in
