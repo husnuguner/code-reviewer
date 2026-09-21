@@ -157,11 +157,11 @@ By default a line is the sentence and its level; `-v` adds the record around
 it:
 
 ```console
-$ reviewer --base main
+$ reviewer review --base main
 info: Loaded 3 skill(s): api-conventions, error-handling, tests
 warn: No merge-base for 'HEAD' and 'main'; comparing against 'main' directly.
 
-$ reviewer --base main -v
+$ reviewer review --base main -v
 11:12:59.341  debug  reviewer.config: Read repo config file .review/config.yaml: 3 setting(s).
 11:12:59.342  info   reviewer.skills: Loaded 3 skill(s): api-conventions, error-handling, tests
 11:13:41.902  debug  reviewer.review.file_reviewer: src/api/users/handler.ts: the model answered in 77.7s (attempt 1 of 2; 9,445 tokens in (7,650 cached), 2,410 out, 31 tokens/s).

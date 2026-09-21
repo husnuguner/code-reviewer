@@ -80,6 +80,7 @@ describe("actions/review/action.yml, the Review step", () => {
     expect(step.calls[0]).toEqual([
       "--no-env-file",
       "/action/src/cli/main.ts",
+      "review",
       "--base",
       "origin/pre-prod",
       "--branch",

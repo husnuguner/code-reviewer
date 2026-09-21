@@ -82,7 +82,7 @@ meets and the composition root all learn the name from the registry.
 ### `src/cli/` — the composition
 
 Each command is two files: `command.ts` says what it takes, `run.ts` what it
-does. `review` (the default) calls a model and cannot post; `comment` holds a
+does. `review` calls a model and cannot post; `comment` holds a
 token and cannot call a model; `init` writes a config file.
 Each has its own composition root, so no run ever holds both credentials.
 

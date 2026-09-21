@@ -1,5 +1,5 @@
 /**
- * `reviewer review` (the default): its flags and their parsed shape. What it does is `run.ts`.
+ * `reviewer review`: its flags and their parsed shape. What it does is `run.ts`.
  * @packageDocumentation
  */
 
@@ -119,7 +119,7 @@ export const REVIEW = defineCommand<ReviewArguments>({
   name: "review",
   description:
     "Review a branch against a base from local git and report the findings " +
-    "(bug/security/performance/readability). The default command. Nothing is posted: " +
+    "(bug/security/performance/readability). Nothing is posted: " +
     "the findings go to stdout as text, NDJSON or GitHub Actions annotations, and " +
     "`reviewer comment` reads them from there.",
   options: reviewOptions,

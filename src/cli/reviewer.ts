@@ -1,6 +1,6 @@
 /**
- * The `reviewer` root command: a registry of subcommands (`review` default, `init`, `comment`). `review`
- * holds no hosting token; `comment` builds no model.
+ * The `reviewer` root command: a registry of subcommands (`review`, `init`, `comment`), none of them the
+ * default. `review` holds no hosting token; `comment` builds no model.
  * @packageDocumentation
  */
 
@@ -23,10 +23,7 @@ import { REVIEW } from "./commands/review/command";
 
 export { type Invocation, UsageError, isInvocationOf } from "./command-line";
 
-/** What a command line that names no command means. */
-const DEFAULT_COMMAND: CliCommand<unknown> = REVIEW;
-
-/** Every command, in `--help` order. */
+/** Every command, in `--help` order. There is no default: a command line names what it wants. */
 const COMMANDS: readonly CliCommand<unknown>[] = [REVIEW, INIT, COMMENT];
 
 /** Attaches one command to the root so its parse hands back a bound invocation. */
@@ -39,7 +36,6 @@ function register(
     command.build((arguments_) => {
       onParsed(bind(command, arguments_));
     }),
-    { isDefault: command === DEFAULT_COMMAND },
   );
 }
 
@@ -53,8 +49,8 @@ export function buildProgram(onParsed: (invocation: Invocation) => void): Comman
   const program = loggingOptions(
     commandLine(
       "reviewer",
-      "Review a change set with a language model and report anchored findings, or post a " +
-        `run's findings to a pull request. \`${DEFAULT_COMMAND.name}\` is the default command.`,
+      "Review a change set with a language model and report anchored findings (`review`), write " +
+        "the config files (`init`), or post a run's findings to a pull request (`comment`).",
     ),
   );
   for (const command of COMMANDS) register(program, command, onParsed);

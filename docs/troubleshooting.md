@@ -3,7 +3,7 @@
 A free first check that needs no key:
 
 ```bash
-reviewer --preview --base main -v
+reviewer review --preview --base main -v
 ```
 
 It resolves the config, opens git, computes the merge-base and prints the

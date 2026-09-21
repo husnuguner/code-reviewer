@@ -68,8 +68,8 @@ function finishRepoInit(files: ConfigDirectory, out: ConsoleOutput, starter: Sta
     `  3. Add this project's review skills to ${files.directory}/skills/ -- see the README there.`,
   );
   out.line(`  4. Map each skill to the paths it reviews: skills.mappings in ${files.path}.`);
-  out.line("  5. reviewer --preview --base main    # what would be reviewed; no model call");
-  out.line("  6. reviewer --base main");
+  out.line("  5. reviewer review --preview --base main    # what would be reviewed; no model call");
+  out.line("  6. reviewer review --base main");
   return 0;
 }
 
@@ -82,7 +82,7 @@ function finishMachineInit(files: ConfigDirectory, out: ConsoleOutput): number {
   );
   out.line("  2. cd <a checkout> && reviewer init         # that repository's rules: .review/");
   out.line(
-    "  3. reviewer --preview --base main            # what would be reviewed; no model call",
+    "  3. reviewer review --preview --base main            # what would be reviewed; no model call",
   );
   return 0;
 }

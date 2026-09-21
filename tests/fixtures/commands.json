@@ -7,7 +7,7 @@
       "input": {},
       "expected": {
         "code": 0,
-        "out": "Wrote <CONFIG_PATH>\n\nNext:\n  1. Put the model's key in <CONFIG_HOME>/.env under the name <CONFIG_PATH> gives it.\n  2. cd <a checkout> && reviewer init         # that repository's rules: .review/\n  3. reviewer --preview --base main            # what would be reviewed; no model call\n"
+        "out": "Wrote <CONFIG_PATH>\n\nNext:\n  1. Put the model's key in <CONFIG_HOME>/.env under the name <CONFIG_PATH> gives it.\n  2. cd <a checkout> && reviewer init         # that repository's rules: .review/\n  3. reviewer review --preview --base main            # what would be reviewed; no model call\n"
       }
     },
     {

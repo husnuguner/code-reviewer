@@ -15,7 +15,7 @@ pull-request comments is a separate command, in a separate CI job, that runs
 no model.
 
 ```text
-$ reviewer --base main
+$ reviewer review --base main
 
 === Branch review: HEAD vs main ===
 2 finding(s) across 1 file(s).
@@ -126,8 +126,8 @@ printf 'ANTHROPIC_API_KEY=sk-ant-...\n' > ~/.config/reviewer/.env && chmod 600 ~
 # 2. In the repository you want reviewed
 cd ~/work/my-repo
 reviewer init                    # writes ./.review/ — config, prompts/, skills/
-reviewer --preview --base main   # what would be reviewed; no model call, no cost
-reviewer --base main             # the review
+reviewer review --preview --base main   # what would be reviewed; no model call, no cost
+reviewer review --base main             # the review
 ```
 
 Two files, one rule: **the machine's says how the reviewer runs, the
@@ -149,28 +149,28 @@ To use a local model instead of Anthropic:
 
 ```bash
 LLM_PROVIDER=local LLM_BASE_URL=http://localhost:11434/v1 LLM_MODEL=qwen2.5-coder LLM_API_KEY=ollama \
-  reviewer --base main
+  reviewer review --base main
 ```
 
 ## Usage
 
 ```bash
-reviewer --base main                        # text, for a human
-reviewer --base main --format ndjson        # one JSON record per line, for a program
-reviewer --base main --format github        # GitHub Actions annotations + job summary
-reviewer --base main --out findings.ndjson  # ...and a machine-readable copy, whatever --format prints
-reviewer --preview --base main              # scope only: no model, no cost
-reviewer --base main --fail-on bug,security # exit 3 when one of those is reported
-reviewer --uncommitted                      # the work that is not in a commit yet
+reviewer review --base main                        # text, for a human
+reviewer review --base main --format ndjson        # one JSON record per line, for a program
+reviewer review --base main --format github        # GitHub Actions annotations + job summary
+reviewer review --base main --out findings.ndjson  # ...and a machine-readable copy, whatever --format prints
+reviewer review --preview --base main              # scope only: no model, no cost
+reviewer review --base main --fail-on bug,security # exit 3 when one of those is reported
+reviewer review --uncommitted                      # the work that is not in a commit yet
 ```
 
 ### Commands
 
-| Command             | What it does                                                                            |
-| ------------------- | --------------------------------------------------------------------------------------- |
-| `reviewer [review]` | Review a branch against a base (the default command).                                   |
-| `reviewer comment`  | Post a findings file to a pull request. Needs `GITHUB_TOKEN`; runs no model.            |
-| `reviewer init`     | Write the config file: `.review/` inside a checkout, `~/.config/reviewer/` outside one. |
+| Command            | What it does                                                                            |
+| ------------------ | --------------------------------------------------------------------------------------- |
+| `reviewer review`  | Review a branch against a base.                                                         |
+| `reviewer comment` | Post a findings file to a pull request. Needs `GITHUB_TOKEN`; runs no model.            |
+| `reviewer init`    | Write the config file: `.review/` inside a checkout, `~/.config/reviewer/` outside one. |
 
 ### Review flags
 

@@ -15,7 +15,10 @@ export function argumentsOf<A>(command: CliCommand<A>, argv: readonly string[]):
   return parsed.arguments;
 }
 
-/** `argumentsOf` for one command, so a test file names the command once. */
+/**
+ * `argumentsOf` for one command, the command's name put first: a test then writes only the flags, the way a
+ * user writes them after `reviewer <command>`.
+ */
 export function parsedBy<A>(command: CliCommand<A>): (argv: readonly string[]) => A {
-  return (argv) => argumentsOf(command, argv);
+  return (argv) => argumentsOf(command, [command.name, ...argv]);
 }

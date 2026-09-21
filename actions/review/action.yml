@@ -227,6 +227,7 @@ runs:
         set_if_given REVIEW_VERIFY "${IN_VERIFY}"
         set_if_given REVIEWER_LOG_LEVEL "${IN_LOG_LEVEL}"
         args=(
+          review
           --base "origin/${BASE_REF}"
           --branch "${HEAD_REF}"
           --fail-on "${FAIL_ON}"

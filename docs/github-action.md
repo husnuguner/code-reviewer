@@ -140,7 +140,7 @@ reviewer comment --findings code-review.ndjson --repo acme/app --pr 7   # needs 
 
 | Flag                   | Effect                                                                                                      |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `--findings`           | The NDJSON stream `reviewer --out` wrote.                                                                   |
+| `--findings`           | The NDJSON stream `reviewer review --out` wrote.                                                            |
 | `--provider`           | The hosting system (`github`, the default).                                                                 |
 | `--repo`               | The repository as the provider names it — `owner/name` on GitHub. A bad slug is refused before any request. |
 | `--pr`                 | The pull request number.                                                                                    |

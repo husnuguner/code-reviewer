@@ -14,9 +14,11 @@ import { argumentsOf, parsedBy } from "../helpers/command-line";
 const review = parsedBy(REVIEW);
 
 describe("naming the command", () => {
-  it("reviews unless told otherwise", () => {
-    expect(parseArguments([]).command).toBe("review");
-    expect(parseArguments(["--preview"]).command).toBe("review");
+  it("has no default: a bare command line is a usage error that prints the help", () => {
+    // `reviewer` alone, or `reviewer --preview`, used to mean `review`. A flag
+    // without its command now says which command it was meant for.
+    expect(() => parseArguments([])).toThrow(UsageError);
+    expect(() => parseArguments(["--preview"])).toThrow(/unknown option '--preview'/u);
     expect(parseArguments(["review", "--base", "develop"]).command).toBe("review");
   });
 
@@ -69,8 +71,12 @@ describe("the logging flags", () => {
   });
 
   it("refuse a level and a format neither the logger knows", () => {
-    expect(() => parseArguments(["--log-level", "chatty"])).toThrow(/Allowed levels are/u);
-    expect(() => parseArguments(["--log-format", "xml"])).toThrow(/Allowed log formats are/u);
+    expect(() => parseArguments(["review", "--log-level", "chatty"])).toThrow(
+      /Allowed levels are/u,
+    );
+    expect(() => parseArguments(["review", "--log-format", "xml"])).toThrow(
+      /Allowed log formats are/u,
+    );
   });
 
   it("spell --no-color as color: false, and leave the terminal to decide otherwise", () => {
@@ -119,11 +125,11 @@ describe("the review flags", () => {
     // One question or the other: the working tree against HEAD, or a branch
     // against a base. A base named with --uncommitted was never used, and a
     // flag that does nothing is a flag the operator misread.
-    expect(() => parseArguments(["--uncommitted", "--base", "develop"])).toThrow(UsageError);
-    expect(() => parseArguments(["--uncommitted", "--base", "develop"])).toThrow(
+    expect(() => review(["--uncommitted", "--base", "develop"])).toThrow(UsageError);
+    expect(() => review(["--uncommitted", "--base", "develop"])).toThrow(
       /'--uncommitted' cannot be used with option '--base/u,
     );
-    expect(() => parseArguments(["--uncommitted", "--branch", "feat"])).toThrow(UsageError);
+    expect(() => review(["--uncommitted", "--branch", "feat"])).toThrow(UsageError);
     // The defaults of --base and --branch do not count as naming them.
     expect(review(["--uncommitted"]).base).toBe("main");
   });
@@ -167,13 +173,11 @@ describe("the review flags", () => {
   it("read --fail-on as a severity list, and 'none' as no gate", () => {
     expect(review(["--fail-on", "bug,security"]).failOn).toEqual(["bug", "security"]);
     expect(review(["--fail-on", "none"]).failOn).toEqual([]);
-    expect(() => parseArguments(["--fail-on", "urgent"])).toThrow(/Allowed severities are/u);
+    expect(() => review(["--fail-on", "urgent"])).toThrow(/Allowed severities are/u);
   });
 
   it("refuse a format the registry does not know", () => {
-    expect(() => parseArguments(["--format", "xml"])).toThrow(
-      /Allowed formats are text, ndjson, github/u,
-    );
+    expect(() => review(["--format", "xml"])).toThrow(/Allowed formats are text, ndjson, github/u);
   });
 });
 
@@ -184,6 +188,6 @@ describe("the config-file flags", () => {
   });
 
   it("no longer take --project", () => {
-    expect(() => parseArguments(["--project", "app"])).toThrow(UsageError);
+    expect(() => review(["--project", "app"])).toThrow(UsageError);
   });
 });
