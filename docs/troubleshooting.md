@@ -11,23 +11,27 @@ scope, without calling a model.
 
 ## When it does not run
 
-| Symptom                                                            | Cause / fix                                                                                                                    |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| exit 2, `settings.llm.api-key reads '${...}', which is not set`    | Put the variable in `~/.config/reviewer/.env` (or `.review/.env`), or export it.                                               |
-| exit 2, `... is spelled like a variable's name, not a key`         | Write `api-key: ${NAME}`; a bare name is taken as the key itself.                                                              |
-| exit 2, `1 validation error for Config`                            | A setting has the wrong shape; the message names the variable.                                                                 |
-| exit 2, `... is not a git repository`                              | Run inside a checkout: the one owning `.review/config.yaml`, else the working directory.                                       |
-| exit 2, `configuration param '...' not declared in the schema`     | A key the schema does not know, named by its place in the file. Every such key is listed.                                      |
-| exit 2, `... sets ['skills'], which belongs to a repository's ...` | `skills` is in `~/.config/reviewer/config.yaml`; move it to the repository's `.review/config.yaml`.                            |
-| exit 2, `... declares schema version N ... up to 1`                | A config file from a newer build; upgrade the reviewer or lower `version`.                                                     |
-| The model is not the one I set                                     | Two files and the environment speak; `-v` logs which files were read, and `LLM_*` variables (a CI input among them) beat both. |
-| exit 3                                                             | Not an error: a finding matched `--fail-on`.                                                                                   |
-| exit 1 with a usage message                                        | Bad flag, or no command named (`reviewer review …`); see `--help`.                                                             |
-| `No merge-base for 'X' and 'Y'`                                    | Unrelated refs, or a shallow clone. CI needs `fetch-depth: 0`.                                                                 |
-| `0 changed file(s)` with work in `git status`                      | The work is not committed, or the branch is already merged. Use `reviewer review --uncommitted`.                               |
-| 0 findings and `files_reviewed=0`                                  | Everything was skipped; `--preview` says why, per file.                                                                        |
-| `Skill ... has no entry in the project's skills.mappings`          | A loaded skill nobody scoped. Map it, or switch it off with `[]`.                                                              |
-| `Skill mapping for '…' matches no loaded skill`                    | The mapping names a skill that is not in `skills.path`; almost always a typo.                                                  |
+| Symptom                                                            | Cause / fix                                                                                                                     |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| exit 2, `settings.llm.api-key reads '${...}', which is not set`    | Put the variable in `~/.config/reviewer/.env` (or `.review/.env`), or export it.                                                |
+| exit 2, `... is spelled like a variable's name, not a key`         | Write `api-key: ${NAME}`; a bare name is taken as the key itself.                                                               |
+| exit 2, `1 validation error for Config`                            | A setting has the wrong shape; the message names the variable.                                                                  |
+| exit 2, `... is not a git repository`                              | Run inside a checkout: the one owning `.review/config.yaml`, else the working directory.                                        |
+| exit 2, `configuration param '...' not declared in the schema`     | A key the schema does not know, named by its place in the file. Every such key is listed.                                       |
+| exit 2, `... sets ['skills'], which belongs to a repository's ...` | `skills` is in `~/.config/reviewer/config.yaml`; move it to the repository's `.review/config.yaml`.                             |
+| exit 2, `... declares schema version N ... up to 1`                | A config file from a newer build; upgrade the reviewer or lower `version`.                                                      |
+| The model is not the one I set                                     | Two files and the environment speak; `-v` logs which files were read, and `LLM_*` variables (a CI input among them) beat both.  |
+| exit 3                                                             | Not an error: a finding matched `--fail-on`.                                                                                    |
+| exit 1 with a usage message                                        | Bad flag, or no command named (`reviewer review …`); see `--help`.                                                              |
+| `No merge-base for 'X' and 'Y'`                                    | Unrelated refs, or a shallow clone. CI needs `fetch-depth: 0`.                                                                  |
+| `0 changed file(s)` with work in `git status`                      | The work is not committed, or the branch is already merged. Use `reviewer review --uncommitted`.                                |
+| 0 findings and `files_reviewed=0`                                  | Everything was skipped; `--preview` says why, per file.                                                                         |
+| `Skill ... is in neither the project's skills.defaults nor ...`    | A loaded skill nobody scoped. Name it under a `skills.defaults` glob, map it, or switch it off with `[]`.                       |
+| `Skill mapping for '…' matches no loaded skill`                    | The mapping names a skill that is not in `skills.path`; almost always a typo.                                                   |
+| `Skill default for '…' matches no loaded skill`                    | A `skills.defaults` glob lists a skill that is not in `skills.path`; almost always a typo.                                      |
+| `Skill budget reached for …`                                       | `max-skills-total-chars` left a matching skill out of that file's prompt, so it was not reviewed against it. Said once a skill. |
+| `settings.max-skill-chars=… is larger than …`                      | The two caps [disagree](configuration.md#when-settings-disagree): one skill can fill a file's whole block.                      |
+| `skills.path is empty, so no skill is loaded, but …`               | The tables scope skills the run never loads. Name the skills directory, or drop the tables.                                     |
 
 ## A branch with no commits of its own reviews nothing
 

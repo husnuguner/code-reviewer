@@ -206,10 +206,7 @@ describe("the shared per-file step", () => {
 
   it("names the skills that were in the prompt", async () => {
     const skills = {
-      skillsFor: () => [
-        { name: "http-route", globs: ["**"], body: "b", source: "repo", description: "" },
-      ],
-      renderFor: () => "skills-text",
+      renderFor: () => ({ text: "skills-text", applied: ["http-route"] }),
     };
     const { result, reviewer } = await review(new ChangedFile("a.ts", "modified", PATCH), {
       skills,

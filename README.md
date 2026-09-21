@@ -229,6 +229,7 @@ settings: # on top of the machine's
   max-findings-per-file: 3
 skills: # this file only
   path: skills # beside config.yaml
+  defaults: [{ globs: "**/*.ts", skills: [typescript-base] }] # the baseline
   mappings:
     api-conventions: ["src/api/**/*.ts"]
     error-handling: "src/**/*.ts"
@@ -257,8 +258,10 @@ reference is [templates/config.example.yaml](templates/config.example.yaml).
 ## Review skills
 
 A skill is one Markdown file of review guidelines. Which files it applies to
-is stated once, in `config.yaml`. Skills live in the reviewed repository; the
-reviewer ships none of its own.
+is stated once, in `config.yaml`: `skills.defaults` for the baseline a whole
+language or area shares, `skills.mappings` for the paths one skill alone
+reviews. Skills live in the reviewed repository; the reviewer ships none of
+its own.
 
 ```markdown
 <!-- .review/skills/api-conventions.md -->
@@ -278,15 +281,19 @@ description: Rules for HTTP handlers.
 # .review/config.yaml
 skills:
   path: skills
-  mappings:
+  defaults: # the skills every file these globs match is held to
+    - globs: ["**/*.ts", "**/*.tsx"]
+      skills: [typescript-base, naming]
+  mappings: # skill -> the globs only it reviews, added to the baseline
     api-conventions: ["src/api/**/*.ts"]
     background-jobs: [] # switched off without deleting the file
 ```
 
 For a changed file whose path matches, the skill's text is rendered into the
 prompt under _"Project/framework standards for this file"_; the report names
-the skills that were in the prompt. A file that matches nothing is still
-reviewed with the four lenses alone.
+the skills that were in the prompt. `src/api/users.ts` above is held to
+`typescript-base`, `naming` and `api-conventions` at once. A file that matches
+nothing is still reviewed with the four lenses alone.
 
 Instructions that should hold on **every** file go in `.review/prompts/*.md`
 instead. Both are described in

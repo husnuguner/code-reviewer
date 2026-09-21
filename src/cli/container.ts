@@ -209,8 +209,13 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
       ({ checkoutRoot, logger }: RunCradle) => new LocalGitReader(checkoutRoot, undefined, logger),
     ).singleton(),
     skills: asFunction(({ config, checkoutRoot, logger }: RunCradle) => {
-      const { path, mappings } = config.skillSettings();
-      return SkillRegistry.build([skillSource(checkoutRoot, path, logger)], logger, mappings);
+      const { path, defaults, mappings } = config.skillSettings();
+      return SkillRegistry.build(
+        [skillSource(checkoutRoot, path, logger)],
+        logger,
+        mappings,
+        defaults,
+      );
     }).singleton(),
     configHomePath: asFunction(() => configHome()).singleton(),
     configFilePaths: asFunction(({ request: r }: RunCradle) =>

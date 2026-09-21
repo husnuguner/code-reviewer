@@ -39,8 +39,11 @@ src/lib/cache.ts  (no line anchor)
   **[Readability]** `ttl` is documented in seconds but compared against `Date.now()` in milliseconds.
 ````
 
-The `(skills: …)` line names the skills that were in the prompt for that
-file. A finding that could not be anchored is listed with `(no line anchor)`.
+The `(skills: …)` line names the skills that were in the prompt for that file
+-- what it actually carried, so a skill the
+[per-file budget](configuration.md#review-skills) left out is not among them,
+and a warning names it instead. A finding that could not be anchored is listed
+with `(no line anchor)`.
 When files failed or were shown in part, the header says so before the
 findings.
 
@@ -74,7 +77,7 @@ One `finding` record per finding, as each file's review completes:
 | `severity`   | string         | `bug`, `security`, `performance` or `readability`.                                        |
 | `body`       | string         | The comment, in the configured language.                                                  |
 | `example`    | string         | A short fix snippet, or `""`.                                                             |
-| `skills`     | string[]       | The skills that were in the prompt for this file.                                         |
+| `skills`     | string[]       | The skills the prompt carried for this file; one the budget left out is not listed.       |
 
 Then exactly one `summary` record:
 

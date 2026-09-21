@@ -36,7 +36,12 @@ skills:
   # Every relative path in this file is taken from its own directory
   # (.review/), so this means .review/skills.
   path: skills
-  # skill name -> globs it reviews; a skill mapped nowhere never applies.
-  # This is where your rules go: map one to ["**/*"] to apply it everywhere.
+  # The baseline: the skills every file these globs match is held to. This is
+  # where a language's standing rules go, stated once for all of them.
+  defaults: []
+  # - globs: ["**/*.ts", "**/*.tsx"]
+  #   skills: [typescript-base]
+  # skill name -> the globs only it reviews, added to what `defaults` gave it;
+  # a skill in neither table never applies, and [] switches one off.
   mappings: {}
   # api-rules: ["src/api/**/*.ts"]

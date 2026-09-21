@@ -59,9 +59,29 @@ export interface ConcurrencyLimits {
 /** Skill name → path globs. `[]` switches a skill off; an unmapped skill never applies. */
 export type SkillMappings = Readonly<Record<string, readonly string[]>>;
 
+/**
+ * One baseline entry: the skills every file these globs match is held to.
+ *
+ * @remarks Written the other way round from a mapping -- the paths first, then the skills -- because that is
+ * how a project states it: "every TypeScript file is held to these". A list rather than a `glob: skills`
+ * object because a config key is a dotted path, and every useful glob carries a dot.
+ */
+export interface SkillDefault {
+  readonly globs: readonly string[];
+  readonly skills: readonly string[];
+}
+
+/**
+ * The baseline, stated once per group of paths instead of repeated under every skill that shares it. A skill
+ * named here still takes whatever `mappings` adds to it.
+ */
+export type SkillDefaults = readonly SkillDefault[];
+
 /** Where a project's skills are and what each applies to. */
 export interface SkillSettings {
   /** Directory of the skill documents; `""` = no skills. */
   readonly path: string;
+  /** The baseline every matching file is held to, whatever `mappings` adds. */
+  readonly defaults: SkillDefaults;
   readonly mappings: SkillMappings;
 }

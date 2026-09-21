@@ -18,6 +18,7 @@ import {
   type ConfigShape,
   FIELD_PATHS,
   type RegisteredProviders,
+  type SkillDefaultShape,
   configSchema,
 } from "./schema";
 import {
@@ -25,6 +26,7 @@ import {
   type FileReviewSettings,
   type LlmSettings,
   type ReportPolicy,
+  type SkillDefaults,
   type SkillMappings,
   type SkillSettings,
 } from "./settings";
@@ -83,6 +85,7 @@ export interface ConfigValues {
   readonly maxContextChars: number;
   readonly maxConcurrentFiles: number;
   readonly skillsPath: string;
+  readonly skillDefaults: SkillDefaults;
   readonly skillMappings: SkillMappings;
 }
 
@@ -205,20 +208,28 @@ function valuesFrom(
         ? defaultConcurrency(cpuCount)
         : shape.settings["max-concurrent-files"],
     skillsPath: shape.skills.path,
+    skillDefaults: normalisedDefaults(shape.skills.defaults),
     skillMappings: normalisedMappings(shape.skills.mappings),
   };
+}
+
+/** One bare entry becomes a list of one; every string is trimmed and an empty one is dropped. */
+function asList(value: string | string[]): string[] {
+  return (typeof value === "string" ? [value] : value)
+    .map((item) => item.trim())
+    .filter((item) => item !== "");
 }
 
 /** One bare glob becomes a list; names and globs are trimmed, empty globs dropped. */
 function normalisedMappings(mappings: Record<string, string | string[]>): SkillMappings {
   return Object.fromEntries(
-    Object.entries(mappings).map(([name, globs]) => [
-      name.trim(),
-      (typeof globs === "string" ? [globs] : globs)
-        .map((glob) => glob.trim())
-        .filter((glob) => glob !== ""),
-    ]),
+    Object.entries(mappings).map(([name, globs]) => [name.trim(), asList(globs)]),
   );
+}
+
+/** The same normalisation for the baseline, whose entries carry the two lists side by side. */
+function normalisedDefaults(defaults: SkillDefaultShape[]): SkillDefaults {
+  return defaults.map((entry) => ({ globs: asList(entry.globs), skills: asList(entry.skills) }));
 }
 
 /** Attaches the derived views to one immutable set of values. */
@@ -239,7 +250,11 @@ function withViews(values: ConfigValues): Config {
       maxContextChars: values.maxContextChars,
     }),
     reportPolicy: () => ({ maxFindingsPerFile: values.maxFindingsPerFile }),
-    skillSettings: () => ({ path: values.skillsPath, mappings: values.skillMappings }),
+    skillSettings: () => ({
+      path: values.skillsPath,
+      defaults: values.skillDefaults,
+      mappings: values.skillMappings,
+    }),
     concurrency: () => ({ files: values.maxConcurrentFiles }),
   });
 }

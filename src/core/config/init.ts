@@ -67,7 +67,9 @@ function finishRepoInit(files: ConfigDirectory, out: ConsoleOutput, starter: Sta
   out.line(
     `  3. Add this project's review skills to ${files.directory}/skills/ -- see the README there.`,
   );
-  out.line(`  4. Map each skill to the paths it reviews: skills.mappings in ${files.path}.`);
+  out.line(
+    `  4. Scope each skill in ${files.path}: skills.defaults for the baseline a glob's files all share, skills.mappings for the paths one skill alone reviews.`,
+  );
   out.line("  5. reviewer review --preview --base main    # what would be reviewed; no model call");
   out.line("  6. reviewer review --base main");
   return 0;

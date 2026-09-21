@@ -24,6 +24,7 @@ import {
 } from "../../../src/providers/config/paths";
 import { loadConfigFiles } from "../../../src/providers/config/reader";
 import { casesUnder, isErrorContract, loadFixture } from "../../contracts/fixtures";
+import { recordingLogger } from "../../helpers/logging";
 
 /** What the composition root tells the configuration: the registered names and the default. */
 const PROVIDERS = { names: ["local", "claude"], default: "local" };
@@ -149,12 +150,15 @@ function load(
     env?: Record<string, string>;
     overrides?: Record<string, unknown>;
     requiresModel?: boolean;
+    /** Collects every line the load logs. */
+    log?: string[];
   } = {},
 ): Config {
   return loadRunConfig({
     configFile: options.configFile ?? null,
     ...(options.overrides && { overrides: options.overrides }),
     ...(options.requiresModel !== undefined && { requiresModel: options.requiresModel }),
+    ...(options.log && { logger: recordingLogger(options.log) }),
     providers: PROVIDERS,
     cpuCount: 8,
     environment: options.env ?? cleanEnvironment(s),
@@ -368,6 +372,7 @@ describe("the repository's file on top of the machine's", () => {
     const s = scratchWithBoth();
     expect(load(s).skillSettings()).toEqual({
       path: join(s.repo, ".review", "skills"),
+      defaults: [],
       mappings: { "api-routes": ["src/api/**/route.ts"], models: ["src/modules/**/models/*.ts"] },
     });
   });
@@ -387,7 +392,7 @@ describe("the repository's file on top of the machine's", () => {
     expect(config.provider).toBe("claude");
     expect(config.model).toBe("claude-opus-5");
     expect(config.reviewLang).toBe("English");
-    expect(config.skillSettings()).toEqual({ path: "", mappings: {} });
+    expect(config.skillSettings()).toEqual({ path: "", defaults: [], mappings: {} });
   });
 
   it("runs on the repository's file alone when the machine has none", () => {
@@ -428,6 +433,33 @@ describe("the repository's file on top of the machine's", () => {
   });
 });
 
+describe("settings that disagree with each other", () => {
+  it("warns once the whole configuration is in hand, without refusing the run", () => {
+    // Each cap is legal, so validation passes; together they mean a file's
+    // block can hold one skill and no more.
+    const s = scratchWithBoth();
+    const log: string[] = [];
+    const config = load(s, {
+      env: cleanEnvironment(s, {
+        REVIEW_MAX_SKILL_CHARS: "20000",
+        REVIEW_MAX_SKILLS_TOTAL_CHARS: "18000",
+      }),
+      log,
+    });
+    expect(config.maxSkillChars).toBe(20_000);
+    expect(log.filter((line) => line.startsWith("WARNING"))).toEqual([
+      "WARNING settings.max-skill-chars=20000 is larger than settings.max-skills-total-chars=18000: one long skill can fill a file's whole block, leaving every other skill that matches it out of the prompt. Raise the block cap, or lower the per-skill one.",
+    ]);
+  });
+
+  it("says nothing when they agree", () => {
+    const s = scratchWithBoth();
+    const log: string[] = [];
+    load(s, { log });
+    expect(log.filter((line) => line.startsWith("WARNING"))).toEqual([]);
+  });
+});
+
 describe("the environment and the command line", () => {
   it("reads the skills map from the environment as JSON, which beats the files", () => {
     const s = scratchWithBoth();
@@ -435,6 +467,20 @@ describe("the environment and the command line", () => {
       env: cleanEnvironment(s, { REVIEW_SKILL_MAPPINGS: '{"models": [" a/** ", ""]}' }),
     });
     expect(config.skillSettings().mappings).toEqual({ models: ["a/**"] });
+  });
+
+  it("reads the skills baseline from the environment as JSON, one bare string becoming a list", () => {
+    const s = scratchWithBoth();
+    const config = load(s, {
+      env: cleanEnvironment(s, {
+        REVIEW_SKILL_DEFAULTS:
+          '[{"globs": [" **/*.ts ", ""], "skills": ["typescript-base"]}, {"globs": "**/*", "skills": "house-rules"}]',
+      }),
+    });
+    expect(config.skillSettings().defaults).toEqual([
+      { globs: ["**/*.ts"], skills: ["typescript-base"] },
+      { globs: ["**/*"], skills: ["house-rules"] },
+    ]);
   });
 
   it("refuses a skills map that is not an object", () => {

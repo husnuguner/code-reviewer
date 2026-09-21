@@ -65,9 +65,22 @@ skills:
   # file, so in .review/config.yaml `skills` means .review/skills. Default "":
   # no skills.
   path: skills
-  # skill name -> the globs it reviews: a list, one bare glob, or [] to switch
-  # a skill off without deleting its file. A skill mapped nowhere never
-  # applies, and a mapping naming no skill is warned about. Default {}.
+  # The baseline: the skills every file these globs match is held to, whatever
+  # `mappings` adds. This is where a language's or an area's standing rules go,
+  # stated once instead of repeated under each skill that shares them. Each
+  # side takes a list or one bare string; a list of entries and not an object
+  # keyed by glob because a config key is a dotted path and every useful glob
+  # carries a dot. A skill named here that was not loaded is warned about.
+  # Default [].
+  defaults:
+    - globs: ["**/*.ts", "**/*.tsx"]
+      skills: [typescript-base, naming]
+    - globs: "**/*"
+      skills: house-rules
+  # skill name -> the globs only it reviews, ADDED to what `defaults` gave it:
+  # a list, one bare glob, or [] to switch a skill off (baseline included)
+  # without deleting its file. A skill named in neither table never applies,
+  # and a mapping naming no skill is warned about. Default {}.
   mappings:
     api-rules: ["src/api/**/route.ts", "src/api/**/middlewares.ts"]
     data-model: "src/modules/**/models/**/*.ts"

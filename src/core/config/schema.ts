@@ -42,8 +42,15 @@ export interface ConfigShape {
   };
   skills: {
     path: string;
+    defaults: SkillDefaultShape[];
     mappings: Record<string, string | string[]>;
   };
+}
+
+/** One `skills.defaults` entry as the file writes it: each side a list, or one bare string. */
+export interface SkillDefaultShape {
+  globs: string | string[];
+  skills: string | string[];
 }
 
 /** The root keys only a repository's `.review/config.yaml` may set: they describe the reviewed code, not the machine. */
@@ -129,14 +136,61 @@ function addFormats(): void {
             "must be an object of skill name → globs (as JSON, from the environment)",
           );
         for (const [name, globs] of Object.entries(value)) {
-          const isOk =
-            typeof globs === "string" ||
-            (Array.isArray(globs) && globs.every((glob) => typeof glob === "string"));
-          if (!isOk) throw new TypeError(`${show(name)} must map to a glob or a list of globs`);
+          if (!isStringList(globs))
+            throw new TypeError(`${show(name)} must map to a glob or a list of globs`);
         }
       },
     },
+    /**
+     * The baseline: a list of `{ globs, skills }` entries; from the environment, that list as JSON text. A
+     * list and not an object keyed by glob because convict reads a key as a dotted path and every useful
+     * glob carries a dot.
+     */
+    "skill-defaults": {
+      coerce: (value: unknown) => {
+        if (typeof value !== "string") return value;
+        if (value.trim() === "") return [];
+        try {
+          return JSON.parse(value) as unknown;
+        } catch {
+          return value;
+        }
+      },
+      validate: (value: unknown) => {
+        if (!Array.isArray(value)) {
+          throw new TypeError(
+            "must be a list of { globs, skills } entries (as JSON, from the environment)",
+          );
+        }
+        for (const [index, entry] of value.entries()) validateDefault(entry, index);
+      },
+    },
   });
+}
+
+/** One string, or a list of them: how both skill tables spell every value. */
+function isStringList(value: unknown): boolean {
+  return (
+    typeof value === "string" ||
+    (Array.isArray(value) && value.every((item) => typeof item === "string"))
+  );
+}
+
+/** One `skills.defaults` entry: `globs` and `skills`, each a string or a list of them, and nothing else. */
+function validateDefault(entry: unknown, index: number): void {
+  const at = `entry ${index + 1}`;
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+    throw new TypeError(`${at} must be an object with 'globs' and 'skills'`);
+  }
+  const extra = Object.keys(entry).filter((key) => key !== "globs" && key !== "skills");
+  if (extra.length > 0) throw new TypeError(`${at} has no place for ${show(extra)}`);
+  for (const key of ["globs", "skills"] as const) {
+    const listed = (entry as Record<string, unknown>)[key];
+    if (listed === undefined) throw new TypeError(`${at} is missing ${show(key)}`);
+    if (!isStringList(listed)) {
+      throw new TypeError(`${at}: ${show(key)} must be one name or a list of them`);
+    }
+  }
 }
 
 /**
@@ -175,6 +229,7 @@ export const CONFIG_ALIASES = {
   maxContextChars: "REVIEW_MAX_CONTEXT_CHARS",
   maxConcurrentFiles: "REVIEW_MAX_CONCURRENT_FILES",
   skillsPath: "REVIEW_SKILLS_PATH",
+  skillDefaults: "REVIEW_SKILL_DEFAULTS",
   skillMappings: "REVIEW_SKILL_MAPPINGS",
 } as const;
 
@@ -197,6 +252,7 @@ export const FIELD_PATHS: Readonly<Record<ConfigField, string>> = {
   maxContextChars: "settings.max-context-chars",
   maxConcurrentFiles: "settings.max-concurrent-files",
   skillsPath: "skills.path",
+  skillDefaults: "skills.defaults",
   skillMappings: "skills.mappings",
 };
 
@@ -304,8 +360,14 @@ export function configSchema(providers: RegisteredProviders): convict.Schema<Con
         default: "",
         env: CONFIG_ALIASES.skillsPath,
       },
+      defaults: {
+        doc: "Glob → the skills every file it matches is held to, whatever mappings add; from the environment, as JSON.",
+        format: "skill-defaults",
+        default: [],
+        env: CONFIG_ALIASES.skillDefaults,
+      },
       mappings: {
-        doc: "Skill name → globs it reviews; from the environment, as JSON.",
+        doc: "Skill name → the globs only it reviews, added to what defaults gave it; from the environment, as JSON.",
         format: "skill-mappings",
         default: {},
         env: CONFIG_ALIASES.skillMappings,

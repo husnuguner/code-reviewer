@@ -3,6 +3,7 @@
  * @packageDocumentation
  */
 
+import { configIncoherences } from "../../core/config/coherence";
 import {
   type Config,
   type ConfigField,
@@ -54,7 +55,7 @@ export function loadRunConfig(options: LoadRunConfigOptions): Config {
       .child("config")
       .info(`Config files, lowest first: ${files.map((file) => file.source).join(" < ")}.`);
   }
-  return buildConfig({
+  const config = buildConfig({
     environment,
     files,
     ...(options.overrides && { overrides: options.overrides }),
@@ -63,4 +64,8 @@ export function loadRunConfig(options: LoadRunConfigOptions): Config {
     cpuCount: options.cpuCount,
     configHome: configHome(processEnvironment),
   });
+  // Said once, where the whole configuration is first in hand: a setting that contradicts another is legal
+  // and so passes validation, but it decides what the run will quietly not do.
+  for (const line of configIncoherences(config)) logger.child("config").warn(line);
+  return config;
 }

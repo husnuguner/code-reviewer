@@ -125,12 +125,28 @@ Keys are kebab-case. Everything under `settings` may be set in either file;
 | `settings.max-context-chars`      | `6000`           |    ✓    |  ✓   | Cap on the [pre-context](how-it-works.md#pre-context) block; `0` switches it off.           |
 | `settings.max-concurrent-files`   | CPU-derived      |    ✓    |  ✓   | File reviews in flight at once.                                                             |
 | `skills.path`                     | `""` (no skills) |         |  ✓   | Directory of skill documents. A relative path is taken from beside the file.                |
-| `skills.mappings`                 | `{}`             |         |  ✓   | Skill name → globs it reviews.                                                              |
+| `skills.defaults`                 | `[]`             |         |  ✓   | `{ globs, skills }` entries: the baseline every matching file is held to.                   |
+| `skills.mappings`                 | `{}`             |         |  ✓   | Skill name → the globs only it reviews, added to what `defaults` gave it.                   |
 
 A key the schema does not recognise is **rejected**, not ignored: the error
 names it by its place in the file (`configuration param 'settings.exlude' not
 declared in the schema`), and every problem in a file is reported at once. The
 schema is at `version: 1`; a newer number than the build knows is refused.
+
+### When settings disagree
+
+The schema checks one setting at a time. Some combinations are legal setting by
+setting and still contradict each other, and every one of them decides
+something the run will quietly **not** do -- so the whole resolved
+configuration is read once at startup and each contradiction is a WARNING, not
+a refusal:
+
+| The combination                                                            | What it silently means                                                                     |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `skills.path` empty while `skills.defaults`/`skills.mappings` scope skills | No skill is loaded, so the tables hold nothing to a rule.                                  |
+| `max-skill-chars` > `max-skills-total-chars`                               | One long skill can fill a file's whole block, leaving every other match out of the prompt. |
+| `max-skills-total-chars` = `0`                                             | Only the first matching skill ever reaches a prompt.                                       |
+| `max-skill-chars` = `0`                                                    | Every skill's body is cut to nothing: the prompt carries names and no rules.               |
 
 The schema, merging, precedence and validation are
 [convict](https://github.com/mozilla/node-convict)'s; the reviewer declares
@@ -187,7 +203,8 @@ text would drop a guardrail by accident.
 
 What a project adds _on top_ has two shapes, and neither is a key:
 [standing instructions](#standing-instructions) for every file, and
-[skills](#review-skills) for the paths a mapping names.
+[skills](#review-skills) for the paths `skills.defaults` and `skills.mappings`
+name.
 
 ## Environment
 
@@ -205,6 +222,7 @@ whole run.
 | `REVIEW_EXCLUDE_PATHS`          | —                | Comma-separated globs skipped entirely.                                     |
 | `REVIEW_MAX_FINDINGS_PER_FILE`  | `3`              | Per-file cap; `0` = uncapped.                                               |
 | `REVIEW_SKILLS_PATH`            | —                | Directory of review skills inside the reviewed repo; empty disables skills. |
+| `REVIEW_SKILL_DEFAULTS`         | `[]`             | The repository's `skills.defaults` as JSON.                                 |
 | `REVIEW_SKILL_MAPPINGS`         | `{}`             | The repository's `skills.mappings` as JSON.                                 |
 | `REVIEW_VERIFY`                 | `true`           | Run the verification pass. `--no-verify` wins.                              |
 | `REVIEW_MAX_SKILL_CHARS`        | `10000`          | Per-skill body cap.                                                         |
@@ -297,27 +315,62 @@ description: Rules for HTTP handlers.
 - Authorisation happens in middleware, not inside the handler.
 ```
 
-**Which files a skill reviews is stated once, in `config.yaml`:**
+**Which files a skill reviews is stated once, in `config.yaml`,** in two
+tables that add up:
 
 ```yaml
 skills:
   path: skills
-  mappings:
+  defaults: # the baseline: the skills every matching file is held to
+    - globs: ["**/*.ts", "**/*.tsx"]
+      skills: [typescript-base, naming]
+    - globs: "**/*" # one bare string reads as a list of one
+      skills: house-rules
+  mappings: # the extras: skill -> the globs only it reviews
     api-conventions: ["src/api/**/*.ts"]
     error-handling: "src/**/*.ts"
     background-jobs: [] # switched off without deleting the file
 ```
 
+`src/api/users.ts` is therefore held to `typescript-base`, `naming`,
+`house-rules`, `api-conventions` and `error-handling` at once: every skill
+whose globs match is rendered, and the two tables are unioned per skill, not
+weighed against each other.
+
+`defaults` exists so a language's or an area's standing rules are stated once
+rather than repeated as a wide glob under every skill that shares them. It is
+a list of `{ globs, skills }` entries rather than an object keyed by glob
+because a config key is read as a dotted path, and every useful glob carries a
+dot. A skill named in both tables reviews the union of what each gave it: name
+`typescript-base` under `globs: ["**/*.ts"]` and map it to `["scripts/*.mjs"]`,
+and it reviews both. `[]` in `mappings` is the exception that wins: it
+switches the skill off, baseline included.
+
 Globs use Bun's `Glob` syntax: `**` (across directories), `*` (within a
 segment), `?`, `[...]` classes, `{a,b}` alternatives and `\` to escape a
 wildcard. A skill's frontmatter carries `name` and `description`, nothing about
-paths. A skill mapped nowhere never applies and is warned about; a mapping
-naming a skill that was not loaded is warned about too. A file without valid
-frontmatter (a README in the skills directory) is ignored.
+paths. A skill named in neither table never applies and is warned about; a
+name in either table that no loaded skill answers to is warned about too. A
+file without valid frontmatter (a README in the skills directory) is ignored.
 
 Injection is capped so a wide match cannot flood the prompt: `max-skill-chars`
-truncates one skill's body, `max-skills-total-chars` caps the whole per-file
-block, and a skill that would overflow is skipped with an INFO log naming it.
+truncates one skill's body and `max-skills-total-chars` caps the whole per-file
+block. A skill that would overflow the block is left out of the prompt, which
+means the file was **not** reviewed against it -- so it is a **warning**, named
+with the file and the cap:
+
+```text
+WARNING Skill budget reached for src/api/users.ts: max-skills-total-chars=18000
+left ['naming', 'typescript-base'] out of the prompt, so that file was not
+reviewed against them. Raise the cap, shorten those skills, or narrow their
+globs. Each skill is said once; later files are not repeated.
+```
+
+Each skill is named **once a run**, at the first file it did not fit: the same
+cap over a thousand files is one fact, and a warning per file would bury it.
+Every later file still loses the skill, and the skills the report names for a
+file are the ones the prompt actually carried -- so a skill the budget left out
+is never counted as applied.
 
 Keep a skill short and concrete: it is read by a model for every matching
 file.

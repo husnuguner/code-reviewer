@@ -85,22 +85,15 @@ class FakeReviewer implements PerFileReviewer {
   }
 }
 
-/** Minimal registry stand-in: maps every path to fixed skill names. */
+/** Minimal registry stand-in: renders fixed skill names into every path's block. */
 class FakeSkills implements SkillMatcher {
   constructor(private readonly names: readonly string[]) {}
 
-  skillsFor(): ReturnType<SkillMatcher["skillsFor"]> {
-    return this.names.map((name) => ({
-      name,
-      globs: ["**"],
-      body: "",
-      source: "repo",
-      description: "",
-    }));
-  }
-
-  renderFor(): string {
-    return this.names.length > 0 ? "skills-text" : "";
+  renderFor(): ReturnType<SkillMatcher["renderFor"]> {
+    return {
+      text: this.names.length > 0 ? "skills-text" : "",
+      applied: this.names,
+    };
   }
 }
 

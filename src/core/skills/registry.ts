@@ -3,10 +3,10 @@
  * @packageDocumentation
  */
 
-import { type SkillMappings } from "../config/settings";
+import { type SkillDefaults, type SkillMappings } from "../config/settings";
 import { type Skill, isSkillMatch } from "../domain/skill";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
-import { type SkillMatcher } from "../ports/skill-matcher";
+import { type RenderedSkills, type SkillMatcher } from "../ports/skill-matcher";
 import { type SkillSource } from "../ports/skill-source";
 import { errorMessage } from "../util/errors";
 import {
@@ -21,6 +21,8 @@ import {
 export class SkillRegistry implements SkillMatcher {
   private readonly skills: readonly Skill[];
   private readonly log: Logger;
+  /** Skills already reported as left out by the budget; a run says each once, not once per file. */
+  private readonly reportedOverflow = new Set<string>();
 
   /**
    * @param skills - Loaded skills; a repeated name keeps the last declaration in the first's position.
@@ -38,16 +40,18 @@ export class SkillRegistry implements SkillMatcher {
   }
 
   /**
-   * Loads the sources into one registry and applies the project's mappings.
+   * Loads the sources into one registry and scopes every skill by the project's baseline and mappings.
    *
    * @param sources - Where skills come from; none yields an empty registry.
    * @param mappings - Skill name → globs.
+   * @param defaults - Glob → the skills every file it matches is held to.
    * @returns The registry. A source that fails is logged and skipped.
    */
   static async build(
     sources: readonly SkillSource[],
     logger: Logger = NULL_LOGGER,
     mappings: SkillMappings = {},
+    defaults: SkillDefaults = [],
   ): Promise<SkillRegistry> {
     const log = logger.child("skills.registry");
     const skills: Skill[] = [];
@@ -59,7 +63,7 @@ export class SkillRegistry implements SkillMatcher {
         log.warn(`Skill source ${source.sourceName} failed: ${detail}`);
       }
     }
-    const registry = new SkillRegistry(applyMappings(skills, mappings, log), logger);
+    const registry = new SkillRegistry(applyMappings(skills, mappings, defaults, log), logger);
     const names = sortedByCodePoint(registry.skills.map((s) => s.name)).join(", ");
     log.info(`Loaded ${registry.skills.length} skill(s): ${names || "(none)"}`);
     return registry;
@@ -76,13 +80,19 @@ export class SkillRegistry implements SkillMatcher {
    * Renders the matching skills into a prompt block.
    *
    * @param maxSkillChars - Truncates one skill's body.
-   * @param maxTotalChars - Caps the whole block; a skill that would overflow is skipped and logged.
-   * @returns The block, or `""` when nothing matches. The first matching skill is always included.
+   * @param maxTotalChars - Caps the whole block; a skill that would overflow is left out and warned about.
+   * @returns The block and the skills it carries; `""` and `[]` when nothing matches. The first matching
+   * skill is always included.
+   * @remarks A skill the budget leaves out is a rule the review silently would not have applied, so it is a
+   * warning and not a note, and it is absent from `applied` rather than reported as if the model saw it.
+   * The warning names each skill once per run: the same cap over a thousand files is one fact, not a
+   * thousand, and a flooded log is one nobody reads.
    */
-  renderFor(path: string, maxSkillChars: number, maxTotalChars: number): string {
+  renderFor(path: string, maxSkillChars: number, maxTotalChars: number): RenderedSkills {
     const matched = this.skillsFor(path);
-    if (matched.length === 0) return "";
+    if (matched.length === 0) return { text: "", applied: [] };
     const blocks: string[] = [];
+    const applied: string[] = [];
     const skipped: string[] = [];
     let used = 0;
     for (const skill of matched) {
@@ -93,45 +103,81 @@ export class SkillRegistry implements SkillMatcher {
         continue;
       }
       blocks.push(block);
+      applied.push(skill.name);
       used += size;
     }
-    if (skipped.length > 0) {
-      this.log.info(`Skill budget reached for ${path}; skipped: ${skipped.join(", ")}`);
+    const unreported = skipped.filter((name) => !this.reportedOverflow.has(name));
+    if (unreported.length > 0) {
+      for (const name of unreported) this.reportedOverflow.add(name);
+      this.log.warn(
+        `Skill budget reached for ${path}: max-skills-total-chars=${maxTotalChars} left ${show(unreported)} out of the prompt, so that file was not reviewed against them. Raise the cap, shorten those skills, or narrow their globs. Each skill is said once; later files are not repeated.`,
+      );
     }
     const header =
       "Project/framework standards for this file (apply IN ADDITION to the four lenses):";
-    return `${header}\n\n${blocks.join("\n\n")}`;
+    return { text: `${header}\n\n${blocks.join("\n\n")}`, applied };
   }
 }
 
 /**
- * Sets each skill's globs from the project's mappings.
+ * Sets each skill's globs from the project's baseline and mappings: a skill named by `skills.defaults`
+ * reviews that glob, and a `skills.mappings` entry adds the paths only that skill reviews.
  *
- * @returns The skills with globs applied. An unmapped skill (never matches) and a mapping naming no loaded
- * skill are each warned about; `[]` switches a skill off at INFO.
+ * @param defaults - The baseline a whole language or area shares: globs, then the skills they are held to.
+ * @returns The skills with globs applied. A skill neither defaulted nor mapped (it never matches), and a
+ * name in either table that no loaded skill answers to, are each warned about; a mapping of `[]` switches a
+ * skill off at INFO, baseline and all.
  */
 export function applyMappings(
   skills: readonly Skill[],
   mappings: SkillMappings,
+  defaults: SkillDefaults = [],
   log: Logger = NULL_LOGGER,
 ): Skill[] {
+  const baseline = invertDefaults(defaults);
   const loaded = new Set(skills.map((skill) => skill.name));
   for (const name of Object.keys(mappings)) {
     if (!loaded.has(name)) {
       log.warn(`Skill mapping for ${show(name)} matches no loaded skill; check the name.`);
     }
   }
+  for (const name of Object.keys(baseline)) {
+    if (!loaded.has(name)) {
+      log.warn(`Skill default for ${show(name)} matches no loaded skill; check the name.`);
+    }
+  }
   return skills.map((skill) => {
     const mapped = Object.hasOwn(mappings, skill.name) ? mappings[skill.name] : undefined;
-    if (mapped === undefined) {
+    if (mapped?.length === 0) {
+      log.info(`Skill ${show(skill.name)} is switched off by the project's skills.mappings.`);
+      return { ...skill, globs: [] };
+    }
+    const globs = [...new Set([...(baseline[skill.name] ?? []), ...(mapped ?? [])])];
+    if (globs.length === 0) {
       log.warn(
-        `Skill ${show(skill.name)} has no entry in the project's skills.mappings and will not be applied to any file. Map it (skills.mappings.${skill.name}: ["<glob>"]) or switch it off explicitly with [].`,
+        `Skill ${show(skill.name)} is in neither the project's skills.defaults nor its skills.mappings and will not be applied to any file. Give it a scope (skills.mappings.${skill.name}: ["<glob>"], or name it in a skills.defaults entry) or switch it off explicitly with [].`,
       );
       return skill;
     }
-    if (mapped.length === 0) {
-      log.info(`Skill ${show(skill.name)} is switched off by the project's skills.mappings.`);
-    }
-    return { ...skill, globs: mapped };
+    return { ...skill, globs };
   });
+}
+
+/**
+ * Turns the baseline inside out: paths-then-skills as the file states it, `skill name → globs` as the
+ * registry needs it.
+ *
+ * @remarks The file states it per group of paths because that is how a project thinks of it ("every
+ * TypeScript file is held to these"); a skill still carries its own globs, so the two meet here.
+ */
+function invertDefaults(defaults: SkillDefaults): SkillMappings {
+  const byName = new Map<string, string[]>();
+  for (const entry of defaults) {
+    for (const name of entry.skills) {
+      const globs = byName.get(name) ?? [];
+      for (const glob of entry.globs) if (!globs.includes(glob)) globs.push(glob);
+      byName.set(name, globs);
+    }
+  }
+  return Object.fromEntries(byName);
 }

@@ -11,7 +11,7 @@ import { type ChangedFile } from "../domain/changed-file";
 import { type Finding } from "../domain/finding";
 import { type CodeContext } from "../ports/code-context";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
-import { type SkillMatcher } from "../ports/skill-matcher";
+import { type RenderedSkills, type SkillMatcher } from "../ports/skill-matcher";
 import { show } from "../util/text";
 import { type Clock, SYSTEM_CLOCK, seconds, stopwatch } from "../util/timing";
 
@@ -42,6 +42,7 @@ export interface ReviewedFile {
   readonly path: string;
   /** What survived verification. */
   readonly findings: readonly Finding[];
+  /** The skills the prompt actually carried; one the budget left out is not among them. */
   readonly skillNames: readonly string[];
   /** How many findings verification removed; `0` without a verifier. */
   readonly refuted: number;
@@ -105,20 +106,19 @@ export async function reviewChangedFile(
     return null;
   }
 
-  const skillNames = skills === null ? [] : skills.skillsFor(file.path).map((s) => s.name);
   const verifier = options.verifier ?? null;
   const now = options.now ?? SYSTEM_CLOCK;
 
-  const { verdict, timings } = await limit(async () => {
+  const { verdict, timings, skillNames } = await limit(async () => {
     // An added file's patch is the whole file; content is fetched only for modified files.
     const readContent = options.readContent ?? null;
     const content =
       readContent !== null && file.status !== "added"
         ? await readContent(file.path, file.status)
         : null;
-    const skillsText =
+    const rendered: RenderedSkills =
       skills === null
-        ? ""
+        ? { text: "", applied: [] }
         : skills.renderFor(file.path, settings.maxSkillChars, settings.maxSkillsTotalChars);
     const contextElapsed = stopwatch(now);
     const contextText = await surroundingsOf(file, options, log);
@@ -130,18 +130,27 @@ export async function reviewChangedFile(
       allowedLines: allowed,
       content,
       language: settings.language,
-      skillsText,
+      skillsText: rendered.text,
       contextText,
       anchorIndex: selected.newSide,
       maxFindings: options.maxFindingsPerFile ?? 0,
     });
     const model = modelElapsed();
+    const skillNames = rendered.applied;
     if (verifier === null) {
-      return { verdict: keepAll(findings), timings: { context, model, verify: null } };
+      return {
+        verdict: keepAll(findings),
+        timings: { context, model, verify: null },
+        skillNames,
+      };
     }
     const verifyElapsed = stopwatch(now);
     const checked = await verifier.verify({ path: file.path, annotatedPatch: annotated, findings });
-    return { verdict: checked, timings: { context, model, verify: verifyElapsed() } };
+    return {
+      verdict: checked,
+      timings: { context, model, verify: verifyElapsed() },
+      skillNames,
+    };
   });
 
   const refuted = verdict.refuted.length;

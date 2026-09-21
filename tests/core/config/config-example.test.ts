@@ -73,6 +73,12 @@ describe("templates/config.example.yaml", () => {
       "data-model": ["src/modules/**/models/**/*.ts"],
       "background-jobs": [],
     });
+    // The baseline is written the other way round -- the paths first, then
+    // the skills -- and each side takes a list or one bare string.
+    expect(skills.defaults).toEqual([
+      { globs: ["**/*.ts", "**/*.tsx"], skills: ["typescript-base", "naming"] },
+      { globs: ["**/*"], skills: ["house-rules"] },
+    ]);
   });
 });
 
@@ -90,7 +96,7 @@ describe("the starters `reviewer init` writes", () => {
     const path = join(TEMPLATES, "repo-config.yaml");
     const repo = parseConfigFile(readYaml(path), path, "repo");
     expect(repo.values["settings"]).not.toHaveProperty("llm");
-    expect(repo.values["skills"]).toEqual({ path: "skills", mappings: {} });
+    expect(repo.values["skills"]).toEqual({ path: "skills", defaults: [], mappings: {} });
   });
 });
 

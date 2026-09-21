@@ -139,9 +139,75 @@ describe("skill registry", () => {
       "render_for",
     ),
   )("render_for $name", ({ input, expected }) => {
-    expect(registry.renderFor(input.path, input.max_skill_chars, input.max_total_chars)).toBe(
+    expect(registry.renderFor(input.path, input.max_skill_chars, input.max_total_chars).text).toBe(
       expected,
     );
+  });
+});
+
+/** A skill of a known size on one glob: two of them and a cap of 60 leave room for one. */
+const bulkySkill = (name: string): Skill => ({
+  name,
+  globs: ["**/*.ts"],
+  body: "B".repeat(50),
+  source: "repo",
+  description: "",
+});
+
+describe("the per-file skills budget", () => {
+  const lines: string[] = [];
+  const registry = new SkillRegistry(
+    [bulkySkill("aa-first"), bulkySkill("zz-second")],
+    recordingLogger(lines),
+  );
+  const rendered = registry.renderFor("src/a.ts", 10_000, 60);
+
+  it("warns, naming the file, the cap and what it left out", () => {
+    // Left out means the file was not reviewed against that skill, which is a
+    // warning and not a note: at the default level nobody would have seen it.
+    expect(lines).toContain(
+      "WARNING Skill budget reached for src/a.ts: max-skills-total-chars=60 left ['zz-second'] out of the prompt, so that file was not reviewed against them. Raise the cap, shorten those skills, or narrow their globs. Each skill is said once; later files are not repeated.",
+    );
+  });
+
+  it("counts as applied only what the block carries", () => {
+    expect(rendered.applied).toEqual(["aa-first"]);
+    expect(rendered.text).toContain("## aa-first");
+    expect(rendered.text).not.toContain("## zz-second");
+    // The skill still matches the path; it simply did not reach the prompt.
+    expect(registry.skillsFor("src/a.ts").map((s) => s.name)).toEqual(["aa-first", "zz-second"]);
+  });
+
+  it("says nothing when every matching skill fits", () => {
+    const quiet: string[] = [];
+    const roomy = new SkillRegistry(
+      [bulkySkill("aa-first"), bulkySkill("zz-second")],
+      recordingLogger(quiet),
+    );
+    expect(roomy.renderFor("src/a.ts", 10_000, 10_000).applied).toEqual(["aa-first", "zz-second"]);
+    expect(quiet.filter((line) => line.includes("budget"))).toEqual([]);
+  });
+
+  it("says each left-out skill once a run, not once a file", () => {
+    // The same cap over a thousand files is one fact; a warning per file is a
+    // log nobody reads, and the one that matters scrolls away.
+    const spoken: string[] = [];
+    const busy = new SkillRegistry(
+      [bulkySkill("aa-first"), bulkySkill("zz-second")],
+      recordingLogger(spoken),
+    );
+    for (const path of ["src/a.ts", "src/b.ts", "src/c.ts"]) busy.renderFor(path, 10_000, 60);
+    const warnings = spoken.filter((line) => line.includes("Skill budget reached"));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("src/a.ts");
+    // Silence is about the log, not about the prompt: every later file still
+    // loses the skill, and none of them reports it as applied.
+    expect(busy.renderFor("src/d.ts", 10_000, 60).applied).toEqual(["aa-first"]);
+  });
+
+  it("keeps the first matching skill even when it alone overflows", () => {
+    const tight = new SkillRegistry([bulkySkill("aa-first")], recordingLogger([]));
+    expect(tight.renderFor("src/a.ts", 10_000, 1).applied).toEqual(["aa-first"]);
   });
 });
 
@@ -179,9 +245,63 @@ describe("the project's skill mappings", () => {
 
   it("leaves the skills untouched and warns when a mapping names nobody", () => {
     const lines: string[] = [];
-    expect(applyMappings(loaded, { typo: ["**"] }, recordingLogger(lines))).toEqual(loaded);
+    expect(applyMappings(loaded, { typo: ["**"] }, [], recordingLogger(lines))).toEqual(loaded);
     expect(lines).toContain(
       "WARNING Skill mapping for 'typo' matches no loaded skill; check the name.",
     );
+  });
+});
+
+describe("the project's skill defaults", () => {
+  const loaded = [ruleSkill("typescript-base", []), ruleSkill("routes", []), ruleSkill("jobs", [])];
+  const defaults = [{ globs: ["**/*.ts"], skills: ["typescript-base"] }];
+
+  it("scopes a skill the baseline names, for every file that glob matches", () => {
+    const registry = new SkillRegistry(applyMappings(loaded, {}, defaults));
+    expect(registry.skillsFor("src/api/route.ts").map((s) => s.name)).toEqual(["typescript-base"]);
+    expect(registry.skillsFor("src/api/route.py")).toEqual([]);
+  });
+
+  it("adds the baseline to what a mapping gives the same skill, never replacing it", () => {
+    // The two tables answer different questions -- "what is every TypeScript
+    // file held to" and "what does this one skill also review" -- so a skill
+    // in both reviews the union, and a glob repeated in both is kept once.
+    const ruled = applyMappings(
+      loaded,
+      { "typescript-base": ["scripts/*.mjs", "**/*.ts"] },
+      defaults,
+    );
+    expect(ruled.find((s) => s.name === "typescript-base")?.globs).toEqual([
+      "**/*.ts",
+      "scripts/*.mjs",
+    ]);
+  });
+
+  it("lets a mapping of [] switch a defaulted skill off, baseline included", () => {
+    const registry = new SkillRegistry(applyMappings(loaded, { "typescript-base": [] }, defaults));
+    expect(registry.skillsFor("src/api/route.ts")).toEqual([]);
+  });
+
+  it("renders the baseline beside the skills a mapping scoped", () => {
+    const registry = new SkillRegistry(applyMappings(loaded, { routes: ["src/api/**"] }, defaults));
+    expect(registry.skillsFor("src/api/route.ts").map((s) => s.name)).toEqual([
+      "routes",
+      "typescript-base",
+    ]);
+  });
+
+  it("warns about a skill in neither table, and about a default naming nobody", () => {
+    const lines: string[] = [];
+    applyMappings(
+      loaded,
+      {},
+      [{ globs: ["**/*.ts"], skills: ["typescript-base", "typo"] }],
+      recordingLogger(lines),
+    );
+    expect(lines).toContain(
+      "WARNING Skill default for 'typo' matches no loaded skill; check the name.",
+    );
+    expect(lines.filter((line) => line.includes("is in neither the project's"))).toHaveLength(2);
+    expect(lines.some((line) => line.includes("'typescript-base'"))).toBe(false);
   });
 });
