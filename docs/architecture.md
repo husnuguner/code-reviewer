@@ -142,9 +142,9 @@ The choices with a real trade-off behind them, and what was given up:
   that repository's conventions, versioned with its code. The reviewer ships
   none.
 - **The machine's config file says how; the repository's says what.** The
-  model, its key's name and the caps are set once per machine; skills,
-  mappings and excludes are set once per repository, which may also restate
-  any machine key for itself. There is no list of projects anywhere: a project
+  model, its key's name and how much runs at once are set once per machine;
+  skills, their cap, the pre-context budget, mappings and excludes are set
+  once per repository, which may also restate any machine key for itself. There is no list of projects anywhere: a project
   is a checkout that carries `.review/`. Given up: reviewing a repository with
   personal skills without putting a `.review/` in it, and reviewing a checkout
   from outside it.

@@ -97,25 +97,33 @@ snapshots are the project's judgement and belong in its `exclude`.
 A diff rarely explains itself. Before each call the reviewer fetches, from the
 checkout at the reviewed ref:
 
-| Block           | What                                                                                                                       | Answers                                             |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| **Definitions** | Exported signatures (with doc comments, and an `enum`/`interface`/`type`'s members) of the local modules the patch imports | "What does the thing I am calling take and return?" |
-| **Usages**      | Paths of other source files that mention an exported symbol the change adds, removes or edits                              | "Does this signature change break anyone?"          |
-| **Related**     | Diffs of the other changed files bound to this one: an import either way first, then the same stem or directory            | "Was the counterpart updated too?"                  |
+| Block           | What                                                                                                                                         | Answers                                             |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| **Definitions** | Exported signatures (with doc comments, and an `enum`/`interface`/`type`'s members) of the local modules the patch imports; JS/TS only today | "What does the thing I am calling take and return?" |
+| **Usages**      | Paths of other source files that mention an exported symbol the change adds, removes or edits                                                | "Does this signature change break anyone?"          |
+| **Related**     | Diffs of the other changed files bound to this one: an import either way first, then the same stem or directory                              | "Was the counterpart updated too?"                  |
 
 Pre-context is deterministic: the reviewer decides what to fetch and the model
 asks for nothing, so the review stays one call and the output contract is
-untouched. The block is capped by `settings.context.max-chars` (default
-12000; `0` switches it off) and read through local git (`git show`, `git grep`). The three
-blocks share that cap: each gets an equal allowance, and whatever one does not
-need goes to the others, most valuable first — so a file importing four
-documented modules cannot spend the whole budget on signatures and leave the
-related diffs out.
+untouched. It is read through local git (`git show`, `git grep`) and budgeted
+by the [`settings.context`](configuration.md#keys) section: how many imported
+modules are resolved (`max-definitions`), how many changed exports are searched
+for and how many of their users are listed (`max-symbols`,
+`max-usages-per-symbol`), how many related diffs travel (`max-related`), and a
+cap on the whole rendered block (`max-chars`; `0` switches pre-context off).
+The three blocks share that cap: each gets an equal allowance, and whatever one
+does not need goes to the others, most valuable first — so a file importing
+four documented modules cannot spend the whole budget on signatures and leave
+the related diffs out.
 
 Related diffs are built from the _selected_ files, so an excluded or
 credential file can never reach a prompt as somebody else's "related change".
 
-The three blocks are read off the patch itself, so they need no language server:
+The three blocks are read off the patch itself, so they need no language
+server. The import reading is JavaScript/TypeScript-shaped: in another language
+Definitions is empty, the import edge is never drawn, and Related falls back to
+the name heuristics (whose stem rule, `foo.test.ts` → `foo`, is itself a
+JavaScript convention).
 
 - **Imports** are read from the added lines first and the surrounding context
   lines second, as written (`./x`, `../x`) or from the repository root
@@ -123,8 +131,9 @@ The three blocks are read off the patch itself, so they need no language server:
   `await import(...)` — is found too.
 - **Related** names the relation in the prompt (`(this file imports it)`,
   `(it imports this file)`), and an import outranks the name heuristics: the
-  route and the service it calls share neither stem nor directory, and the cap
-  is three.
+  route and the service it calls share neither stem nor directory, and with
+  `max-related` at its default of three the siblings of a crowded directory
+  would otherwise crowd the dependency out.
 - **Usages** skips export names every file has (`GET`, `POST`, `default`, …)
   and hits in documentation, generated specs and dotfiles: they match the whole
   repository and answer nothing.
