@@ -8,6 +8,17 @@ none — so the section is written beside the version bump. What is in a section
 is what a user of the action or the CLI has to know; the commit log has the
 rest.
 
+## v0.0.12
+
+No change to the reviewer, the actions or the NDJSON contract. One change to how a release happens,
+the day after the last one.
+
+- **A version bump on `main` is the release; nobody tags.** The `Release` workflow now runs after
+  every green Check on `main`. A commit whose `package.json` names a version with no GitHub Release
+  is tagged `vX.Y.Z` by the workflow, published with that version's changelog section as its notes,
+  and `v0` moves to it; a commit that bumps nothing releases nothing, and says so. v0.0.11 was the
+  last release made from a hand-pushed tag. This one is the first made this way.
+
 ## v0.0.11
 
 No change to the reviewer, the actions or the NDJSON contract. This release is about how releases
