@@ -33,7 +33,7 @@ jobs:
         with:
           fetch-depth: 0 # the reviewer diffs locally and needs the merge-base
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: husnuguner/code-reviewer/actions/review@v0.0.10
+      - uses: husnuguner/code-reviewer/actions/review@v0
         with:
           provider: claude # the workflow names the model: a runner has no ~/.config/reviewer
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -54,7 +54,7 @@ jobs:
         id: findings
         with: { name: code-review-findings }
         continue-on-error: true
-      - uses: husnuguner/code-reviewer/actions/comment@v0.0.10 # same version as the review job
+      - uses: husnuguner/code-reviewer/actions/comment@v0 # the same ref as the review job
         if: ${{ steps.findings.outcome == 'success' }} # skipped, not green, when there is nothing to post
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -247,13 +247,16 @@ Releases follow GitHub's action convention: an immutable `vX.Y.Z` tag per
 release and a moving major tag (`v0`) that points at the latest `v0.*`.
 
 ```yaml
-- uses: husnuguner/code-reviewer/actions/review@v0.0.10 # this exact release; recommended while 0.x
-- uses: husnuguner/code-reviewer/actions/review@v0 # latest 0.x
+- uses: husnuguner/code-reviewer/actions/review@v0 # latest 0.x; what the examples use
+- uses: husnuguner/code-reviewer/actions/review@vX.Y.Z # one release, from the Releases page
 - uses: husnuguner/code-reviewer/actions/review@<full-sha> # what a hardened workflow pins
 ```
 
-While the major is 0, any release may change the action's inputs or the NDJSON
-contract, so pin the exact version. `@main` is the development branch: it
+The examples use `@v0` so they stay true as releases land. While the major is
+0, any release may change the action's inputs or the NDJSON contract; a
+workflow that would rather not move pins an exact `vX.Y.Z` from the
+[Releases](https://github.com/husnuguner/code-reviewer/releases) page, and
+takes the two jobs to the same one. `@main` is the development branch: it
 works, but it is a mutable reference in a step that receives a secret.
 
 A workflow that would rather not use the wrapper can check this repository out

@@ -263,6 +263,8 @@ git tag -f vX vX.Y.Z                        # move the major tag
 git push origin main vX.Y.Z && git push -f origin vX
 ```
 
-Update the `@vX.Y.Z` references in the README and `docs/github-action.md` in
-the same commit. A tag is not a GitHub Release; publish one separately
+The README and `docs/github-action.md` reference the actions as `@v0`, the
+moving major tag, so a release touches no documentation; a test
+(`tests/docs/action-references.test.ts`) refuses an exact version there. A tag is not
+a GitHub Release; publish one separately
 (`gh release create vX.Y.Z --verify-tag --notes-file …`).

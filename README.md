@@ -326,7 +326,7 @@ jobs:
         with:
           fetch-depth: 0 # the reviewer needs the merge-base
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: husnuguner/code-reviewer/actions/review@v0.0.10
+      - uses: husnuguner/code-reviewer/actions/review@v0
         with:
           provider: claude # the workflow names the model: a runner has no ~/.config/reviewer
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -346,7 +346,7 @@ jobs:
         id: findings
         with: { name: code-review-findings }
         continue-on-error: true
-      - uses: husnuguner/code-reviewer/actions/comment@v0.0.10
+      - uses: husnuguner/code-reviewer/actions/comment@v0
         if: ${{ steps.findings.outcome == 'success' }}
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -427,9 +427,11 @@ Bugs and feature requests:
 Releases follow GitHub's action convention: an immutable `vX.Y.Z` tag per
 release and a moving major tag (`v0`) pointing at the latest `v0.*`.
 
-**While the major is 0, any release may change the action's inputs or the
-NDJSON contract.** Pin the exact version in workflows; `@v0` is the
-convenience. `1.0.0` is the release that turns both into promises.
+The examples here use `@v0`, which follows every `0.x` release without a
+workflow edit. **While the major is 0, any release may change the action's
+inputs or the NDJSON contract**; a workflow that would rather not move pins an
+exact tag from the [Releases](https://github.com/husnuguner/code-reviewer/releases)
+page instead. `1.0.0` is the release that turns both into promises.
 
 ## License
 
