@@ -36,8 +36,14 @@ export interface BypassRegionRecord {
  */
 export interface SummaryRecord {
   readonly type: "summary";
+  /** What the checkout was compared against: `--base`, `--since`'s commit, or `HEAD` for the working tree. */
   readonly base: string;
   readonly branch: string;
+  /**
+   * `true` for a `--since` run, which reviewed only the commits after `base`: a clean result then says
+   * nothing about findings earlier runs reported on this change.
+   */
+  readonly incremental: boolean;
   readonly files_changed: number;
   readonly files_reviewed: number;
   /** Files selected for review whose review threw. */

@@ -86,6 +86,7 @@ Then exactly one `summary` record:
   "type": "summary",
   "base": "main",
   "branch": "HEAD",
+  "incremental": false,
   "files_changed": 6,
   "files_reviewed": 4,
   "failed": 0,
@@ -103,23 +104,24 @@ Then exactly one `summary` record:
 }
 ```
 
-| Field                 | Meaning                                                                                                                                                                                |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `base`, `branch`      | What was compared: `--base` and `"HEAD"`. An `--uncommitted` run reports `"HEAD"` and `"working tree"`.                                                                                |
-| `files_changed`       | Files in the change set.                                                                                                                                                               |
-| `files_reviewed`      | Files whose review came back.                                                                                                                                                          |
-| `failed`              | Files selected for review whose review threw.                                                                                                                                          |
-| `findings`            | Findings reported.                                                                                                                                                                     |
-| `files_with_findings` | Distinct paths among them.                                                                                                                                                             |
-| `anchors`             | Reported findings by anchor outcome.                                                                                                                                                   |
-| `unanchored`          | Reported findings with `line: null`.                                                                                                                                                   |
-| `refuted`             | Findings the verification pass removed before they were reported.                                                                                                                      |
-| `capped`              | Findings `max-findings-per-file` withheld.                                                                                                                                             |
-| `mislabelled`         | Reported findings whose severity the model spelled outside the vocabulary (kept under the mildest one).                                                                                |
-| `bypassed`            | Findings that fell in a region a [`reviewer: by-pass` marker](how-it-works.md#bypassing-a-block-from-the-code) took out of review; dropped before verification.                        |
-| `skipped`             | Files not reviewed, by reason: `secret`, `binary`, `status`, `excluded`, `no_added_lines`, `no_patch`, `too_large`, `bypassed` (every added line in a bypassed region; no model call). |
-| `policy_changed`      | The review-policy files this change edits (`.review/**` and the run's own), sorted; `[]` when none.                                                                                    |
-| `bypass_regions`      | The regions markers took out of review: `{ path, start_line, end_line, reason }`, by path then line; `[]` when none. Listed whether or not a finding fell in them.                     |
+| Field                 | Meaning                                                                                                                                                                                               |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `base`, `branch`      | What was compared: `--base` and `"HEAD"`. An `--uncommitted` run reports `"HEAD"` and `"working tree"`; a `--since` run reports the commit it started from and `"HEAD"`.                              |
+| `incremental`         | `true` for a `--since` run, which reviewed only the commits after `base`; a clean result then says nothing about findings earlier runs reported. `reviewer comment` does not supersede on such a run. |
+| `files_changed`       | Files in the change set.                                                                                                                                                                              |
+| `files_reviewed`      | Files whose review came back.                                                                                                                                                                         |
+| `failed`              | Files selected for review whose review threw.                                                                                                                                                         |
+| `findings`            | Findings reported.                                                                                                                                                                                    |
+| `files_with_findings` | Distinct paths among them.                                                                                                                                                                            |
+| `anchors`             | Reported findings by anchor outcome.                                                                                                                                                                  |
+| `unanchored`          | Reported findings with `line: null`.                                                                                                                                                                  |
+| `refuted`             | Findings the verification pass removed before they were reported.                                                                                                                                     |
+| `capped`              | Findings `max-findings-per-file` withheld.                                                                                                                                                            |
+| `mislabelled`         | Reported findings whose severity the model spelled outside the vocabulary (kept under the mildest one).                                                                                               |
+| `bypassed`            | Findings that fell in a region a [`reviewer: by-pass` marker](how-it-works.md#bypassing-a-block-from-the-code) took out of review; dropped before verification.                                       |
+| `skipped`             | Files not reviewed, by reason: `secret`, `binary`, `status`, `excluded`, `no_added_lines`, `no_patch`, `too_large`, `bypassed` (every added line in a bypassed region; no model call).                |
+| `policy_changed`      | The review-policy files this change edits (`.review/**` and the run's own), sorted; `[]` when none.                                                                                                   |
+| `bypass_regions`      | The regions markers took out of review: `{ path, start_line, end_line, reason }`, by path then line; `[]` when none. Listed whether or not a finding fell in them.                                    |
 
 The counters close:
 

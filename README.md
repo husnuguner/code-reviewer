@@ -178,20 +178,21 @@ reviewer review --uncommitted                      # the work that is not in a c
 
 ### Review flags
 
-| Flag                                                    | Effect                                                                                          |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `--base NAME`                                           | Base the checkout (`HEAD`) is compared against (default `main`).                                |
-| `--uncommitted`                                         | Review the working tree against `HEAD`: staged, unstaged and untracked work. Not with `--base`. |
-| `--format text\|ndjson\|github`                         | How findings are reported (default `text`).                                                     |
-| `--out PATH`                                            | Also write every record to this file as NDJSON. This is what a CI bot reads.                    |
-| `--preview`                                             | Print which files would be reviewed and why the others are skipped, then stop.                  |
-| `--fail-on LIST`                                        | Exit `3` when a reported finding has one of these severities, e.g. `bug,security`.              |
-| `--lang LANG`                                           | Language of each finding's body (default `en`). JSON keys and severities stay English.          |
-| `--exclude GLOB`                                        | Skip files matching the glob; repeatable.                                                       |
-| `--skills-path PATH`                                    | Directory of review skills inside the reviewed repo; empty disables skills.                     |
-| `--no-verify`                                           | Report every finding the model produced, skipping the verification pass.                        |
-| `--config PATH`                                         | Another repository `config.yaml`, in place of the nearest `.review/config.yaml`.                |
-| `-v`, `-q`, `--log-level`, `--log-format`, `--no-color` | Logging; see [docs/output.md](docs/output.md#logging).                                          |
+| Flag                                                    | Effect                                                                                            |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `--base NAME`                                           | Base the checkout (`HEAD`) is compared against (default `main`).                                  |
+| `--uncommitted`                                         | Review the working tree against `HEAD`: staged, unstaged and untracked work. Not with `--base`.   |
+| `--since REF`                                           | Review only the commits after `REF` (the diff `REF..HEAD`). Not with `--base` or `--uncommitted`. |
+| `--format text\|ndjson\|github`                         | How findings are reported (default `text`).                                                       |
+| `--out PATH`                                            | Also write every record to this file as NDJSON. This is what a CI bot reads.                      |
+| `--preview`                                             | Print which files would be reviewed and why the others are skipped, then stop.                    |
+| `--fail-on LIST`                                        | Exit `3` when a reported finding has one of these severities, e.g. `bug,security`.                |
+| `--lang LANG`                                           | Language of each finding's body (default `en`). JSON keys and severities stay English.            |
+| `--exclude GLOB`                                        | Skip files matching the glob; repeatable.                                                         |
+| `--skills-path PATH`                                    | Directory of review skills inside the reviewed repo; empty disables skills.                       |
+| `--no-verify`                                           | Report every finding the model produced, skipping the verification pass.                          |
+| `--config PATH`                                         | Another repository `config.yaml`, in place of the nearest `.review/config.yaml`.                  |
+| `-v`, `-q`, `--log-level`, `--log-format`, `--no-color` | Logging; see [docs/output.md](docs/output.md#logging).                                            |
 
 Exit codes: `0` success · `1` usage error · `2` a configuration or working-tree
 problem the operator can fix · `3` a finding matched `--fail-on`.
@@ -330,6 +331,7 @@ jobs:
           provider: claude # the workflow names the model: a runner has no ~/.config/reviewer
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           skills-path: .review/skills
+          incremental: true # on a push, review only the commits it added
           out: code-review.ndjson
           annotations: false # the comment job posts them
 

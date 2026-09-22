@@ -38,6 +38,7 @@ jobs:
           provider: claude # the workflow names the model: a runner has no ~/.config/reviewer
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           skills-path: .review/skills # this repo's own conventions
+          incremental: true # on a push, review only the commits it added (see below)
           fail-on: none
           out: code-review.ndjson
           annotations: false # the comment job posts them; no need to show each twice
@@ -130,6 +131,7 @@ input that names a file wins over both.
 | ----------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------- |
 | `api-key`               | _required_                          | The LLM key. Pass a secret.                                                                 |
 | `base-ref`              | the PR's base branch                | What the checkout is compared against. The action fetches it before reviewing.              |
+| `incremental`           | `false`                             | On a `synchronize` event, review only the commits the push added; see below.                |
 | `policy-ref`            | `base`                              | Whose `.review/` is read: the base branch's (`base`), or the checkout's own (`head`).       |
 | `provider`              | the checkout's config, else `local` | `claude`, or `local` for an OpenAI-compatible server. Set it: a runner has no machine file. |
 | `model` / `base-url`    | provider default                    | Model name; endpoint for `local` (or a Claude proxy).                                       |
@@ -147,7 +149,37 @@ input that names a file wins over both.
 | `log-level`             | —                                   | As `--log-level`.                                                                           |
 | `bun-version`           | the pinned version                  | The Bun toolchain to install.                                                               |
 
-Outputs: `findings-file` (the path) and `findings` (a count).
+Outputs: `findings-file` (the path), `findings` (a count), `range` (`full` or
+`since`) and `range-reason` (why).
+
+## Reviewing only what a push added
+
+Every push to a pull request re-runs the workflow, and by default the review
+covers the whole range again, merge-base to head: files the push never
+touched go back to the model, and cost what they cost the first time. With
+`incremental: true`, a `synchronize` event reviews only the diff from the
+previous head (`github.event.before`, which the event carries -- no state is
+kept anywhere) to the new one: `reviewer review --since <previous head>`.
+
+Every doubt resolves to the whole range, and the log says why (`range-reason`):
+
+- the event is not a `synchronize` (`opened`, `reopened`, `ready_for_review`,
+  `workflow_dispatch`);
+- the previous head is not in the checkout (a force-push, or a shallow clone),
+  or is not an ancestor of the new head (a force-push);
+- the base branch was merged or rebased in between, so `since..HEAD` would
+  carry the base's own commits;
+- nothing was added.
+
+Two consequences an incremental run states plainly. The summary record carries
+`incremental: true` and every report opens with "Only the commits since … were
+reviewed; findings earlier runs reported on this change still stand". And the
+comment action **does not supersede** on such a run even when `supersede:
+true`: a clean review of two new commits says nothing about the findings an
+earlier run left on the rest, so the earlier verdict stands until a full run
+answers it. A finding on code the push did not touch is not re-checked; a
+run without `incremental`, or any non-`synchronize` event, reviews the whole
+range again.
 
 ## `actions/comment` and `reviewer comment`
 

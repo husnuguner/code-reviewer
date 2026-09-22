@@ -82,13 +82,21 @@ export async function runComment(
   }
   const review = build(posted);
   log.info(describe(review));
+  // An incremental run reviewed only the commits since one point: a clean result does not mean an
+  // earlier verdict was answered, so it must not lift one.
+  const isIncremental = records.summary?.incremental === true;
+  if (isIncremental && arguments_.supersede) {
+    log.info(
+      "The run reviewed only the commits since a checkpoint; earlier reviews are left standing rather than superseded.",
+    );
+  }
   const { inline, superseded } = await poster.submit({
     repository: arguments_.repo,
     pullNumber: arguments_.pr,
     body: review.body,
     comments: review.comments,
     event: review.event,
-    supersede: arguments_.supersede,
+    supersede: !isIncremental && arguments_.supersede,
   });
   const dismissed = superseded > 0 ? `; dismissed ${String(superseded)} earlier review(s)` : "";
   log.info(

@@ -9,6 +9,15 @@ import { policyWarning } from "./policy";
 import { type FileDecision, isSelected, skipCounts, skipDetail } from "./selection";
 import { severityLabel } from "./severity";
 
+/**
+ * The line every report of a `--since` run carries: what it did not look at.
+ *
+ * @param since - The commit the run started from, as the summary's `base` spells it.
+ */
+export function incrementalNote(since: string): string {
+  return `Only the commits since ${since} were reviewed; findings earlier runs reported on this change still stand.`;
+}
+
 /** One finding as a line of terminal output: `**[Label]** body`. */
 export function textBody(severity: string, body: string): string {
   return `**[${severityLabel(severity)}]** ${body}`;

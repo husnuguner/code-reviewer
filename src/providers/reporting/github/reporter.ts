@@ -12,6 +12,7 @@ import {
 } from "../../../core/ports/review-reporter";
 import { bypassWarning } from "../../../core/review/bypass";
 import { policyWarning } from "../../../core/review/policy";
+import { incrementalNote } from "../../../core/review/render";
 import { severityLabel, severityRankOf } from "../../../core/review/severity";
 import { compareCodePoints } from "../../../core/util/text";
 import { escapeData, escapeProperty } from "../../../lib/github-actions/workflow-commands";
@@ -49,6 +50,7 @@ export function summaryFor(
   summary: SummaryRecord | null,
 ): string {
   const lines = ["## Code review", ""];
+  if (summary?.incremental === true) lines.push(`> ${incrementalNote(`\`${summary.base}\``)}`, "");
   const policy = policyWarning(summary?.policy_changed ?? []);
   if (policy !== "") lines.push(`> **${policy}**`, "");
   const bypass = bypassWarning(summary?.bypass_regions ?? []);

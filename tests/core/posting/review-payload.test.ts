@@ -39,6 +39,7 @@ const SUMMARY: SummaryRecord = {
   type: "summary",
   base: "main",
   branch: "HEAD",
+  incremental: false,
   files_changed: 4,
   files_reviewed: 2,
   failed: 0,
@@ -277,6 +278,29 @@ describe("building the review", () => {
     const review = buildReview(records);
     expect(review.alreadyPosted).toBe(0);
     expect(review.body).not.toContain("already posted");
+  });
+
+  it("says first when the run was incremental, and reads the flag off the stream", () => {
+    const review = buildReview({
+      findings: [finding()],
+      summary: { ...SUMMARY, incremental: true, base: "abc123" },
+      unreadable: 0,
+    });
+    expect(review.body.split("\n", 5)[4]).toBe(
+      "> **Only the commits since `abc123` were reviewed; findings earlier runs reported on this change still stand.**",
+    );
+    expect(buildReview({ findings: [], summary: SUMMARY, unreadable: 0 }).body).not.toContain(
+      "Only the commits",
+    );
+    expect(
+      parseRecords(JSON.stringify({ ...SUMMARY, incremental: true })).summary?.incremental,
+    ).toBe(true);
+    expect(
+      parseRecords(JSON.stringify({ ...SUMMARY, incremental: "yes" })).summary?.incremental,
+    ).toBe(false);
+    expect(
+      parseRecords(JSON.stringify({ ...SUMMARY, incremental: undefined })).summary?.incremental,
+    ).toBe(false);
   });
 
   it("says nothing about bypassing when no region was bypassed", () => {

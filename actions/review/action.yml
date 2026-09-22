@@ -53,6 +53,19 @@ inputs:
       globs match its path, on top of the standing lenses.
     required: false
     default: ""
+  incremental:
+    description: >-
+      On a `synchronize` event, review only the commits the push added:
+      the diff from the previous head (`github.event.before`) to the new one,
+      instead of from the merge-base. Fail-closed: when the previous head is
+      not in the checkout (a force-push), is not an ancestor of the new one,
+      or the base branch was merged in between, the whole range is reviewed
+      as usual, and the log says why. Other events (opened, reopened,
+      ready_for_review, workflow_dispatch) always review the whole range. The
+      summary record then carries `incremental: true`, and the comment action
+      leaves earlier verdicts standing rather than superseding them.
+    required: false
+    default: "false"
   policy-ref:
     description: >-
       Whose .review/ the review is held to. "base" (the default) reads the
@@ -140,6 +153,14 @@ outputs:
   findings:
     description: "How many findings were reported."
     value: ${{ steps.review.outputs.findings }}
+  range:
+    description: >-
+      What was reviewed: "full" (from the merge-base) or "since" (only the
+      commits the push added, with `incremental: true`).
+    value: ${{ steps.range.outputs.range }}
+  range-reason:
+    description: "Why that range: one short phrase."
+    value: ${{ steps.range.outputs.reason }}
 
 runs:
   using: composite
@@ -174,6 +195,64 @@ runs:
           fi
         fi
         echo "ref=${BASE_REF}" >> "${GITHUB_OUTPUT}"
+
+    - name: Resolve the range
+      id: range
+      shell: bash
+      env:
+        INCREMENTAL: ${{ inputs.incremental }}
+        EVENT_NAME: ${{ github.event_name }}
+        EVENT_ACTION: ${{ github.event.action }}
+        BEFORE: ${{ github.event.before }}
+        BASE_REF: ${{ steps.base.outputs.ref }}
+      run: |
+        # Decides between the whole range (merge-base..HEAD) and only what the
+        # push added (before..HEAD). Every doubt resolves to the whole range:
+        # reviewing too much costs tokens, reviewing too little hides a finding.
+        set -euo pipefail
+        decide() {
+          echo "range=${1}" >> "${GITHUB_OUTPUT}"
+          echo "reason=${2}" >> "${GITHUB_OUTPUT}"
+          echo "since=${3:-}" >> "${GITHUB_OUTPUT}"
+          echo "Range: ${1} (${2})."
+        }
+        g() { git -C "${GITHUB_WORKSPACE}" "$@"; }
+        if [ "${INCREMENTAL}" != "true" ]; then
+          decide full "incremental is off"
+          exit 0
+        fi
+        if [ "${EVENT_NAME}" != "pull_request" ] \
+          || [ "${EVENT_ACTION}" != "synchronize" ]; then
+          decide full \
+            "event ${EVENT_NAME}/${EVENT_ACTION:-none} asks for the whole range"
+          exit 0
+        fi
+        if [[ ! "${BEFORE}" =~ ^[0-9a-f]{40}$ ]]; then
+          decide full "no previous head on the event"
+          exit 0
+        fi
+        short="${BEFORE:0:7}"
+        if ! g cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+          reason="previous head ${short} is not in the checkout"
+          decide full "${reason} (force-push, or a shallow clone)"
+          exit 0
+        fi
+        if ! g merge-base --is-ancestor "${BEFORE}" HEAD; then
+          decide full \
+            "previous head ${short} is not an ancestor of HEAD (force-push)"
+          exit 0
+        fi
+        if [ "$(g rev-parse HEAD)" = "${BEFORE}" ]; then
+          decide full "HEAD is the previous head; nothing was added"
+          exit 0
+        fi
+        base="refs/remotes/origin/${BASE_REF}"
+        if [ "$(g merge-base "${base}" "${BEFORE}")" \
+          != "$(g merge-base "${base}" HEAD)" ]; then
+          decide full "the base branch was merged or rebased in since ${short}"
+          exit 0
+        fi
+        decide since "only the commits after ${short}" "${BEFORE}"
 
     - name: Read the policy from the base branch
       id: policy
@@ -250,6 +329,7 @@ runs:
         ANNOTATIONS: ${{ inputs.annotations }}
         REVIEWER: ${{ github.action_path }}/../../src/cli/main.ts
         BASE_REF: ${{ steps.base.outputs.ref }}
+        SINCE: ${{ steps.range.outputs.since }}
       run: |
         # The runner starts this shell with -e, which `set -uo pipefail`
         # does not undo. Off it goes, for two reasons: the reviewer's exit
@@ -268,12 +348,16 @@ runs:
         set_if_given REVIEW_EXCLUDE_PATHS "${IN_EXCLUDE}"
         set_if_given REVIEW_MAX_FINDINGS_PER_FILE "${IN_MAX_FINDINGS}"
         set_if_given REVIEW_VERIFY "${IN_VERIFY}"
-        # The reviewed side is the checkout: what actions/checkout put here.
-        args=(
-          review
-          --base "origin/${BASE_REF}"
-          --fail-on "${FAIL_ON}"
-        )
+        # The reviewed side is the checkout: what actions/checkout put here. The
+        # other side is the base branch, or -- for an incremental run -- the
+        # previous head the range step settled on.
+        args=(review)
+        if [ -n "${SINCE:-}" ]; then
+          args+=(--since "${SINCE}")
+        else
+          args+=(--base "origin/${BASE_REF}")
+        fi
+        args+=(--fail-on "${FAIL_ON}")
         args+=(--log-format github)
         if [ -n "${IN_LOG_LEVEL}" ]; then
           args+=(--log-level "${IN_LOG_LEVEL}")

@@ -28,7 +28,7 @@ import { compareCodePoints } from "../util/text";
 
 import { bypassWarning, regionRecords, sortedRegions } from "./bypass";
 import { type PolicyPath, policyChanges, policyWarning } from "./policy";
-import { previewReport, textBody } from "./render";
+import { incrementalNote, previewReport, textBody } from "./render";
 import {
   type FileOutcome,
   type FileReviewSettings,
@@ -53,6 +53,11 @@ export interface BranchReviewOptions {
   readonly base: string;
   /** Review the working tree against `HEAD`; `base` is then not consulted. */
   readonly uncommitted?: boolean;
+  /**
+   * Review only the commits after this one: the diff `since..HEAD`, with `base` not consulted. For a run
+   * that should look at what one push added and nothing before it.
+   */
+  readonly since?: string;
   readonly reviewer: PerFileReviewer;
   /** `null` reports every finding. */
   readonly verifier?: PerFileVerifier | null;
@@ -179,6 +184,7 @@ export async function* iterBranchReview(
     type: "summary",
     base,
     branch,
+    incremental: options.since !== undefined,
     files_changed: files.length,
     files_reviewed: filesReviewed,
     failed,
@@ -216,18 +222,21 @@ function withPerFileSkips(
 }
 
 /** The two sides a review names. */
-type ReviewScope = Pick<BranchReviewOptions, "base" | "uncommitted">;
+type ReviewScope = Pick<BranchReviewOptions, "base" | "uncommitted" | "since">;
 
 /** The reviewed side: the checkout. Also what the working tree is reviewed against. */
 export const HEAD = "HEAD";
 /** How the summary names the working tree. */
 export const WORKING_TREE = "working tree";
 
-/** The two sides a run actually compared; an uncommitted review reports `HEAD` and `working tree`. */
+/**
+ * The two sides a run actually compared; an uncommitted review reports `HEAD` and `working tree`, a
+ * `--since` run the commit it started from.
+ */
 function reviewedReferences(options: ReviewScope): { base: string; branch: string } {
   return options.uncommitted === true
     ? { base: HEAD, branch: WORKING_TREE }
-    : { base: options.base, branch: HEAD };
+    : { base: options.since ?? options.base, branch: HEAD };
 }
 
 /** How a report titles the scope it covered: `HEAD vs main`, or `working tree vs HEAD`. */
@@ -236,7 +245,13 @@ function scopeTitle(options: ReviewScope): string {
   return `${branch} vs ${base}`;
 }
 
-/** The changed files of the run's scope: the three-dot diff `base...HEAD`, or the uncommitted change set. */
+/**
+ * The changed files of the run's scope: the three-dot diff `base...HEAD`, the commits since a given one,
+ * or the uncommitted change set.
+ *
+ * @remarks `since` is expected to be an ancestor of `HEAD`; when it is not, the diff starts at their
+ * merge-base, which reviews more than the push added, never less.
+ */
 async function changedFilesOf(
   options: ReviewScope & Pick<BranchReviewOptions, "git">,
   log: Logger,
@@ -246,6 +261,13 @@ async function changedFilesOf(
     const dirty = await git.worktreeFiles();
     log.info(`Working tree vs ${HEAD} in ${git.root}: ${dirty.length} uncommitted file(s).`);
     return dirty;
+  }
+  if (options.since !== undefined) {
+    const files = await git.changedFiles(options.since, HEAD);
+    log.info(
+      `${HEAD} since '${options.since}' in ${git.root}: ${files.length} changed file(s); earlier commits are not reviewed.`,
+    );
+    return files;
   }
   const forkPoint = await git.mergeBase(base, HEAD);
   if (forkPoint === null) {
@@ -262,6 +284,8 @@ export interface BranchPreviewOptions {
   readonly base: string;
   /** Preview the uncommitted change set instead of the checkout's. */
   readonly uncommitted?: boolean;
+  /** Preview only the commits after this one. */
+  readonly since?: string;
   readonly git: GitReader;
   readonly settings: FileReviewSettings;
   /** As in {@link BranchReviewOptions.policyPaths}. */
@@ -291,6 +315,8 @@ export async function previewBranch(
 /** A review collected into one result. */
 export interface BranchReviewResult {
   readonly findings: readonly Omit<FindingRecord, "type">[];
+  /** Whether only the commits after `--since` were reviewed. */
+  readonly incremental: boolean;
   readonly files_changed: number;
   readonly files_reviewed: number;
   /** Files selected for review whose review did not finish. */
@@ -334,6 +360,7 @@ function collect(
 ): BranchReviewResult {
   return {
     findings,
+    incremental: summary?.incremental ?? false,
     files_changed: summary?.files_changed ?? 0,
     files_reviewed: summary?.files_reviewed ?? 0,
     failed: summary?.failed ?? 0,
@@ -375,6 +402,8 @@ export async function streamBranchReview(
 /** What the text report needs; every tally may be absent. */
 export interface TextReportInput {
   readonly findings: readonly Omit<FindingRecord, "type">[];
+  /** Whether only the commits after `base` were reviewed. */
+  readonly incremental?: boolean;
   readonly anchors?: Readonly<Record<string, number>>;
   /** Files selected for review whose review did not finish. */
   readonly failed?: number;
@@ -390,12 +419,13 @@ export interface TextReportInput {
  * What a reader must know before believing the findings: failed files, a policy the change itself edits,
  * and the regions the code took out of its own review.
  */
-function caveats(result: TextReportInput): string[] {
+function caveats(result: TextReportInput, base: string): string[] {
   const failed = result.failed ?? 0;
   const bypassed = result.bypassed ?? 0;
   const policy = policyWarning(result.policy_changed ?? []);
   const bypass = bypassWarning(result.bypass_regions ?? []);
   return [
+    ...(result.incremental === true ? [incrementalNote(base)] : []),
     ...(failed > 0 ? [`${failed} file(s) could not be reviewed; the log says why.`] : []),
     ...(policy === "" ? [] : [policy]),
     ...(bypass === "" ? [] : [bypass]),
@@ -412,7 +442,7 @@ export function branchReviewText(base: string, branch: string, result: TextRepor
   const lines = [`\n=== Branch review: ${branch} vs ${base} ===`];
   const { findings } = result;
   if (findings.length === 0) {
-    lines.push("No issues found.", ...caveats(result));
+    lines.push("No issues found.", ...caveats(result, base));
     return lines;
   }
   const files = new Set(findings.map((f) => f.path)).size;
@@ -423,7 +453,7 @@ export function branchReviewText(base: string, branch: string, result: TextRepor
   if (notable.length > 0) {
     lines.push(`anchors: ${notable.map(([name, n]) => `${n} ${name}`).join(", ")}`);
   }
-  lines.push(...caveats(result), "");
+  lines.push(...caveats(result, base), "");
   const ordered = findings.toSorted(
     (a, b) => compareCodePoints(a.path, b.path) || (a.line ?? -1) - (b.line ?? -1),
   );

@@ -70,6 +70,7 @@ async function runBranchReview(arguments_: ReviewArguments, cradle: RunCradle): 
   const options = {
     base: arguments_.base,
     uncommitted: arguments_.uncommitted,
+    ...(arguments_.since !== null && { since: arguments_.since }),
     reviewer: cradle.fileReviewer,
     verifier: cradle.verifier,
     git: gitReader,
@@ -97,6 +98,7 @@ async function runPreview(arguments_: ReviewArguments, cradle: RunCradle): Promi
   const { report } = await previewBranch({
     base: arguments_.base,
     uncommitted: arguments_.uncommitted,
+    ...(arguments_.since !== null && { since: arguments_.since }),
     git: gitReader,
     settings: config.fileReviewSettings(arguments_.exclude),
     policyPaths: cradle.policyPaths,

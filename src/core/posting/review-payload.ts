@@ -10,6 +10,7 @@ import {
   type SummaryRecord,
 } from "../ports/review-reporter";
 import { regionLocation, sortedRegions } from "../review/bypass";
+import { incrementalNote } from "../review/render";
 import { severityGate, severityLabel, severityRankOf } from "../review/severity";
 import { type JsonObject, type JsonValue, isJsonArray, isJsonObject } from "../util/json";
 import { compareCodePoints } from "../util/text";
@@ -166,6 +167,7 @@ function toSummary(record: JsonObject): SummaryRecord {
     type: "summary",
     base: text_(record["base"]),
     branch: text_(record["branch"]),
+    incremental: record["incremental"] === true,
     files_changed: count(record["files_changed"]),
     files_reviewed: count(record["files_reviewed"]),
     failed: count(record["failed"]),
@@ -348,10 +350,13 @@ function reviewBody(
   const tally = tallies(summary, records.unreadable, alreadyPosted);
   const policy = policyNote(summary?.policy_changed ?? []);
   const bypass = bypassNote(summary?.bypass_regions ?? []);
+  const scope =
+    summary?.incremental === true ? `> **${incrementalNote(`\`${summary.base}\``)}**` : "";
   return [
     "### Automated review",
     "",
     headline(findings),
+    ...(scope === "" ? [] : ["", scope]),
     ...(policy === "" ? [] : ["", policy]),
     ...(bypass === "" ? [] : ["", bypass]),
     ...(loose.length > 0

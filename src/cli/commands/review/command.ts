@@ -21,6 +21,8 @@ export interface ReviewArguments extends ConfigArguments {
   readonly base: string;
   /** Review the working tree; `--base` is then not used. */
   readonly uncommitted: boolean;
+  /** Review only the commits after this one; `--base` is then not used. `null` when not given. */
+  readonly since: string | null;
   readonly format: ReportFormat;
   /** `--out`, or `null`. */
   readonly out: string | null;
@@ -49,6 +51,14 @@ function reviewOptions(command: Command): Command {
         )
           .default(false)
           .conflicts(["base"]),
+      )
+      // A third way to name the scope: what one push added. The checkout is still the reviewed side; only
+      // the starting point moves, from the merge-base to a commit the caller names.
+      .addOption(
+        new Option(
+          "--since <ref>",
+          "Review only the commits after this one (the diff since..HEAD), for a run that should look at what a push added and nothing before it. The ref should be an ancestor of HEAD. Cannot be combined with --base or --uncommitted.",
+        ).conflicts(["base", "uncommitted"]),
       )
       .option(
         "--format <format>",
@@ -118,6 +128,7 @@ export const REVIEW = defineCommand<ReviewArguments>({
     ...options,
     ...configArguments(options),
     out: options.out ?? null,
+    since: options.since ?? null,
     lang: options.lang ?? null,
     skillsPath: options.skillsPath ?? null,
   }),

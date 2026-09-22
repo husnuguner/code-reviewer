@@ -40,6 +40,7 @@ const SUMMARY: SummaryRecord = {
   type: "summary",
   base: "main",
   branch: "HEAD",
+  incremental: false,
   files_changed: 1,
   files_reviewed: 1,
   failed: 0,

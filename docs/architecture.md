@@ -187,6 +187,14 @@ The choices with a real trade-off behind them, and what was given up:
   keep them consistent, and the warning that they disagreed existed only
   because both were settings. Given up: capping a file's whole skills block
   below the per-skill cap × the number of matching skills.
+- **An incremental review is a narrower diff, not a memory.** `--since` reviews
+  the commits a push added, from the previous head the event already names,
+  and the action falls back to the whole range on any doubt -- a force-push,
+  a merged base, another event. The run knows nothing of earlier runs: it
+  says so (`incremental: true`, a line in every report) and the comment job
+  leaves earlier verdicts standing. Given up: a finding on code the push did
+  not touch is not re-checked until a full run, and a clean incremental run
+  cannot lift a block.
 - **A comment is repeated or not by where it sits, not by what it says.** The
   comment job asks GitHub for the inline comments earlier runs left, at
   GitHub's current positions, and does not post a finding again on a line

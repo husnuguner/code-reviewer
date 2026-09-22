@@ -46,6 +46,7 @@ const SUMMARY: SummaryRecord = {
   type: "summary",
   base: "main",
   branch: "HEAD",
+  incremental: false,
   files_changed: 4,
   files_reviewed: 2,
   failed: 0,
@@ -150,6 +151,16 @@ describe("the job summary", () => {
     expect(heading).toBe("## Code review");
     expect(warning).toContain("edits the review policy (.review/config.yaml)");
     expect(summaryFor([record()], SUMMARY)).not.toContain("review policy");
+  });
+
+  it("says first when only the commits since a point were reviewed", () => {
+    const markdown = summaryFor([record()], { ...SUMMARY, incremental: true, base: "abc123" });
+    const [heading, , note] = markdown.split("\n", 3);
+    expect(heading).toBe("## Code review");
+    expect(note).toBe(
+      "> Only the commits since `abc123` were reviewed; findings earlier runs reported on this change still stand.",
+    );
+    expect(summaryFor([record()], SUMMARY)).not.toContain("Only the commits");
   });
 
   it("calls out bypassed regions with their reasons, after the policy warning, and tallies the findings they cost", () => {

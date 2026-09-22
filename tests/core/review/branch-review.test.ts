@@ -221,6 +221,65 @@ describe("what git reports", () => {
   });
 });
 
+// -- only the commits since a point ----------------------------------------
+
+/** The feature branch after one more commit: `b.py` added on top of `repo()`'s work. */
+function twoCommits(): string {
+  const root = repo();
+  writeFileSync(join(root, "b.py"), "later = True\n");
+  git(root, "add", "-A");
+  git(root, "commit", "-qm", "second push");
+  return root;
+}
+
+describe("reviewing only the commits since a point", () => {
+  it("reviews what the later commits changed and nothing from before", async () => {
+    const o = options(twoCommits(), { since: "HEAD~1" });
+    const result = await reviewBranch(o);
+    expect(o.reviewer.seen).toEqual(["b.py"]);
+    expect(result.files_changed).toBe(1);
+    expect(result.incremental).toBe(true);
+  });
+
+  it("names the starting commit as the base, and says the run was incremental", async () => {
+    const stream = iterBranchReview(options(twoCommits(), { since: "HEAD~1" }));
+    const records: BranchReviewRecord[] = await Array.fromAsync(stream);
+    expect(records.at(-1)).toMatchObject({
+      type: "summary",
+      base: "HEAD~1",
+      branch: HEAD,
+      incremental: true,
+    });
+  });
+
+  it("is not incremental, and reviews everything, without --since", async () => {
+    const o = options(twoCommits());
+    const result = await reviewBranch(o);
+    expect(sortedByCodePoint(o.reviewer.seen)).toEqual(["a.py", "b.py", "new.py"]);
+    expect(result.incremental).toBe(false);
+  });
+
+  it("previews the same narrowed scope under a title naming the point", async () => {
+    const { decisions, report } = await previewBranch({
+      base: "main",
+      since: "HEAD~1",
+      git: new LocalGitReader(twoCommits()),
+      settings: DEFAULT_FILE_REVIEW_SETTINGS,
+    });
+    expect(decisions.map((decision) => decision.path)).toEqual(["b.py"]);
+    expect(report).toContain("=== [PREVIEW] HEAD vs HEAD~1 ===");
+  });
+
+  it("says in the text report what it did not look at", () => {
+    const lines = branchReviewText("abc123", "HEAD", { findings: [], incremental: true });
+    expect(lines).toEqual([
+      "\n=== Branch review: HEAD vs abc123 ===",
+      "No issues found.",
+      "Only the commits since abc123 were reviewed; findings earlier runs reported on this change still stand.",
+    ]);
+  });
+});
+
 // -- skills ----------------------------------------------------------------
 
 describe("skills", () => {

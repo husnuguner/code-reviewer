@@ -32,7 +32,12 @@ local git ──▶ select ──▶ per file: context ▸ model ▸ anchor ▸ 
 
 ## Scope, and previewing it
 
-Which files a run reviews is decided once, before anything is prompted
+A run compares the checkout against one of three things: a base branch
+(`--base`, the diff from their merge-base), the working tree against `HEAD`
+(`--uncommitted`), or the commits after a given one (`--since REF`, the diff
+`REF..HEAD`, for a run that should look at what one push added and nothing
+before it; the summary then says `incremental: true`). Which files a run
+reviews within that is decided once, before anything is prompted
 (`src/core/review/selection.ts`). Every file that is not reviewed carries a
 reason:
 

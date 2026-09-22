@@ -24,6 +24,7 @@ const SUMMARY: SummaryRecord = {
   type: "summary",
   base: "main",
   branch: "HEAD",
+  incremental: false,
   files_changed: 2,
   files_reviewed: 1,
   failed: 0,

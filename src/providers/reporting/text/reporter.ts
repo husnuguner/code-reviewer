@@ -17,6 +17,7 @@ export class TextReporter extends CollectingReporter {
   protected onSummary(summary: SummaryRecord): void {
     const lines = branchReviewText(summary.base, summary.branch, {
       findings: this.findings,
+      incremental: summary.incremental,
       anchors: summary.anchors,
       failed: summary.failed,
       policy_changed: summary.policy_changed,

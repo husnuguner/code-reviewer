@@ -45,6 +45,7 @@ function reviewEnvironment(overrides: Record<string, string> = {}): Record<strin
     ANNOTATIONS: "false",
     REVIEWER: "/action/src/cli/main.ts",
     BASE_REF: "pre-prod",
+    SINCE: "",
     ...overrides,
   };
 }
@@ -140,6 +141,181 @@ describe("actions/review/action.yml, the Review step", () => {
     expect(step.calls[0]).toContain("--preview");
     expect(step.calls[0]).not.toContain("--out");
     expect(step.exitCode).toBe(0);
+  });
+
+  it("reviews since the range step's commit instead of from the base when it named one", () => {
+    const since = "a".repeat(40);
+    const step = runStep(run, { env: reviewEnvironment({ SINCE: since }), stub: "bun" });
+
+    expect(step.calls[0]).toContain("--since");
+    expect(step.calls[0]).toContain(since);
+    expect(step.calls[0]).not.toContain("--base");
+    expect(step.exitCode).toBe(0);
+  });
+});
+
+/**
+ * A pull request checkout after two pushes: `main` as `origin/main`, then on `feature` a first commit
+ * (the head the previous run saw) and a second (the head now). `sibling` is a commit off `main` that
+ * `feature` never had, for the force-push case.
+ */
+function twoPushes(): {
+  workspace: string;
+  before: string;
+  head: string;
+  sibling: string;
+} {
+  const workspace = mkdtempSync(join(tmpdir(), "reviewer-range-step-"));
+  git(workspace, "init", "-q", "-b", "main");
+  git(workspace, "config", "user.email", "t@example.com");
+  git(workspace, "config", "user.name", "Test");
+  writeFileSync(join(workspace, "a.ts"), "1\n");
+  git(workspace, "add", "-A");
+  git(workspace, "commit", "-qm", "base");
+  git(workspace, "update-ref", "refs/remotes/origin/main", "main");
+  git(workspace, "checkout", "-q", "-b", "sibling");
+  writeFileSync(join(workspace, "s.ts"), "s\n");
+  git(workspace, "add", "-A");
+  git(workspace, "commit", "-qm", "sibling");
+  const sibling = revParse(workspace, "HEAD");
+  git(workspace, "checkout", "-q", "main");
+  git(workspace, "checkout", "-q", "-b", "feature");
+  writeFileSync(join(workspace, "b.ts"), "2\n");
+  git(workspace, "add", "-A");
+  git(workspace, "commit", "-qm", "first push");
+  const before = revParse(workspace, "HEAD");
+  writeFileSync(join(workspace, "c.ts"), "3\n");
+  git(workspace, "add", "-A");
+  git(workspace, "commit", "-qm", "second push");
+  const head = revParse(workspace, "HEAD");
+  return { workspace, before, head, sibling };
+}
+
+function revParse(workspace: string, reference: string): string {
+  const result = Bun.spawnSync(["git", "rev-parse", reference], { cwd: workspace, stdout: "pipe" });
+  return result.stdout.toString().trim();
+}
+
+/** The range step's environment for a synchronize event with `incremental: true`. */
+function rangeEnvironment(
+  workspace: string,
+  before: string,
+  overrides: Record<string, string> = {},
+): Record<string, string> {
+  return {
+    GITHUB_WORKSPACE: workspace,
+    INCREMENTAL: "true",
+    EVENT_NAME: "pull_request",
+    EVENT_ACTION: "synchronize",
+    BEFORE: before,
+    BASE_REF: "main",
+    ...overrides,
+  };
+}
+
+describe("actions/review/action.yml, the range step", () => {
+  const { run } = stepScript(REVIEW_ACTION, "Resolve the range");
+
+  it("narrows to the commits since the previous head on an ordinary push", () => {
+    const { workspace, before } = twoPushes();
+    const step = runStep(run, { env: rangeEnvironment(workspace, before), stub: "bun" });
+    expect(step.exitCode).toBe(0);
+    expect(step.outputs).toEqual({
+      range: "since",
+      reason: `only the commits after ${before.slice(0, 7)}`,
+      since: before,
+    });
+  });
+
+  it("reviews the whole range when incremental is off, whatever the event", () => {
+    const { workspace, before } = twoPushes();
+    const step = runStep(run, {
+      env: rangeEnvironment(workspace, before, { INCREMENTAL: "false" }),
+      stub: "bun",
+    });
+    expect(step.outputs).toEqual({ range: "full", reason: "incremental is off", since: "" });
+  });
+
+  it("reviews the whole range on any event but a synchronize", () => {
+    const { workspace, before } = twoPushes();
+    for (const [name, action] of [
+      ["pull_request", "opened"],
+      ["pull_request", "reopened"],
+      ["pull_request", "ready_for_review"],
+      ["workflow_dispatch", ""],
+    ] as const) {
+      const step = runStep(run, {
+        env: rangeEnvironment(workspace, before, { EVENT_NAME: name, EVENT_ACTION: action }),
+        stub: "bun",
+      });
+      expect(step.outputs["range"]).toBe("full");
+      expect(step.outputs["reason"]).toContain(`event ${name}/${action === "" ? "none" : action}`);
+      expect(step.outputs["since"]).toBe("");
+    }
+  });
+
+  it("reviews the whole range when the event carries no usable previous head", () => {
+    const { workspace, before } = twoPushes();
+    for (const bad of ["", "0000000000000000000000000000000000000000".slice(0, 39), "not-a-sha"]) {
+      const step = runStep(run, {
+        env: rangeEnvironment(workspace, before, { BEFORE: bad }),
+        stub: "bun",
+      });
+      expect(step.outputs).toEqual({
+        range: "full",
+        reason: "no previous head on the event",
+        since: "",
+      });
+    }
+  });
+
+  it("reviews the whole range when the previous head is not in the checkout", () => {
+    const { workspace, before } = twoPushes();
+    const unknown = "f".repeat(40);
+    const step = runStep(run, {
+      env: rangeEnvironment(workspace, before, { BEFORE: unknown }),
+      stub: "bun",
+    });
+    expect(step.outputs["range"]).toBe("full");
+    expect(step.outputs["reason"]).toBe(
+      `previous head ${unknown.slice(0, 7)} is not in the checkout (force-push, or a shallow clone)`,
+    );
+  });
+
+  it("reviews the whole range after a force-push, when the previous head is no ancestor", () => {
+    const { workspace, sibling } = twoPushes();
+    const step = runStep(run, {
+      env: rangeEnvironment(workspace, sibling),
+      stub: "bun",
+    });
+    expect(step.outputs["range"]).toBe("full");
+    expect(step.outputs["reason"]).toBe(
+      `previous head ${sibling.slice(0, 7)} is not an ancestor of HEAD (force-push)`,
+    );
+  });
+
+  it("reviews the whole range when nothing was added since the previous head", () => {
+    const { workspace, head } = twoPushes();
+    const step = runStep(run, { env: rangeEnvironment(workspace, head), stub: "bun" });
+    expect(step.outputs["range"]).toBe("full");
+    expect(step.outputs["reason"]).toBe("HEAD is the previous head; nothing was added");
+  });
+
+  it("reviews the whole range when the base branch was merged in since the previous head", () => {
+    const { workspace, before } = twoPushes();
+    // main moves on, and the pull request merges it: since..HEAD would now carry main's own work.
+    git(workspace, "checkout", "-q", "main");
+    writeFileSync(join(workspace, "m.ts"), "m\n");
+    git(workspace, "add", "-A");
+    git(workspace, "commit", "-qm", "main moves");
+    git(workspace, "update-ref", "refs/remotes/origin/main", "main");
+    git(workspace, "checkout", "-q", "feature");
+    git(workspace, "merge", "-q", "--no-edit", "main");
+    const step = runStep(run, { env: rangeEnvironment(workspace, before), stub: "bun" });
+    expect(step.outputs["range"]).toBe("full");
+    expect(step.outputs["reason"]).toBe(
+      `the base branch was merged or rebased in since ${before.slice(0, 7)}`,
+    );
   });
 });
 

@@ -57,6 +57,30 @@ const root = mkdtempSync(join(tmpdir(), "reviewer-comment-"));
 const findings = join(root, "findings.ndjson");
 const SILENT = resolveLogSettings({ level: "silent" }, { environment: {} });
 
+/** The closing record, incremental or not. */
+function summary(isIncremental: boolean): string {
+  return JSON.stringify({
+    type: "summary",
+    base: "abc123",
+    branch: "HEAD",
+    incremental: isIncremental,
+    files_changed: 1,
+    files_reviewed: 1,
+    failed: 0,
+    findings: 2,
+    files_with_findings: 1,
+    anchors: { exact: 2 },
+    unanchored: 0,
+    refuted: 0,
+    capped: 0,
+    mislabelled: 0,
+    bypassed: 0,
+    skipped: {},
+    policy_changed: [],
+    bypass_regions: [],
+  });
+}
+
 function record(line: number, body: string): string {
   return JSON.stringify({
     type: "finding",
@@ -117,6 +141,21 @@ describe("runComment", () => {
     await runComment(arguments_, SILENT);
     expect(host.poster.submitted[0]?.comments).toHaveLength(2);
     expect(host.poster.submitted[0]?.body).not.toContain("already posted");
+  });
+
+  it("supersedes when asked on a full run, but never on an incremental one", async () => {
+    const full = join(root, "full.ndjson");
+    writeFileSync(full, `${record(12, "First.")}\n${summary(false)}\n`);
+    host.poster = new RecordingPoster([]);
+    await runComment({ ...arguments_, findings: full, supersede: true }, SILENT);
+    expect(host.poster.submitted[0]?.supersede).toBe(true);
+
+    const incremental = join(root, "incremental.ndjson");
+    writeFileSync(incremental, `${record(12, "First.")}\n${summary(true)}\n`);
+    host.poster = new RecordingPoster([]);
+    await runComment({ ...arguments_, findings: incremental, supersede: true }, SILENT);
+    expect(host.poster.submitted[0]?.supersede).toBe(false);
+    expect(host.poster.submitted[0]?.body).toContain("Only the commits since `abc123`");
   });
 
   it("neither asks nor posts on a dry run", async () => {

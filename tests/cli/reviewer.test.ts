@@ -98,6 +98,7 @@ describe("the review flags", () => {
       // Commander's shape for `--no-color`: on until the flag is given.
       color: true,
       base: "main",
+      since: null,
       // The checkout against the base until a run asks for the working tree instead.
       uncommitted: false,
       format: "text",
@@ -132,6 +133,14 @@ describe("the review flags", () => {
 
   it("know no --branch: the reviewed side is always the checkout", () => {
     expect(() => review(["--branch", "feature/x"])).toThrow(UsageError);
+  });
+
+  it("take --since as a third scope, and refuse it beside the other two", () => {
+    expect(review(["--since", "abc123"]).since).toBe("abc123");
+    expect(review(["--since", "abc123"]).base).toBe("main");
+    expect(() => review(["--since", "abc123", "--base", "develop"])).toThrow(UsageError);
+    expect(() => review(["--since", "abc123", "--uncommitted"])).toThrow(UsageError);
+    expect(() => review(["--since"])).toThrow(UsageError);
   });
 
   it("name the config file, the language, the skills and the exclusions", () => {
