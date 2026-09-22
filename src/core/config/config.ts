@@ -204,11 +204,11 @@ function valuesFrom(
     excludeGlobs: shape.settings.exclude,
     maxFindingsPerFile: shape.settings["max-findings-per-file"],
     maxSkillChars: shape.settings["max-skill-chars"],
-    maxContextChars: shape.settings["max-context-chars"],
-    maxDefinitions: shape.settings["max-definitions"],
-    maxSymbols: shape.settings["max-symbols"],
-    maxUsagesPerSymbol: shape.settings["max-usages-per-symbol"],
-    maxRelated: shape.settings["max-related"],
+    maxContextChars: shape.settings.context["max-chars"],
+    maxDefinitions: shape.settings.context["max-definitions"],
+    maxSymbols: shape.settings.context["max-symbols"],
+    maxUsagesPerSymbol: shape.settings.context["max-usages-per-symbol"],
+    maxRelated: shape.settings.context["max-related"],
     maxConcurrentFiles:
       shape.settings["max-concurrent-files"] <= 0
         ? defaultConcurrency(cpuCount)

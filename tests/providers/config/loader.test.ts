@@ -37,7 +37,7 @@ const MACHINE = {
   settings: {
     llm: { provider: "claude", model: "claude-opus-5", "api-key": "${ANTHROPIC_API_KEY}" },
     language: "en",
-    "max-context-chars": 4000,
+    context: { "max-chars": 4000 },
     "max-concurrent-files": 3,
   },
 };
@@ -695,9 +695,12 @@ describe("the setting groups", () => {
       "maxRelated",
     ] as const;
     for (const field of budgets) {
-      expect(FIELD_PATHS[field]).toStartWith("settings.max-");
+      expect(FIELD_PATHS[field]).toMatch(/^settings\.(?:context\.)?max-/u);
       expect(CONFIG_ALIASES).not.toHaveProperty(field);
     }
+    // The pre-context budget is one section, so a project tunes it in one place.
+    expect(FIELD_PATHS.maxContextChars).toBe("settings.context.max-chars");
+    expect(FIELD_PATHS.maxRelated).toBe("settings.context.max-related");
     // The knobs a runner does set keep theirs.
     expect(CONFIG_ALIASES.maxConcurrentFiles).toBe("REVIEW_MAX_CONCURRENT_FILES");
     expect(CONFIG_ALIASES.maxFindingsPerFile).toBe("REVIEW_MAX_FINDINGS_PER_FILE");

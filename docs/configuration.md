@@ -109,26 +109,26 @@ repository).
 Keys are kebab-case. Everything under `settings` may be set in either file;
 `skills` sits at the root of the repository's file alone.
 
-| Key                              | Default          | Machine | Repo | Meaning                                                                                        |
-| -------------------------------- | ---------------- | :-----: | :--: | ---------------------------------------------------------------------------------------------- |
-| `settings.llm.provider`          | `local`          |    ✓    |  ✓   | `local` (any OpenAI-compatible endpoint) or `claude` (Anthropic).                              |
-| `settings.llm.model`             | provider default |    ✓    |  ✓   | `local` → `gpt-4.1`, `claude` → `claude-sonnet-4-6`.                                           |
-| `settings.llm.base-url`          | —                |    ✓    |  ✓   | Endpoint URL including the API prefix, e.g. `http://localhost:11434/v1`.                       |
-| `settings.llm.api-key`           | _required_       |    ✓    |  ✓   | The key, or `${VARIABLE}` to read it from the environment. See below.                          |
-| `settings.language`              | `en`             |    ✓    |  ✓   | Language of each finding's body. Accepted: `en`, `tr`; anything else falls back to English.    |
-| `settings.verify`                | `true`           |    ✓    |  ✓   | Run the [verification pass](how-it-works.md#verification).                                     |
-| `settings.exclude`               | `[]`             |    ✓    |  ✓   | Globs never sent to the model; a list or one comma-separated string.                           |
-| `settings.max-findings-per-file` | `3`              |    ✓    |  ✓   | Per-file cap; the most severe survive. `0` = no cap.                                           |
-| `settings.max-skill-chars`       | `10000`          |    ✓    |  ✓   | Cap on one skill's body. No variable.                                                          |
-| `settings.max-context-chars`     | `12000`          |    ✓    |  ✓   | Cap on the [pre-context](how-it-works.md#pre-context) block; `0` switches it off. No variable. |
-| `settings.max-definitions`       | `4`              |    ✓    |  ✓   | Imported modules whose signatures are read, per file. No variable.                             |
-| `settings.max-symbols`           | `6`              |    ✓    |  ✓   | Changed exports searched for, per file; one repository search each. No variable.               |
-| `settings.max-usages-per-symbol` | `8`              |    ✓    |  ✓   | Paths listed per changed export. No variable.                                                  |
-| `settings.max-related`           | `3`              |    ✓    |  ✓   | Related diffs included, import-bound first. No variable.                                       |
-| `settings.max-concurrent-files`  | CPU-derived      |    ✓    |  ✓   | File reviews in flight at once.                                                                |
-| `skills.path`                    | `""` (no skills) |         |  ✓   | Directory of skill documents. A relative path is taken from beside the file.                   |
-| `skills.defaults`                | `[]`             |         |  ✓   | `{ globs, skills }` entries: the baseline every matching file is held to.                      |
-| `skills.mappings`                | `{}`             |         |  ✓   | Skill name → the globs only it reviews, added to what `defaults` gave it.                      |
+| Key                                      | Default          | Machine | Repo | Meaning                                                                                                                   |
+| ---------------------------------------- | ---------------- | :-----: | :--: | ------------------------------------------------------------------------------------------------------------------------- |
+| `settings.llm.provider`                  | `local`          |    ✓    |  ✓   | `local` (any OpenAI-compatible endpoint) or `claude` (Anthropic).                                                         |
+| `settings.llm.model`                     | provider default |    ✓    |  ✓   | `local` → `gpt-4.1`, `claude` → `claude-sonnet-4-6`.                                                                      |
+| `settings.llm.base-url`                  | —                |    ✓    |  ✓   | Endpoint URL including the API prefix, e.g. `http://localhost:11434/v1`.                                                  |
+| `settings.llm.api-key`                   | _required_       |    ✓    |  ✓   | The key, or `${VARIABLE}` to read it from the environment. See below.                                                     |
+| `settings.language`                      | `en`             |    ✓    |  ✓   | Language of each finding's body. Accepted: `en`, `tr`; anything else falls back to English.                               |
+| `settings.verify`                        | `true`           |    ✓    |  ✓   | Run the [verification pass](how-it-works.md#verification).                                                                |
+| `settings.exclude`                       | `[]`             |    ✓    |  ✓   | Globs never sent to the model; a list or one comma-separated string.                                                      |
+| `settings.max-findings-per-file`         | `3`              |    ✓    |  ✓   | Per-file cap; the most severe survive. `0` = no cap.                                                                      |
+| `settings.max-skill-chars`               | `10000`          |    ✓    |  ✓   | Cap on one skill's body. No variable.                                                                                     |
+| `settings.context.max-chars`             | `12000`          |    ✓    |  ✓   | Cap on the whole [pre-context](how-it-works.md#pre-context) block, shared by its parts; `0` switches it off. No variable. |
+| `settings.context.max-definitions`       | `4`              |    ✓    |  ✓   | Imported modules whose signatures are read, per file. No variable.                                                        |
+| `settings.context.max-symbols`           | `6`              |    ✓    |  ✓   | Changed exports searched for, per file; one repository search each. No variable.                                          |
+| `settings.context.max-usages-per-symbol` | `8`              |    ✓    |  ✓   | Paths listed per changed export. No variable.                                                                             |
+| `settings.context.max-related`           | `3`              |    ✓    |  ✓   | Related diffs included, import-bound first. No variable.                                                                  |
+| `settings.max-concurrent-files`          | CPU-derived      |    ✓    |  ✓   | File reviews in flight at once.                                                                                           |
+| `skills.path`                            | `""` (no skills) |         |  ✓   | Directory of skill documents. A relative path is taken from beside the file.                                              |
+| `skills.defaults`                        | `[]`             |         |  ✓   | `{ globs, skills }` entries: the baseline every matching file is held to.                                                 |
+| `skills.mappings`                        | `{}`             |         |  ✓   | Skill name → the globs only it reviews, added to what `defaults` gave it.                                                 |
 
 A key the schema does not recognise is **rejected**, not ignored: the error
 names it by its place in the file (`configuration param 'settings.exlude' not
@@ -230,8 +230,7 @@ whole run.
 
 A variable carries what the shell knows: which vendor, which key, which
 endpoint, how much to run at once. **The prompt budgets have none** —
-`max-skill-chars`, `max-context-chars`, `max-definitions`, `max-symbols`,
-`max-usages-per-symbol`, `max-related` — and
+`max-skill-chars` and the whole `settings.context` section — and
 neither has `skills.defaults`. How much of the repository a review reads is a
 judgement about that code: it belongs in a config file, where it is reviewed
 and versioned and a stray variable on a runner cannot flatten it.

@@ -35,11 +35,13 @@ export interface ConfigShape {
     exclude: string[];
     "max-findings-per-file": number;
     "max-skill-chars": number;
-    "max-context-chars": number;
-    "max-definitions": number;
-    "max-symbols": number;
-    "max-usages-per-symbol": number;
-    "max-related": number;
+    context: {
+      "max-chars": number;
+      "max-definitions": number;
+      "max-symbols": number;
+      "max-usages-per-symbol": number;
+      "max-related": number;
+    };
     "max-concurrent-files": number;
   };
   skills: {
@@ -216,11 +218,11 @@ export const FIELD_PATHS = {
   excludeGlobs: "settings.exclude",
   maxFindingsPerFile: "settings.max-findings-per-file",
   maxSkillChars: "settings.max-skill-chars",
-  maxContextChars: "settings.max-context-chars",
-  maxDefinitions: "settings.max-definitions",
-  maxSymbols: "settings.max-symbols",
-  maxUsagesPerSymbol: "settings.max-usages-per-symbol",
-  maxRelated: "settings.max-related",
+  maxContextChars: "settings.context.max-chars",
+  maxDefinitions: "settings.context.max-definitions",
+  maxSymbols: "settings.context.max-symbols",
+  maxUsagesPerSymbol: "settings.context.max-usages-per-symbol",
+  maxRelated: "settings.context.max-related",
   maxConcurrentFiles: "settings.max-concurrent-files",
   skillsPath: "skills.path",
   skillDefaults: "skills.defaults",
@@ -324,30 +326,34 @@ export function configSchema(providers: RegisteredProviders): convict.Schema<Con
         format: "count",
         default: 10_000,
       },
-      "max-context-chars": {
-        doc: "Cap on the pre-context block; 0 switches it off. From the files only; no environment alias.",
-        format: "count",
-        default: 12_000,
-      },
-      "max-definitions": {
-        doc: "Imported modules whose signatures are read, per file. From the files only; no environment alias.",
-        format: "count",
-        default: 4,
-      },
-      "max-symbols": {
-        doc: "Changed exports searched for across the repository, per file; one search each. From the files only; no environment alias.",
-        format: "count",
-        default: 6,
-      },
-      "max-usages-per-symbol": {
-        doc: "Paths listed per changed export. From the files only; no environment alias.",
-        format: "count",
-        default: 8,
-      },
-      "max-related": {
-        doc: "Related diffs included, import-bound first. From the files only; no environment alias.",
-        format: "count",
-        default: 3,
+      // The pre-context budget, together: a block cap and what may fill it. From the files only; the
+      // whole section has no environment alias.
+      context: {
+        "max-chars": {
+          doc: "Cap on the whole pre-context block, which its parts share; 0 switches it off.",
+          format: "count",
+          default: 12_000,
+        },
+        "max-definitions": {
+          doc: "Imported modules whose signatures are read, per file.",
+          format: "count",
+          default: 4,
+        },
+        "max-symbols": {
+          doc: "Changed exports searched for across the repository, per file; one search each.",
+          format: "count",
+          default: 6,
+        },
+        "max-usages-per-symbol": {
+          doc: "Paths listed per changed export.",
+          format: "count",
+          default: 8,
+        },
+        "max-related": {
+          doc: "Related diffs included, import-bound first.",
+          format: "count",
+          default: 3,
+        },
       },
       "max-concurrent-files": {
         doc: "File reviews in flight at once; 0 or less derives it from the CPU count.",

@@ -52,17 +52,23 @@ settings:
   max-findings-per-file: 3 # the most severe survive; 0 = no cap. Default 3
 
   # The prompt budgets: how much of this repository one file review reads.
-  # None of them has an environment alias -- what a review needs to see is a
-  # judgement about this code, so it is written here and nowhere else.
+  # Neither this cap nor the context section below has an environment alias --
+  # what a review needs to see is a judgement about this code, so it is written
+  # here and nowhere else.
   max-skill-chars: 10000 # per-skill body cap. Default 10000
-  # Cap on the whole pre-context block (imported signatures, users of changed
-  # exports, related diffs); 0 switches it off. The blocks share it, so a long
-  # block of signatures cannot crowd the related diffs out. Default 12000.
-  max-context-chars: 12000
-  max-definitions: 4 # imported modules whose signatures are read. Default 4
-  max-symbols: 6 # changed exports searched for; one search each. Default 6
-  max-usages-per-symbol: 8 # paths listed per changed export. Default 8
-  max-related: 3 # related diffs, import-bound first. Default 3
+
+  # The pre-context read from the checkout for each file: the signatures of the
+  # modules it imports, who else uses the exports it changes, and the diffs of
+  # the changed files an import binds to it.
+  context:
+    # Cap on the whole block, which its parts share -- so a long run of imported
+    # signatures cannot crowd the related diffs out. 0 switches it off entirely.
+    max-chars: 12000
+    max-definitions: 4 # imported modules whose signatures are read. Default 4
+    max-symbols: 6 # changed exports searched for; one search each. Default 6
+    max-usages-per-symbol: 8 # paths listed per changed export. Default 8
+    max-related: 3 # related diffs, import-bound first. Default 3
+
   max-concurrent-files: 4 # file reviews in flight. Default 0: from CPU count
 
 # REPOSITORY FILE ONLY. Skills describe the reviewed code, so the machine's

@@ -105,8 +105,8 @@ checkout at the reviewed ref:
 
 Pre-context is deterministic: the reviewer decides what to fetch and the model
 asks for nothing, so the review stays one call and the output contract is
-untouched. The block is capped by `max-context-chars` (default 6000; `0`
-switches it off) and read through local git (`git show`, `git grep`). The three
+untouched. The block is capped by `settings.context.max-chars` (default
+12000; `0` switches it off) and read through local git (`git show`, `git grep`). The three
 blocks share that cap: each gets an equal allowance, and whatever one does not
 need goes to the others, most valuable first — so a file importing four
 documented modules cannot spend the whole budget on signatures and leave the

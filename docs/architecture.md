@@ -167,8 +167,8 @@ The choices with a real trade-off behind them, and what was given up:
   the language. Import edges are read by a JS/TS-shaped regex, so in another
   language the ranking falls back to the names until a language adapter lands.
 - **The prompt budgets are set in a config file and nowhere else.** How much
-  of the repository one review reads — `max-skill-chars`, `max-context-chars`
-  and the per-kind pre-context limits — is a judgement about that code, so it
+  of the repository one review reads — `max-skill-chars` and the whole
+  `settings.context` section — is a judgement about that code, so it
   is versioned and reviewed with it. A variable carries what the shell knows
   (vendor, key, endpoint, concurrency) and nothing that decides what the model
   gets to see. Given up: shrinking a review's context from a CI runner without
