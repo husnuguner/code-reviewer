@@ -223,7 +223,12 @@ The choices with a real trade-off behind them, and what was given up:
   adapters against **real git** (a throwaway repository per test) and a mock
   language model. Git is not mocked: letting git compute the diff is the point.
 - `tests/actions/` and `tests/cli/commands/comment/action.test.ts` keep the
-  composite actions in step with the commands they wrap.
+  composite actions in step with the commands they wrap; `tests/actions/`
+  also runs the step scripts of the actions and of the `Release` workflow
+  under the runner's own bash (`tests/helpers/action-step.ts`).
+- `tests/docs/` holds the pages to what the code says: the action references
+  are the moving major tag, and the changelog has a section for the version
+  in `package.json`.
 - `tests/core/config/config-example.test.ts` keeps
   `templates/config.example.yaml` in step with the parser.
 
@@ -243,7 +248,9 @@ Prettier.
 
 The gate is `bun run check` (typecheck, lint, format:check, test); the
 `Check` workflow (`.github/workflows/check.yml`) runs the same command on
-every push to `main` and every pull request, on the pinned Bun.
+every push to `main` and every pull request, on the pinned Bun. The
+`Release` workflow (`.github/workflows/release.yml`) is the only other one;
+see Releasing. This repository does not review itself with its own action.
 
 Bun reads a working directory's `.env` by default. This repository turns that
 off (`bunfig.toml`, `env = false`) and the executable carries `--no-env-file`
@@ -257,14 +264,28 @@ With `X.Y.Z` the version being released:
 
 ```bash
 bun pm version X.Y.Z --no-git-tag-version  # package.json
+$EDITOR docs/changelog.md                  # a `## vX.Y.Z` section, newest first
+bun run check
 git commit -am "release: vX.Y.Z"
 git tag -a vX.Y.Z -m "vX.Y.Z"
-git tag -f vX vX.Y.Z                        # move the major tag
-git push origin main vX.Y.Z && git push -f origin vX
+git push origin main vX.Y.Z
 ```
+
+The tag does the rest. The `Release` workflow (`.github/workflows/release.yml`)
+checks the tagged commit against the tag — `package.json` says the same
+version, `docs/changelog.md` has the section — then publishes the GitHub
+Release with that section as its notes and moves the major tag (`v0`) to the
+release. The check runs locally too: the same script is part of the test
+suite, so `bun run check` fails on a bump without its changelog section
+before anything is tagged.
 
 The README and `docs/github-action.md` reference the actions as `@v0`, the
 moving major tag, so a release touches no documentation; a test
-(`tests/docs/action-references.test.ts`) refuses an exact version there. A tag is not
-a GitHub Release; publish one separately
-(`gh release create vX.Y.Z --verify-tag --notes-file …`).
+(`tests/docs/action-references.test.ts`) refuses an exact version there.
+
+If the workflow fails after all, the tag is already on `origin` and nothing
+has been published: commit the fix, move the tag onto it and push the tag
+again (`git tag -fa vX.Y.Z -m "vX.Y.Z"`, `git push origin main`,
+`git push -f origin vX.Y.Z`); the push runs the workflow once more. A tag
+that is not `vX.Y.Z` (a pre-release, say) is refused by the workflow rather
+than released.

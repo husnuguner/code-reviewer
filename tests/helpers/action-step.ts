@@ -1,6 +1,6 @@
 /**
- * Runs a composite action's step the way the GitHub runner does, so a step
- * script is testable without a runner.
+ * Runs a composite action's or a workflow's step the way the GitHub runner
+ * does, so a step script is testable without a runner.
  *
  * The detail that matters: `shell: bash` is not plain bash. The runner spawns
  * `bash --noprofile --norc -e -o pipefail <script>`, so errexit is on before
@@ -18,20 +18,48 @@ import { join } from "node:path";
 
 import { parse as parseYaml } from "yaml";
 
-interface CompositeStep {
+/** A step as both a composite action and a workflow job list them. */
+interface Step {
   readonly name?: string;
   readonly run?: string;
   readonly shell?: string;
 }
 
-/** The `run` script of the named step, and the shell the runner gives it. */
+/** The `run` script of the named step of a composite action, and the shell the runner gives it. */
 export function stepScript(actionPath: string, name: string): { run: string; shell: string } {
   const action = parseYaml(readFileSync(actionPath, "utf8")) as {
-    runs: { steps: readonly CompositeStep[] };
+    runs: { steps: readonly Step[] };
   };
-  const step = action.runs.steps.find((candidate) => candidate.name === name);
+  return scriptOf(action.runs.steps, name, actionPath);
+}
+
+/** The `run` script of the named step of a workflow's job, and the shell the runner gives it. */
+export function workflowStep(
+  workflowPath: string,
+  job: string,
+  name: string,
+): { run: string; shell: string } {
+  const workflow = parseYaml(readFileSync(workflowPath, "utf8")) as {
+    jobs: Record<string, { steps: readonly Step[] } | undefined>;
+  };
+  const steps = workflow.jobs[job]?.steps;
+  if (steps === undefined) throw new Error(`${workflowPath} has no job named ${job}`);
+  return scriptOf(steps, name, `${workflowPath} (job ${job})`);
+}
+
+/**
+ * A workflow step's default shell is `bash -e` without pipefail; only an
+ * explicit `shell: bash` gets the runner's `--noprofile --norc -eo pipefail`,
+ * which is the shell `runStep` reproduces. Both kinds of step are held to it.
+ */
+function scriptOf(
+  steps: readonly Step[],
+  name: string,
+  where: string,
+): { run: string; shell: string } {
+  const step = steps.find((candidate) => candidate.name === name);
   if (step?.run === undefined) {
-    throw new Error(`${actionPath} has no step named ${name} that runs a script`);
+    throw new Error(`${where} has no step named ${name} that runs a script`);
   }
   if (step.shell !== "bash") {
     throw new Error(`step ${name} runs under ${String(step.shell)}, not bash`);
@@ -44,37 +72,38 @@ export interface StepRun {
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
-  /** How the stubbed command was called, one call per entry. */
+  /** How the stubbed command was called, one call per entry; empty when nothing was stubbed. */
   readonly calls: readonly string[][];
   /** What the step wrote to `GITHUB_OUTPUT`, as `name=value` lines. */
   readonly outputs: Record<string, string>;
 }
 
 /**
- * Run `script` under the runner's bash, with `stub` on the PATH in place of
- * the real command, and report what the step did.
+ * Run `script` under the runner's bash, with `stub` (when given) on the PATH
+ * in place of the real command, and report what the step did.
  */
 export function runStep(
   script: string,
-  options: { env: Record<string, string>; stub: string; cwd?: string; stubExit?: number },
+  options: { env: Record<string, string>; stub?: string; cwd?: string; stubExit?: number },
 ): StepRun {
   const root = mkdtempSync(join(tmpdir(), "reviewer-step-"));
   const binary = join(root, "bin");
   mkdirSync(binary);
   const calls = join(root, "calls");
-  // The stub records the call and says nothing, so the step's own control
-  // flow -- not the real command -- is what the test observes.
-  const stubPath = join(binary, options.stub);
-  writeFileSync(
-    stubPath,
-    [
-      "#!/usr/bin/env bash",
-      `printf '%s\\n' "$*" >> "${calls}"`,
-      `exit ${String(options.stubExit ?? 0)}`,
-      "",
-    ].join("\n"),
-    { mode: 0o755 },
-  );
+  if (options.stub !== undefined) {
+    // The stub records the call and says nothing, so the step's own control
+    // flow -- not the real command -- is what the test observes.
+    writeFileSync(
+      join(binary, options.stub),
+      [
+        "#!/usr/bin/env bash",
+        `printf '%s\\n' "$*" >> "${calls}"`,
+        `exit ${String(options.stubExit ?? 0)}`,
+        "",
+      ].join("\n"),
+      { mode: 0o755 },
+    );
+  }
 
   const path = join(root, "script.sh");
   writeFileSync(path, script);

@@ -395,6 +395,7 @@ Inputs, the `reviewer comment` flags, and pinning advice:
 | [docs/github-action.md](docs/github-action.md)     | The workflow, both actions' inputs, `reviewer comment`, pinning.                      |
 | [docs/architecture.md](docs/architecture.md)       | Layout, design principles, decisions, tests, releasing.                               |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Symptoms, causes and fixes.                                                           |
+| [docs/changelog.md](docs/changelog.md)             | What each release changed; the notes of every GitHub Release.                         |
 
 ## Development
 

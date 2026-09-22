@@ -1,0 +1,88 @@
+# The release: a pushed vX.Y.Z tag becomes a GitHub Release whose notes are
+# that tag's section of docs/changelog.md, and the major tag (v0) moves to
+# it. Nothing is built; the actions run from source at the tag.
+#
+# Before anything is published the commit is checked against the tag:
+# package.json must say the same version and the changelog must have the
+# section. A mismatch fails the run with the tag already on origin; the way
+# back is under "Releasing" in docs/architecture.md.
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: verify · publish · move the major tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out
+        # actions/checkout v6.1.0
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Verify the commit against the tag
+        id: verify
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+          NOTES: ${{ runner.temp }}/release-notes.md
+        run: |
+          # The tag is pushed by hand; what has to agree with it is checked
+          # here, first, so a slip fails the run instead of publishing a
+          # release whose page says one version and whose notes say another.
+          set -euo pipefail
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::${TAG} is not a vX.Y.Z tag; only those are released."
+            exit 1
+          fi
+          version="$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' package.json \
+            | head -n 1)"
+          if [ "${version}" != "${TAG#v}" ]; then
+            echo "::error::package.json says ${version}; the tag is ${TAG}." \
+              "Bump the version in the release commit."
+            exit 1
+          fi
+          # The section runs from its `## vX.Y.Z` heading to the next `## `.
+          awk -v heading="## ${TAG}" '
+            $0 == heading { inside = 1; next }
+            inside && /^## / { exit }
+            inside { print }
+          ' docs/changelog.md > "${NOTES}"
+          if [ ! -s "${NOTES}" ] || ! grep -q '[^[:space:]]' "${NOTES}"; then
+            echo "::error::docs/changelog.md has no '## ${TAG}' section," \
+              "or an empty one. Write the release's notes there."
+            exit 1
+          fi
+          echo "notes=${NOTES}" >> "${GITHUB_OUTPUT}"
+          echo "Release ${TAG}: package.json agrees; notes are" \
+            "$(wc -l < "${NOTES}") line(s) of docs/changelog.md."
+
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          NOTES: ${{ steps.verify.outputs.notes }}
+        run: |
+          set -euo pipefail
+          gh release create "${TAG}" --verify-tag --title "${TAG}" \
+            --notes-file "${NOTES}"
+
+      - name: Move the major tag
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # v0 follows the latest 0.x (README, "Versioning"). A tag pushed
+          # with the workflow's token starts no workflow, so this cannot
+          # trigger the run it is part of.
+          set -euo pipefail
+          major="${TAG%%.*}"
+          git tag -f "${major}" "${TAG}"
+          git push -f origin "refs/tags/${major}"
+          echo "${major} -> ${TAG}."
