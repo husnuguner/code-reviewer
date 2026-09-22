@@ -46,6 +46,7 @@ const SUMMARY: SummaryRecord = {
   capped: 0,
   mislabelled: 0,
   skipped: {},
+  policy_changed: [],
 };
 
 /** The record stream as the reviewer writes it. */
@@ -152,6 +153,37 @@ describe("building the review", () => {
     const review = buildReview({ findings: [], summary: SUMMARY, unreadable: 0 });
     expect(review.body).toContain("No issues found");
     expect(review.comments).toHaveLength(0);
+  });
+
+  it("warns first when the change edits the review policy, and names the files", () => {
+    const review = buildReview({
+      findings: [finding()],
+      summary: { ...SUMMARY, policy_changed: [".review/config.yaml", ".review/skills/api.md"] },
+      unreadable: 0,
+    });
+    const [heading, , headline, , warning] = review.body.split("\n", 5);
+    expect(heading).toBe("### Automated review");
+    expect(headline).toContain("1 finding(s)");
+    expect(warning).toContain("**This pull request edits the review policy**");
+    expect(warning).toContain("`.review/config.yaml`, `.review/skills/api.md`");
+    expect(warning).toContain("read those files yourself");
+    // The review itself is unchanged: the warning is a caveat, not a finding.
+    expect(review.comments).toHaveLength(1);
+    expect(review.event).toBe("comment");
+  });
+
+  it("says nothing about policy when the change leaves it alone", () => {
+    const review = buildReview({ findings: [finding()], summary: SUMMARY, unreadable: 0 });
+    expect(review.body).not.toContain("review policy");
+  });
+
+  it("reads policy_changed off the stream and ignores what is not a path", () => {
+    const records = parseRecords(
+      [JSON.stringify({ ...SUMMARY, policy_changed: [".review/config.yaml", 7, null] })].join("\n"),
+    );
+    expect(records.summary?.policy_changed).toEqual([".review/config.yaml"]);
+    const legacy = parseRecords(JSON.stringify({ ...SUMMARY, policy_changed: undefined }));
+    expect(legacy.summary?.policy_changed).toEqual([]);
   });
 
   it("repeats the run's tallies, including what it could not read", () => {

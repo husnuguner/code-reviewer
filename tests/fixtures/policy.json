@@ -1,0 +1,63 @@
+{
+  "module": "policy",
+  "cases": [
+    {
+      "name": "policy_changes/nothing under .review",
+      "input": {
+        "files": ["src/a.ts", "README.md", ".reviewer/x.md", "review/config.yaml"],
+        "policy_paths": []
+      },
+      "expected": []
+    },
+    {
+      "name": "policy_changes/.review is policy whatever the run was told",
+      "input": {
+        "files": ["src/a.ts", ".review/config.yaml", ".review/skills/api.md", ".review/prompts/security.md"],
+        "policy_paths": []
+      },
+      "expected": [".review/config.yaml", ".review/prompts/security.md", ".review/skills/api.md"]
+    },
+    {
+      "name": "policy_changes/the run's own paths count too",
+      "input": {
+        "files": ["ci/review.yaml", "ci/skills/http.md", "ci/other.txt", "docs/skills/x.md"],
+        "policy_paths": ["ci/review.yaml", "ci/skills"]
+      },
+      "expected": ["ci/review.yaml", "ci/skills/http.md"]
+    },
+    {
+      "name": "policy_changes/a directory prefix must be a whole segment",
+      "input": {
+        "files": ["ci/skillsets/a.md", "ci/skills.md", "ci/skills/a.md"],
+        "policy_paths": ["ci/skills"]
+      },
+      "expected": ["ci/skills/a.md"]
+    },
+    {
+      "name": "policy_changes/spelling variants normalise",
+      "input": {
+        "files": ["./.review/config.yaml", ".review\\skills\\a.md", ".review/config.yaml"],
+        "policy_paths": ["./ci/skills/", "/ci/policy.yaml"]
+      },
+      "expected": [".review/config.yaml", ".review/skills/a.md"]
+    },
+    {
+      "name": "policy_changes/blank policy paths are ignored",
+      "input": {
+        "files": ["src/a.ts", "b.ts"],
+        "policy_paths": ["", ".", "./", "/"]
+      },
+      "expected": []
+    },
+    {
+      "name": "policy_warning/none",
+      "input": { "changed": [] },
+      "expected": ""
+    },
+    {
+      "name": "policy_warning/two files",
+      "input": { "changed": [".review/config.yaml", ".review/skills/api.md"] },
+      "expected": "This change edits the review policy (.review/config.yaml, .review/skills/api.md); a policy can weaken the review that reads it, so read those files yourself."
+    }
+  ]
+}

@@ -35,6 +35,7 @@ const SUMMARY: SummaryRecord = {
   capped: 0,
   mislabelled: 0,
   skipped: {},
+  policy_changed: [],
 };
 
 /** A context that collects instead of writing anywhere. */

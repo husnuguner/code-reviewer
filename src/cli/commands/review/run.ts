@@ -78,6 +78,7 @@ async function runBranchReview(arguments_: ReviewArguments, cradle: RunCradle): 
     maxConcurrentFiles: config.concurrency().files,
     maxFindingsPerFile: config.reportPolicy().maxFindingsPerFile,
     codeContext: cradle.codeContext,
+    policyPaths: cradle.policyPaths,
     logger,
   };
 
@@ -98,6 +99,7 @@ async function runPreview(arguments_: ReviewArguments, cradle: RunCradle): Promi
     uncommitted: arguments_.uncommitted,
     git: gitReader,
     settings: config.fileReviewSettings(arguments_.exclude),
+    policyPaths: cradle.policyPaths,
     logger,
   });
   cradle.console.line(report);

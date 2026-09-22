@@ -146,7 +146,15 @@ function toSummary(record: JsonObject): SummaryRecord {
     capped: count(record["capped"]),
     mislabelled: count(record["mislabelled"]),
     skipped: {},
+    policy_changed: stringList(record["policy_changed"]),
   };
+}
+
+/** The strings of a JSON list; anything else reads as none. */
+function stringList(value: JsonValue | undefined): string[] {
+  return isJsonArray(value)
+    ? value.flatMap((item) => (typeof item === "string" ? [item] : []))
+    : [];
 }
 
 /**
@@ -228,7 +236,7 @@ export function buildReview(
   };
 }
 
-/** The review's own comment: headline, what is not inline, tallies. */
+/** The review's own comment: headline, a policy warning when the change edits one, what is not inline, tallies. */
 function reviewBody(
   records: ReviewRecords,
   loose: readonly Finding[],
@@ -236,10 +244,12 @@ function reviewBody(
 ): string {
   const { findings, summary } = records;
   const tally = tallies(summary, records.unreadable);
+  const policy = policyNote(summary?.policy_changed ?? []);
   return [
     "### Automated review",
     "",
     headline(findings),
+    ...(policy === "" ? [] : ["", policy]),
     ...(loose.length > 0
       ? ["", details(`${loose.length} finding(s) that could not be anchored to a line`, loose)]
       : []),
@@ -248,6 +258,13 @@ function reviewBody(
       : []),
     ...(tally === "" ? [] : ["", tally]),
   ].join("\n");
+}
+
+/** The warning a change that edits the review policy earns: those files are named, and the reader is asked to read them. */
+function policyNote(changed: readonly string[]): string {
+  if (changed.length === 0) return "";
+  const files = changed.map((path) => `\`${path}\``).join(", ");
+  return `> **This pull request edits the review policy** (${files}). A policy can weaken the review that reads it, so read those files yourself.`;
 }
 
 function headline(findings: readonly Finding[]): string {

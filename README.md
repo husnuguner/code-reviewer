@@ -371,6 +371,10 @@ Inputs, the `reviewer comment` flags, and pinning advice:
   `exclude` can add to that list; nothing can take away from it.
 - **The review policy is not configurable.** A project adds standing
   instructions and skills on top of it; it cannot drop a hard rule.
+- **A pull request cannot loosen the rules it is reviewed under.** In CI the
+  `.review/` that is read is the base branch's, not the pull request's; and a
+  change that edits `.review/` is named in the summary and in the posted
+  comment either way, so the reader knows to look at those files.
 - **Secrets never reach a log line.** Values of `*_API_KEY`, `*_TOKEN`,
   `*_SECRET`, `*_PASSWORD` variables are masked at the sink in every format.
 - **The bot may request changes; it may not approve.**

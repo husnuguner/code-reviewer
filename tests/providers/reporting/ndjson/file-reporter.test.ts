@@ -51,6 +51,7 @@ const SUMMARY: SummaryRecord = {
   capped: 0,
   mislabelled: 0,
   skipped: {},
+  policy_changed: [],
 };
 
 /** A fresh directory nothing else writes to. */

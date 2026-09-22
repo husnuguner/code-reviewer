@@ -5,7 +5,7 @@
  */
 
 import { homedir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { findUpSync } from "find-up";
 import untildify from "untildify";
@@ -73,6 +73,18 @@ export function isRepoConfig(path: string): boolean {
 /** The repository a repo-local config file belongs to: the parent of `.review/`. */
 export function repoRootOf(configFile: string): string {
   return dirname(dirname(configFile));
+}
+
+/**
+ * `path` as the checkout spells it, forward slashes, or `null` when it lies outside `root`.
+ *
+ * @remarks `root` itself reads as `null` too: a directory is inside the checkout, the checkout is not inside itself.
+ */
+export function insideCheckout(root: string, path: string): string | null {
+  const below = relative(resolve(root), resolve(path));
+  return below === "" || below.startsWith("..") || isAbsolute(below)
+    ? null
+    : below.split(sep).join("/");
 }
 
 /** The two config files a run reads: the repository's on top of the machine's. */

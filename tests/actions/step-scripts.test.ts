@@ -13,11 +13,12 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { runStep, stepScript } from "../helpers/action-step";
+import { git } from "../helpers/git";
 
 // Up out of tests/actions/ to the repository root.
 const ROOT = join(import.meta.dirname, "..", "..");
@@ -138,6 +139,132 @@ describe("actions/review/action.yml, the Review step", () => {
     expect(step.calls[0]).toContain("--preview");
     expect(step.calls[0]).not.toContain("--out");
     expect(step.exitCode).toBe(0);
+  });
+});
+
+/**
+ * A checkout the way the runner leaves it: the pull request's commit checked out, the base branch
+ * fetched as `origin/main`. `main` carries a strict `.review/`; the pull request loosens it.
+ *
+ * @param hasBasePolicy - Whether `main` carries a `.review/` at all.
+ */
+function pullRequestCheckout(hasBasePolicy = true): { workspace: string; temporary: string } {
+  const root = mkdtempSync(join(tmpdir(), "reviewer-policy-step-"));
+  const workspace = join(root, "workspace");
+  mkdirSync(workspace);
+  git(workspace, "init", "-q", "-b", "main");
+  git(workspace, "config", "user.email", "t@example.com");
+  git(workspace, "config", "user.name", "Test");
+  if (hasBasePolicy) {
+    mkdirSync(join(workspace, ".review", "skills"), { recursive: true });
+    writeFileSync(
+      join(workspace, ".review", "config.yaml"),
+      "version: 1\nsettings: { exclude: [] }\n",
+    );
+    writeFileSync(join(workspace, ".review", "skills", "strict.md"), "---\nname: strict\n---\n");
+  }
+  writeFileSync(join(workspace, "a.ts"), "1\n");
+  git(workspace, "add", "-A");
+  git(workspace, "commit", "-qm", "base");
+  // The runner has `origin/main`, not a local `main`, for the base.
+  git(workspace, "update-ref", "refs/remotes/origin/main", "main");
+  git(workspace, "checkout", "-q", "-b", "feature");
+  mkdirSync(join(workspace, ".review", "skills"), { recursive: true });
+  writeFileSync(
+    join(workspace, ".review", "config.yaml"),
+    'version: 1\nsettings: { exclude: ["**"] }\n',
+  );
+  writeFileSync(join(workspace, ".review", "skills", "loose.md"), "---\nname: loose\n---\n");
+  git(workspace, "add", "-A");
+  git(workspace, "commit", "-qm", "loosen");
+  const temporary = join(root, "runner-temp");
+  mkdirSync(temporary);
+  return { workspace, temporary };
+}
+
+/** The policy step's environment for a checkout. */
+function policyEnvironment(
+  checkout: { workspace: string; temporary: string },
+  overrides: Record<string, string> = {},
+): Record<string, string> {
+  return {
+    GITHUB_WORKSPACE: checkout.workspace,
+    POLICY_REF: "base",
+    CONFIG_INPUT: "",
+    BASE_REF: "main",
+    POLICY_DIR: join(checkout.temporary, "review-policy"),
+    ...overrides,
+  };
+}
+
+describe("actions/review/action.yml, the policy step", () => {
+  const { run } = stepScript(REVIEW_ACTION, "Read the policy from the base branch");
+
+  it("copies the base branch's .review/ out of the checkout and names its config", () => {
+    const checkout = pullRequestCheckout();
+    const step = runStep(run, { env: policyEnvironment(checkout), stub: "bun" });
+
+    expect(step.exitCode).toBe(0);
+    const config = step.outputs["config"] ?? "";
+    expect(config).toBe(join(checkout.temporary, "review-policy", ".review", "config.yaml"));
+    // The base's rules, not the pull request's; the base's skill, not the pull request's.
+    expect(readFileSync(config, "utf8")).toContain("exclude: []");
+    expect(
+      existsSync(join(checkout.temporary, "review-policy", ".review", "skills", "strict.md")),
+    ).toBe(true);
+    expect(
+      existsSync(join(checkout.temporary, "review-policy", ".review", "skills", "loose.md")),
+    ).toBe(false);
+    // The checkout itself is left as the pull request made it.
+    expect(readFileSync(join(checkout.workspace, ".review", "config.yaml"), "utf8")).toContain(
+      '["**"]',
+    );
+    expect(step.stdout).toContain("as origin/main has it");
+  });
+
+  it("writes an empty policy when the base branch has none, so the pull request's is not found", () => {
+    const checkout = pullRequestCheckout(false);
+    const step = runStep(run, { env: policyEnvironment(checkout), stub: "bun" });
+
+    expect(step.exitCode).toBe(0);
+    const config = step.outputs["config"] ?? "";
+    expect(readFileSync(config, "utf8")).toBe("version: 1\n");
+    expect(step.stdout).toContain("carries no .review/");
+  });
+
+  it("leaves the checkout's own policy in force when asked for head", () => {
+    const checkout = pullRequestCheckout();
+    const step = runStep(run, {
+      env: policyEnvironment(checkout, { POLICY_REF: "head" }),
+      stub: "bun",
+    });
+
+    expect(step.exitCode).toBe(0);
+    expect(step.outputs["config"]).toBe("");
+    expect(existsSync(join(checkout.temporary, "review-policy"))).toBe(false);
+  });
+
+  it("passes a named config file through untouched", () => {
+    const checkout = pullRequestCheckout();
+    const step = runStep(run, {
+      env: policyEnvironment(checkout, { CONFIG_INPUT: "ci/review.yaml" }),
+      stub: "bun",
+    });
+
+    expect(step.exitCode).toBe(0);
+    expect(step.outputs["config"]).toBe("ci/review.yaml");
+    expect(existsSync(join(checkout.temporary, "review-policy"))).toBe(false);
+  });
+
+  it("refuses a policy-ref it does not know", () => {
+    const checkout = pullRequestCheckout();
+    const step = runStep(run, {
+      env: policyEnvironment(checkout, { POLICY_REF: "origin/develop" }),
+      stub: "bun",
+    });
+
+    expect(step.exitCode).toBe(1);
+    expect(step.stdout).toContain("::error::policy-ref must be 'base' or 'head'");
   });
 });
 

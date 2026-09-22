@@ -5,6 +5,7 @@
 
 import { compareCodePoints } from "../util/text";
 
+import { policyWarning } from "./policy";
 import { type FileDecision, isSelected, skipCounts, skipDetail } from "./selection";
 import { severityLabel } from "./severity";
 
@@ -16,11 +17,16 @@ export function textBody(severity: string, body: string): string {
 /**
  * The `--preview` report: every changed file, whether it would be reviewed, and why not.
  *
- * @param title - The scope, e.g. `branch HEAD vs main`.
+ * @param title - The scope, e.g. `HEAD vs main`.
  * @param decisions - The selection.
+ * @param policyChanged - The policy files the change edits; a warning follows the rows when there are any.
  * @returns Files to review first, then skipped ones, each block by path; closes with "No model was called."
  */
-export function previewReport(title: string, decisions: readonly FileDecision[]): string {
+export function previewReport(
+  title: string,
+  decisions: readonly FileDecision[],
+  policyChanged: readonly string[] = [],
+): string {
   const ordered = [...decisions].toSorted(
     (a, b) => Number(isSelected(b)) - Number(isSelected(a)) || compareCodePoints(a.path, b.path),
   );
@@ -41,6 +47,7 @@ export function previewReport(title: string, decisions: readonly FileDecision[])
     `${decisions.length} changed file(s); ${reviewing.length} to review, ${decisions.length - reviewing.length} skipped.`,
     ...(rows.length > 0 ? ["", ...rows] : []),
     ...(skips.length > 0 ? ["", `skipped: ${skips.join(", ")}`] : []),
+    ...(policyChanged.length > 0 ? ["", policyWarning(policyChanged)] : []),
     "No model was called.",
   ].join("\n");
 }

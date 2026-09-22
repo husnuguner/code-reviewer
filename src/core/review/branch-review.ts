@@ -25,6 +25,7 @@ import { asCompleted } from "../util/as-completed";
 import { errorMessage } from "../util/errors";
 import { compareCodePoints } from "../util/text";
 
+import { type PolicyPath, policyChanges, policyWarning } from "./policy";
 import { previewReport, textBody } from "./render";
 import {
   type FileReviewSettings,
@@ -62,6 +63,8 @@ export interface BranchReviewOptions {
   readonly maxFindingsPerFile?: number;
   /** Reads the repository beyond the diff at `HEAD`; `null` gathers no pre-context. */
   readonly codeContext?: CodeContext | null;
+  /** Where this run's policy lives inside the checkout, beside `.review`; a change to any of it is reported. */
+  readonly policyPaths?: readonly PolicyPath[];
   readonly logger?: Logger;
 }
 
@@ -80,6 +83,8 @@ export async function* iterBranchReview(
   const log = (options.logger ?? NULL_LOGGER).child("review.branch_review");
 
   const files = await changedFilesOf(options, log);
+  const policy = policyChanges(files, options.policyPaths ?? []);
+  if (policy.length > 0) log.warn(policyWarning(policy));
   const decisions = selectFiles(files, options.settings);
   const selected = selectedFiles(decisions);
   logSkips(decisions, options.logger);
@@ -176,6 +181,7 @@ export async function* iterBranchReview(
         compareCodePoints(a, b),
       ),
     ),
+    policy_changed: policy,
   };
 }
 
@@ -239,23 +245,27 @@ export interface BranchPreviewOptions {
   readonly uncommitted?: boolean;
   readonly git: GitReader;
   readonly settings: FileReviewSettings;
+  /** As in {@link BranchReviewOptions.policyPaths}. */
+  readonly policyPaths?: readonly PolicyPath[];
   readonly logger?: Logger;
 }
 
 /**
  * What a review would review, without calling a model or needing a credential.
  *
- * @returns The decisions and the report text.
+ * @returns The decisions, the policy files the change edits, and the report text.
  */
 export async function previewBranch(
   options: BranchPreviewOptions,
-): Promise<{ decisions: FileDecision[]; report: string }> {
+): Promise<{ decisions: FileDecision[]; policyChanged: string[]; report: string }> {
   const log = (options.logger ?? NULL_LOGGER).child("review.branch_review");
   const files = await changedFilesOf(options, log);
+  const policyChanged = policyChanges(files, options.policyPaths ?? []);
   const decisions = selectFiles(files, options.settings);
   return {
     decisions,
-    report: previewReport(scopeTitle(options), decisions),
+    policyChanged,
+    report: previewReport(scopeTitle(options), decisions, policyChanged),
   };
 }
 
@@ -275,6 +285,8 @@ export interface BranchReviewResult {
   readonly mislabelled: number;
   /** Files not reviewed, by reason. */
   readonly skipped: Readonly<Record<string, number>>;
+  /** The policy files this change edits; `[]` when none. */
+  readonly policy_changed: readonly string[];
 }
 
 /** Runs {@link iterBranchReview} to completion and collects the result. */
@@ -308,6 +320,7 @@ function collect(
     capped: summary?.capped ?? 0,
     mislabelled: summary?.mislabelled ?? 0,
     skipped: summary?.skipped ?? {},
+    policy_changed: summary?.policy_changed ?? [],
   };
 }
 
@@ -340,12 +353,18 @@ export interface TextReportInput {
   readonly anchors?: Readonly<Record<string, number>>;
   /** Files selected for review whose review did not finish. */
   readonly failed?: number;
+  /** The policy files this change edits. */
+  readonly policy_changed?: readonly string[];
 }
 
-/** What a reader must know before believing the findings: the files whose review failed. */
+/** What a reader must know before believing the findings: failed files, and a policy the change itself edits. */
 function caveats(result: TextReportInput): string[] {
   const failed = result.failed ?? 0;
-  return failed > 0 ? [`${failed} file(s) could not be reviewed; the log says why.`] : [];
+  const warning = policyWarning(result.policy_changed ?? []);
+  return [
+    ...(failed > 0 ? [`${failed} file(s) could not be reviewed; the log says why.`] : []),
+    ...(warning === "" ? [] : [warning]),
+  ];
 }
 
 /**

@@ -44,7 +44,8 @@ The `(skills: …)` line names the skills that were in the prompt for that file
 [per-file budget](configuration.md#review-skills) left out is not among them,
 and a warning names it instead. A finding that could not be anchored is listed
 with `(no line anchor)`.
-When files failed, the header says so before the findings.
+When files failed, or the change edits the review policy, the header says so
+before the findings.
 
 ## NDJSON contract
 
@@ -95,7 +96,8 @@ Then exactly one `summary` record:
   "refuted": 1,
   "capped": 0,
   "mislabelled": 0,
-  "skipped": { "excluded": 1, "secret": 1 }
+  "skipped": { "excluded": 1, "secret": 1 },
+  "policy_changed": []
 }
 ```
 
@@ -113,6 +115,7 @@ Then exactly one `summary` record:
 | `capped`              | Findings `max-findings-per-file` withheld.                                                                          |
 | `mislabelled`         | Reported findings whose severity the model spelled outside the vocabulary (kept under the mildest one).             |
 | `skipped`             | Files not reviewed, by reason: `secret`, `binary`, `status`, `excluded`, `no_added_lines`, `no_patch`, `too_large`. |
+| `policy_changed`      | The review-policy files this change edits (`.review/**` and the run's own), sorted; `[]` when none.                 |
 
 The counters close:
 

@@ -53,13 +53,22 @@ inputs:
       globs match its path, on top of the standing lenses.
     required: false
     default: ""
+  policy-ref:
+    description: >-
+      Whose .review/ the review is held to. "base" (the default) reads the
+      config, prompts and skills from the base branch, so a pull request
+      cannot loosen the rules it is reviewed under; "head" reads the
+      checkout's own. Either way a pull request that edits .review/ is
+      named in the summary and in the posted comment. Ignored when `config`
+      names a file.
+    required: false
+    default: "base"
   config:
     description: >-
-      Path to a repository config.yaml. Usually unnecessary: a checkout that
-      carries its own .review/config.yaml (written by `reviewer init`) is found
-      automatically, and its skills, prompts and mappings apply. Set this only
-      to point at a different file. Empty with no .review/ runs from these
-      inputs alone.
+      Path to a repository config.yaml, in place of the one policy-ref would
+      read. Usually unnecessary: a checkout that carries its own
+      .review/config.yaml (written by `reviewer init`) supplies its skills,
+      prompts and mappings. Set this only to point at a different file.
     required: false
     default: ""
   exclude:
@@ -166,6 +175,45 @@ runs:
         fi
         echo "ref=${BASE_REF}" >> "${GITHUB_OUTPUT}"
 
+    - name: Read the policy from the base branch
+      id: policy
+      shell: bash
+      env:
+        POLICY_REF: ${{ inputs.policy-ref }}
+        CONFIG_INPUT: ${{ inputs.config }}
+        BASE_REF: ${{ steps.base.outputs.ref }}
+        POLICY_DIR: ${{ runner.temp }}/review-policy
+      run: |
+        # The checkout is the pull request's, .review/ included. Its rules are
+        # read from the base branch instead, into a directory outside the
+        # checkout, so a change that loosens them is reviewed under the rules
+        # it is trying to loosen. The working tree is not touched.
+        set -euo pipefail
+        if [ -n "${CONFIG_INPUT}" ] || [ "${POLICY_REF}" = "head" ]; then
+          echo "config=${CONFIG_INPUT}" >> "${GITHUB_OUTPUT}"
+          exit 0
+        fi
+        if [ "${POLICY_REF}" != "base" ]; then
+          echo "::error::policy-ref must be 'base' or 'head';" \
+            "got '${POLICY_REF}'."
+          exit 1
+        fi
+        rm -rf "${POLICY_DIR}"
+        mkdir -p "${POLICY_DIR}/.review"
+        base="refs/remotes/origin/${BASE_REF}"
+        repo=(git -C "${GITHUB_WORKSPACE}")
+        if "${repo[@]}" cat-file -e "${base}:.review/config.yaml" 2>/dev/null; then
+          "${repo[@]}" archive "${base}" .review | tar -x -C "${POLICY_DIR}"
+          echo "Review policy: .review/ as origin/${BASE_REF} has it."
+        else
+          # No policy on the base branch: an empty file, so the checkout's own
+          # .review/ is not found by the walk-up either.
+          printf 'version: 1\n' > "${POLICY_DIR}/.review/config.yaml"
+          echo "Review policy: origin/${BASE_REF} carries no .review/;" \
+            "the checkout's is not read."
+        fi
+        echo "config=${POLICY_DIR}/.review/config.yaml" >> "${GITHUB_OUTPUT}"
+
     - name: Set up Bun
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       with:
@@ -195,7 +243,7 @@ runs:
         IN_MAX_FINDINGS: ${{ inputs.max-findings-per-file }}
         IN_VERIFY: ${{ inputs.verify }}
         IN_LOG_LEVEL: ${{ inputs.log-level }}
-        REVIEWER_CONFIG: ${{ inputs.config }}
+        REVIEWER_CONFIG: ${{ steps.policy.outputs.config }}
         FAIL_ON: ${{ inputs.fail-on }}
         OUT_FILE: ${{ inputs.out }}
         PREVIEW: ${{ inputs.preview }}

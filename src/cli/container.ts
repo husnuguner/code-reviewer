@@ -6,6 +6,7 @@
 
 import { appendFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
+import { join } from "node:path";
 
 import {
   InjectionMode,
@@ -30,6 +31,7 @@ import {
 import { type SkillMatcher } from "../core/ports/skill-matcher";
 import { HEAD } from "../core/review/branch-review";
 import { FileReviewer } from "../core/review/file-reviewer";
+import { type PolicyPath } from "../core/review/policy";
 import { systemPrompt } from "../core/review/prompts";
 import { type PerFileVerifier } from "../core/review/review-file";
 import { FindingVerifier } from "../core/review/verify";
@@ -39,9 +41,12 @@ import { shippedFile } from "../providers/assets/shipped-files";
 import { loadRunConfig } from "../providers/config/loader";
 import {
   type ConfigPaths,
+  type Environment,
   configHome,
   configPaths,
   expandUser,
+  findGitRoot,
+  insideCheckout,
   repoRootOf,
 } from "../providers/config/paths";
 import { StreamConsole } from "../providers/console/stream-console";
@@ -79,6 +84,10 @@ export interface RunRequest {
   readonly format: ReportFormat;
   /** `--out`, or `null`. */
   readonly outFile: string | null;
+  /** Where the run was started; `process.cwd()` unless a test says otherwise. */
+  readonly cwd?: string;
+  /** The environment read for `LLM_*`, `REVIEW_*` and `XDG_CONFIG_HOME`; `process.env` unless a test says otherwise. */
+  readonly environment?: Environment;
 }
 
 /** Everything a run can ask the container for. */
@@ -104,8 +113,13 @@ export interface RunCradle {
   readonly configHomePath: string;
   /** The machine's config file and, when the run is inside a checkout that carries one, the repository's. */
   readonly configFilePaths: ConfigPaths;
-  /** The checkout reviewed: the repository owning `.review/config.yaml`, else cwd. */
+  /**
+   * The checkout reviewed: the repository owning the `.review/config.yaml` that was found; when the config
+   * file was named by hand (it may lie anywhere, a base branch's copy included), the repository containing cwd.
+   */
   readonly checkoutRoot: string;
+  /** Where this run's policy lives inside the checkout: its config file, prompts and skills, when they are in it. */
+  readonly policyPaths: readonly PolicyPath[];
   /** Local git over that checkout. */
   readonly gitReader: GitReader;
   /** The checkout beyond the diff, read at `HEAD`, for pre-context. */
@@ -169,6 +183,8 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
         requiresModel: r.requiresModel,
         providers: { names: modelProviders.names(), default: modelProviders.defaultName() },
         cpuCount: availableParallelism(),
+        ...(r.environment && { environment: r.environment }),
+        ...(r.cwd !== undefined && { cwd: r.cwd }),
         logger,
       }),
     ).singleton(),
@@ -207,9 +223,28 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
     branchReporter: asFunction(({ request: r, formatProviders }: RunCradle) =>
       buildBranchReporter(r, formatProviders),
     ).singleton(),
-    checkoutRoot: asFunction(({ configFilePaths: paths }: RunCradle) =>
-      worktree(paths.repo === null ? process.cwd() : repoRootOf(paths.repo)),
-    ).singleton(),
+    checkoutRoot: asFunction(({ request: r, configFilePaths: paths }: RunCradle) => {
+      const cwd = r.cwd ?? process.cwd();
+      return worktree(
+        paths.repo !== null && !paths.isRepoNamed
+          ? repoRootOf(paths.repo)
+          : (findGitRoot(cwd) ?? cwd),
+      );
+    }).singleton(),
+    policyPaths: asFunction(({ config, configFilePaths: paths, checkoutRoot }: RunCradle) => {
+      const skills = config.skillSettings().path.trim();
+      const candidates = [
+        ...(paths.repo === null ? [] : [paths.repo, promptsDirectory(paths.repo)]),
+        // Spelled the way `skillSource` reads it: on its own, or from the checkout root.
+        ...(skills === ""
+          ? []
+          : [isLocalSkillsPath(skills) ? expandUser(skills) : join(checkoutRoot, skills)]),
+      ];
+      return candidates.flatMap((path) => {
+        const inside = insideCheckout(checkoutRoot, path);
+        return inside === null ? [] : [inside];
+      });
+    }).singleton(),
     gitReader: asFunction(
       ({ checkoutRoot, logger }: RunCradle) => new LocalGitReader(checkoutRoot, undefined, logger),
     ).singleton(),
@@ -226,9 +261,11 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
         defaults,
       );
     }).singleton(),
-    configHomePath: asFunction(() => configHome()).singleton(),
+    configHomePath: asFunction(({ request: r }: RunCradle) =>
+      configHome(r.environment ?? process.env),
+    ).singleton(),
     configFilePaths: asFunction(({ request: r }: RunCradle) =>
-      configPaths(r.configFile),
+      configPaths(r.configFile, r.environment ?? process.env, r.cwd ?? process.cwd()),
     ).singleton(),
   });
   return container;

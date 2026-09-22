@@ -62,6 +62,7 @@ Key modules under `review/`:
 | `volume.ts`        | `max-findings-per-file`.                                                      |
 | `render.ts`        | Text report and preview.                                                      |
 | `guards.ts`        | Credential paths and binary patches: never the project's to override.         |
+| `policy.ts`        | Which changed files are the review policy itself, and the warning they earn.  |
 
 ### `src/providers/` — what can change
 
@@ -130,6 +131,13 @@ The choices with a real trade-off behind them, and what was given up:
   to fit. Given up: a partial review of a very large file; the ceiling is a
   constant, not a setting, because a cap the project can raise is a cap the
   project will raise until the review is half a review.
+- **A change is held to the policy it starts from, not the one it proposes.**
+  `.review/` is instructions, so a change that edits it could weaken its own
+  review. The flow names such a change (`policy_changed`) in every report, and
+  the review action reads `.review/` from the base branch into a directory
+  outside the checkout (`policy-ref: base`). The core stays a reader of one
+  tree: which tree's policy is the caller's choice, made with `--config`.
+  Given up: a pull request that adds a skill sees it applied only once merged.
 - **Skills belong to the reviewed repository, not to the reviewer.** They are
   that repository's conventions, versioned with its code. The reviewer ships
   none.

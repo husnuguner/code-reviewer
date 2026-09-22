@@ -57,6 +57,7 @@ const SUMMARY: SummaryRecord = {
   capped: 0,
   mislabelled: 0,
   skipped: { excluded: 2 },
+  policy_changed: [],
 };
 
 /** One finding of a given severity, anchored at `line` (`null` = unanchored). */
@@ -136,6 +137,17 @@ describe("the job summary", () => {
 
   it("keeps a pipe in a body from breaking the table", () => {
     expect(summaryFor([record({ body: "a | b" })], null)).toContain("a \\| b");
+  });
+
+  it("calls out a change that edits the review policy before anything else", () => {
+    const markdown = summaryFor([record()], {
+      ...SUMMARY,
+      policy_changed: [".review/config.yaml"],
+    });
+    const [heading, , warning] = markdown.split("\n", 3);
+    expect(heading).toBe("## Code review");
+    expect(warning).toContain("edits the review policy (.review/config.yaml)");
+    expect(summaryFor([record()], SUMMARY)).not.toContain("review policy");
   });
 });
 

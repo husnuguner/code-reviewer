@@ -20,6 +20,7 @@ import {
   configHome,
   configPaths,
   findGitRoot,
+  insideCheckout,
   findRepoConfig,
 } from "../../../src/providers/config/paths";
 import { loadConfigFiles } from "../../../src/providers/config/reader";
@@ -223,6 +224,20 @@ describe("configuration paths", () => {
     const worktree = join(s.repo, "trees", "feature");
     touch(join(worktree, ".git"), "gitdir: ../../.git/worktrees/feature\n");
     expect(findGitRoot(join(worktree, "src"))).toBe(worktree);
+  });
+
+  it("spells a path the checkout's way when it is inside, and declines one that is not", () => {
+    const s = scratch();
+    expect(insideCheckout(s.repo, join(s.repo, ".review", "config.yaml"))).toBe(
+      ".review/config.yaml",
+    );
+    expect(insideCheckout(s.repo, join(s.repo, "src", "..", "ci", "skills"))).toBe("ci/skills");
+    // A sibling directory, a parent, and the checkout itself are all "not inside".
+    expect(insideCheckout(s.repo, s.elsewhere)).toBeNull();
+    expect(insideCheckout(s.repo, s.root)).toBeNull();
+    expect(insideCheckout(s.repo, s.repo)).toBeNull();
+    // A prefix match is not containment: `repo-2` is not under `repo`.
+    expect(insideCheckout(s.repo, `${s.repo}-2/x`)).toBeNull();
   });
 });
 

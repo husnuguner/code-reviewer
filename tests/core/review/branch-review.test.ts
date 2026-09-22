@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -385,6 +385,71 @@ describe("previewing a branch", () => {
     const o = options(root, { settings });
     await reviewBranch(o);
     expect(sortedByCodePoint(o.reviewer.seen)).toEqual(sortedByCodePoint(promised));
+  });
+});
+
+// -- policy ----------------------------------------------------------------
+
+/** `repo()` plus a `feature` commit that edits the checkout's own review policy and a skill named by the run. */
+function repoEditingPolicy(): string {
+  const root = repo();
+  mkdirSync(join(root, ".review", "skills"), { recursive: true });
+  mkdirSync(join(root, "ci", "skills"), { recursive: true });
+  writeFileSync(join(root, ".review", "config.yaml"), 'version: 1\nsettings:\n  exclude: ["**"]\n');
+  writeFileSync(join(root, ".review", "skills", "api.md"), "---\nname: api\n---\nAnything goes.\n");
+  writeFileSync(join(root, "ci", "skills", "http.md"), "---\nname: http\n---\nAnything goes.\n");
+  git(root, "add", "-A");
+  git(root, "commit", "-qm", "loosen the review");
+  return root;
+}
+
+describe("a change that edits the review policy", () => {
+  it("is named in the summary, whether the policy is .review or a path the run was told", async () => {
+    const o = options(repoEditingPolicy(), { policyPaths: ["ci/skills"] });
+    const records: BranchReviewRecord[] = await Array.fromAsync(iterBranchReview(o));
+    expect(records.at(-1)).toMatchObject({
+      type: "summary",
+      policy_changed: [".review/config.yaml", ".review/skills/api.md", "ci/skills/http.md"],
+    });
+    // The policy files are still ordinary changed files: reviewed, not hidden.
+    expect(o.reviewer.seen).toContain(".review/config.yaml");
+  });
+
+  it("is an empty list when the change leaves the policy alone", async () => {
+    const result = await reviewBranch(options(repo()));
+    expect(result.policy_changed).toEqual([]);
+  });
+
+  it("is a caveat in the text report, before the findings", async () => {
+    const result = await reviewBranch(options(repoEditingPolicy()));
+    const lines = branchReviewText("main", "HEAD", result);
+    const warning = lines.findIndex((line) => line.includes("edits the review policy"));
+    const firstFinding = lines.findIndex((line) => line.startsWith(".review/config.yaml:"));
+    expect(warning).toBeGreaterThan(0);
+    expect(warning).toBeLessThan(firstFinding);
+    expect(lines[warning]).toContain(".review/config.yaml, .review/skills/api.md");
+  });
+
+  it("is said in the preview too, so it costs nothing to learn", async () => {
+    const { policyChanged, report } = await previewBranch({
+      base: "main",
+      git: new LocalGitReader(repoEditingPolicy()),
+      settings: DEFAULT_FILE_REVIEW_SETTINGS,
+    });
+    expect(policyChanged).toEqual([".review/config.yaml", ".review/skills/api.md"]);
+    expect(report).toContain(
+      "edits the review policy (.review/config.yaml, .review/skills/api.md)",
+    );
+    expect(report).toContain("No model was called.");
+  });
+
+  it("counts an excluded policy file all the same: it changed, whether or not it is reviewed", async () => {
+    const o = options(repoEditingPolicy(), {
+      settings: { ...DEFAULT_FILE_REVIEW_SETTINGS, exclude: [".review/**"] },
+    });
+    const result = await reviewBranch(o);
+    expect(o.reviewer.seen).not.toContain(".review/config.yaml");
+    expect(result.policy_changed).toContain(".review/config.yaml");
   });
 });
 

@@ -271,3 +271,25 @@ behind:
 
 A run that reviewed nothing says which kind of silence that was, rather than
 "No issues found." See [Output](output.md) for the record shapes.
+
+## When the change edits the policy
+
+The repository's `.review/` -- its config, standing instructions and skills
+-- is read as instructions, not as data: it decides what is excluded and what
+the model is told. A change set that edits it can therefore weaken the review
+that reads it: `exclude: ["**"]` reviews nothing, a rewritten skill asks for
+nothing.
+
+So every run compares the change set against the policy's paths -- `.review/`
+always, plus the config file, prompts and skills the run was actually given
+when they lie inside the checkout -- and names what it finds. The summary
+record carries `policy_changed`, a sorted list of those files (`[]` when
+none); the text report and the job summary say so before the findings; the
+posted comment opens with it; `--preview` shows it for free. The files
+themselves are still reviewed like any other. An excluded policy file still
+counts: it changed, whether or not it was reviewed.
+
+That is a warning, not a defence. The defence is in CI: the
+[review action](github-action.md#the-policy-is-the-base-branchs) reads
+`.review/` from the base branch, so a pull request is held to the rules it
+is trying to change.

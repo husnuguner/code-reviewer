@@ -19,6 +19,7 @@ export class TextReporter extends CollectingReporter {
       findings: this.findings,
       anchors: summary.anchors,
       failed: summary.failed,
+      policy_changed: summary.policy_changed,
     });
     for (const line of lines) this.write(line);
   }

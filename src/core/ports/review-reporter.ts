@@ -45,6 +45,8 @@ export interface SummaryRecord {
   readonly mislabelled: number;
   /** Files not reviewed, by reason; reasons that skipped none omitted. */
   readonly skipped: Readonly<Record<string, number>>;
+  /** The review-policy files this change edits (`.review/**` and the run's own), sorted; `[]` when none. */
+  readonly policy_changed: readonly string[];
 }
 
 /** Any branch-review record. */
