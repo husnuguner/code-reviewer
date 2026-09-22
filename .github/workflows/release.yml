@@ -1,86 +1,141 @@
-# The release: a pushed vX.Y.Z tag becomes a GitHub Release whose notes are
-# that tag's section of docs/changelog.md, and the major tag (v0) moves to
-# it. Nothing is built; the actions run from source at the tag.
+# The release: a commit on main whose package.json names a version no GitHub
+# Release has yet is tagged vX.Y.Z, published with that version's section of
+# docs/changelog.md as the notes, and the major tag (v0) moves to it. Most
+# pushes to main bump nothing; the gate says so and the rest is skipped.
 #
-# Before anything is published the commit is checked against the tag:
-# package.json must say the same version and the changelog must have the
-# section. A mismatch fails the run with the tag already on origin; the way
-# back is under "Releasing" in docs/architecture.md.
+# It runs after the Check workflow, and only when that passed on a push to
+# main: what is released is what the gate let through. Nothing is built; the
+# actions run from source at the tag. Every step is safe to run again: a tag
+# already at this commit is kept, a Release already published ends the job.
 name: Release
 
 on:
-  push:
-    tags: ["v*.*.*"]
+  workflow_run:
+    workflows: [Check]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: write
 
+# Two pushes in a row release in order; the second finds the first's Release
+# and stops.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
-    name: verify · publish · move the major tag
+    name: gate · tag · publish · move the major tag
+    if: >-
+      github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      # The commit the Check ran on, which is not always main's newest.
+      SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
       - name: Check out
         # actions/checkout v6.1.0
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Verify the commit against the tag
-        id: verify
+      - name: Decide whether this commit is a release
+        id: gate
         shell: bash
         env:
-          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
           NOTES: ${{ runner.temp }}/release-notes.md
         run: |
-          # The tag is pushed by hand; what has to agree with it is checked
-          # here, first, so a slip fails the run instead of publishing a
-          # release whose page says one version and whose notes say another.
+          # package.json is the release signal: a version with no Release
+          # yet is released, at this commit, with its changelog section as
+          # the notes. Anything the gate does not understand is not released,
+          # and said.
           set -euo pipefail
-          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::${TAG} is not a vX.Y.Z tag; only those are released."
-            exit 1
-          fi
+          decide() {
+            echo "release=${1}" >> "${GITHUB_OUTPUT}"
+            echo "tag=${2}" >> "${GITHUB_OUTPUT}"
+            echo "Release: ${1} (${3})."
+          }
           version="$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' package.json \
             | head -n 1)"
-          if [ "${version}" != "${TAG#v}" ]; then
-            echo "::error::package.json says ${version}; the tag is ${TAG}." \
-              "Bump the version in the release commit."
-            exit 1
+          tag="v${version}"
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::warning::package.json says '${version}', which is not" \
+              "X.Y.Z; nothing is released from it."
+            decide no "${tag}" "${version} is not a release version"
+            exit 0
+          fi
+          if gh release view "${tag}" --json tagName > /dev/null 2>&1; then
+            decide no "${tag}" "${tag} is released"
+            exit 0
           fi
           # The section runs from its `## vX.Y.Z` heading to the next `## `.
-          awk -v heading="## ${TAG}" '
+          awk -v heading="## ${tag}" '
             $0 == heading { inside = 1; next }
             inside && /^## / { exit }
             inside { print }
           ' docs/changelog.md > "${NOTES}"
-          if [ ! -s "${NOTES}" ] || ! grep -q '[^[:space:]]' "${NOTES}"; then
-            echo "::error::docs/changelog.md has no '## ${TAG}' section," \
+          if ! grep -q '[^[:space:]]' "${NOTES}"; then
+            echo "::error::docs/changelog.md has no '## ${tag}' section," \
               "or an empty one. Write the release's notes there."
             exit 1
           fi
           echo "notes=${NOTES}" >> "${GITHUB_OUTPUT}"
-          echo "Release ${TAG}: package.json agrees; notes are" \
-            "$(wc -l < "${NOTES}") line(s) of docs/changelog.md."
+          decide yes "${tag}" \
+            "${tag} has no Release; notes are $(wc -l < "${NOTES}") line(s)"
+
+      - name: Tag the commit
+        if: steps.gate.outputs.release == 'yes'
+        shell: bash
+        env:
+          TAG: ${{ steps.gate.outputs.tag }}
+        run: |
+          # An annotated tag at the commit the Check passed on. A tag this
+          # version already has is kept if it is here -- an earlier run got
+          # this far -- and refused if it is anywhere else: a version is
+          # tagged once.
+          set -euo pipefail
+          ref="refs/tags/${TAG}"
+          if git fetch -q origin "${ref}:${ref}" 2> /dev/null; then
+            at="$(git rev-parse "${TAG}^{commit}")"
+            if [ "${at}" != "${SHA}" ]; then
+              echo "::error::${TAG} already exists at ${at:0:7}, which is" \
+                "not this commit (${SHA:0:7}). Bump the version."
+              exit 1
+            fi
+            echo "${TAG} already points here; not tagged again."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG}" -m "${TAG}" "${SHA}"
+          git push origin "refs/tags/${TAG}"
+          echo "${TAG} -> ${SHA:0:7}."
 
       - name: Publish the release
+        if: steps.gate.outputs.release == 'yes'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-          NOTES: ${{ steps.verify.outputs.notes }}
+          TAG: ${{ steps.gate.outputs.tag }}
+          NOTES: ${{ steps.gate.outputs.notes }}
         run: |
           set -euo pipefail
           gh release create "${TAG}" --verify-tag --title "${TAG}" \
             --notes-file "${NOTES}"
 
       - name: Move the major tag
+        if: steps.gate.outputs.release == 'yes'
         shell: bash
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ steps.gate.outputs.tag }}
         run: |
           # v0 follows the latest 0.x (README, "Versioning"). A tag pushed
-          # with the workflow's token starts no workflow, so this cannot
-          # trigger the run it is part of.
+          # with the workflow's token starts no workflow.
           set -euo pipefail
           major="${TAG%%.*}"
           git tag -f "${major}" "${TAG}"

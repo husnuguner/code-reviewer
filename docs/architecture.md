@@ -267,25 +267,27 @@ bun pm version X.Y.Z --no-git-tag-version  # package.json
 $EDITOR docs/changelog.md                  # a `## vX.Y.Z` section, newest first
 bun run check
 git commit -am "release: vX.Y.Z"
-git tag -a vX.Y.Z -m "vX.Y.Z"
-git push origin main vX.Y.Z
+git push origin main                       # or a pull request, merged
 ```
 
-The tag does the rest. The `Release` workflow (`.github/workflows/release.yml`)
-checks the tagged commit against the tag — `package.json` says the same
-version, `docs/changelog.md` has the section — then publishes the GitHub
-Release with that section as its notes and moves the major tag (`v0`) to the
-release. The check runs locally too: the same script is part of the test
-suite, so `bun run check` fails on a bump without its changelog section
-before anything is tagged.
+Landing on `main` does the rest. Once the `Check` workflow has passed on a
+push to `main`, the `Release` workflow (`.github/workflows/release.yml`) reads
+`package.json`: a version that has no GitHub Release yet is tagged `vX.Y.Z`
+at that commit, published with its `docs/changelog.md` section as the notes,
+and the major tag (`v0`) moves to it. A push that bumps nothing releases
+nothing, and says so. No tag is made by hand.
 
-The README and `docs/github-action.md` reference the actions as `@v0`, the
-moving major tag, so a release touches no documentation; a test
-(`tests/docs/action-references.test.ts`) refuses an exact version there.
+The gate runs locally too: the same script is part of the test suite, so
+`bun run check` fails on a bump without its changelog section before the
+commit reaches `main`. The README and `docs/github-action.md` reference the
+actions as `@v0`, the moving major tag, so a release touches no
+documentation; a test (`tests/docs/action-references.test.ts`) refuses an
+exact version there.
 
-If the workflow fails after all, the tag is already on `origin` and nothing
-has been published: commit the fix, move the tag onto it and push the tag
-again (`git tag -fa vX.Y.Z -m "vX.Y.Z"`, `git push origin main`,
-`git push -f origin vX.Y.Z`); the push runs the workflow once more. A tag
-that is not `vX.Y.Z` (a pre-release, say) is refused by the workflow rather
-than released.
+Every step of the workflow can be run again: a tag it already put at the
+commit is kept, a Release already published ends the run. If it fails
+half-way, re-run it from the _Actions_ tab; if the failure is in the commit
+(a missing section), fix it with another commit — the next green Check
+releases that one. A version that is already tagged on some other commit is
+refused, not moved: a version is released once. A `package.json` version
+that is not `X.Y.Z` (a pre-release, say) is a warning and no release.

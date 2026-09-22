@@ -1,11 +1,12 @@
 # Changelog
 
 One section per release, newest first, headed `## vX.Y.Z` and nothing else on
-the line. The `Release` workflow (`.github/workflows/release.yml`) publishes the
-section whose heading is the pushed tag as the GitHub Release's notes, and fails
-the release when there is none — so the section is written in the release
-commit, beside the version bump. What is in a section is what a user of the
-action or the CLI has to know; the commit log has the rest.
+the line. When a commit on `main` bumps `package.json` to a version that has no
+GitHub Release yet, the `Release` workflow (`.github/workflows/release.yml`)
+publishes one with that version's section as its notes, and fails when there is
+none — so the section is written beside the version bump. What is in a section
+is what a user of the action or the CLI has to know; the commit log has the
+rest.
 
 ## v0.0.11
 
