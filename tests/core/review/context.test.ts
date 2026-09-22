@@ -22,6 +22,10 @@ import {
   resolveSpecifier,
 } from "../../../src/core/review/context";
 import { buildUserPrompt } from "../../../src/core/review/prompts";
+import {
+  DEFAULT_FILE_REVIEW_SETTINGS,
+  contextLimitsOf,
+} from "../../../src/core/review/review-file";
 
 const PATCH = [
   "@@ -1,4 +1,6 @@",
@@ -306,6 +310,35 @@ describe("related changes", () => {
     const code = modified("src/a.ts");
     expect(relationTo(document, code)).toBe("sibling");
     expect(relatedChanges(document, [document, code])).toEqual([]);
+  });
+});
+
+describe("the configured budget", () => {
+  /**
+   * Two spellings of one default: the constant a direct caller of
+   * `gatherContext` gets, and the settings a run reads from its config files.
+   */
+  it("is the same whether it comes from the constant or from the settings", () => {
+    expect(contextLimitsOf(DEFAULT_FILE_REVIEW_SETTINGS)).toEqual(DEFAULT_CONTEXT_LIMITS);
+  });
+
+  it("carries every limit from the settings, not just the cap", () => {
+    expect(
+      contextLimitsOf({
+        ...DEFAULT_FILE_REVIEW_SETTINGS,
+        maxContextChars: 20_000,
+        maxDefinitions: 8,
+        maxSymbols: 2,
+        maxUsagesPerSymbol: 1,
+        maxRelated: 6,
+      }),
+    ).toEqual({
+      maxChars: 20_000,
+      maxDefinitions: 8,
+      maxSymbols: 2,
+      maxUsagesPerSymbol: 1,
+      maxRelated: 6,
+    });
   });
 });
 

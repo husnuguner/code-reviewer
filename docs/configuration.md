@@ -109,23 +109,26 @@ repository).
 Keys are kebab-case. Everything under `settings` may be set in either file;
 `skills` sits at the root of the repository's file alone.
 
-| Key                               | Default          | Machine | Repo | Meaning                                                                                     |
-| --------------------------------- | ---------------- | :-----: | :--: | ------------------------------------------------------------------------------------------- |
-| `settings.llm.provider`           | `local`          |    ✓    |  ✓   | `local` (any OpenAI-compatible endpoint) or `claude` (Anthropic).                           |
-| `settings.llm.model`              | provider default |    ✓    |  ✓   | `local` → `gpt-4.1`, `claude` → `claude-sonnet-4-6`.                                        |
-| `settings.llm.base-url`           | —                |    ✓    |  ✓   | Endpoint URL including the API prefix, e.g. `http://localhost:11434/v1`.                    |
-| `settings.llm.api-key`            | _required_       |    ✓    |  ✓   | The key, or `${VARIABLE}` to read it from the environment. See below.                       |
-| `settings.language`               | `en`             |    ✓    |  ✓   | Language of each finding's body. Accepted: `en`, `tr`; anything else falls back to English. |
-| `settings.verify`                 | `true`           |    ✓    |  ✓   | Run the [verification pass](how-it-works.md#verification).                                  |
-| `settings.exclude`                | `[]`             |    ✓    |  ✓   | Globs never sent to the model; a list or one comma-separated string.                        |
-| `settings.max-findings-per-file`  | `3`              |    ✓    |  ✓   | Per-file cap; the most severe survive. `0` = no cap.                                        |
-| `settings.max-skill-chars`        | `10000`          |    ✓    |  ✓   | Cap on one skill's body.                                                                    |
-| `settings.max-skills-total-chars` | `18000`          |    ✓    |  ✓   | Cap on one file's whole skills block.                                                       |
-| `settings.max-context-chars`      | `6000`           |    ✓    |  ✓   | Cap on the [pre-context](how-it-works.md#pre-context) block; `0` switches it off.           |
-| `settings.max-concurrent-files`   | CPU-derived      |    ✓    |  ✓   | File reviews in flight at once.                                                             |
-| `skills.path`                     | `""` (no skills) |         |  ✓   | Directory of skill documents. A relative path is taken from beside the file.                |
-| `skills.defaults`                 | `[]`             |         |  ✓   | `{ globs, skills }` entries: the baseline every matching file is held to.                   |
-| `skills.mappings`                 | `{}`             |         |  ✓   | Skill name → the globs only it reviews, added to what `defaults` gave it.                   |
+| Key                              | Default          | Machine | Repo | Meaning                                                                                        |
+| -------------------------------- | ---------------- | :-----: | :--: | ---------------------------------------------------------------------------------------------- |
+| `settings.llm.provider`          | `local`          |    ✓    |  ✓   | `local` (any OpenAI-compatible endpoint) or `claude` (Anthropic).                              |
+| `settings.llm.model`             | provider default |    ✓    |  ✓   | `local` → `gpt-4.1`, `claude` → `claude-sonnet-4-6`.                                           |
+| `settings.llm.base-url`          | —                |    ✓    |  ✓   | Endpoint URL including the API prefix, e.g. `http://localhost:11434/v1`.                       |
+| `settings.llm.api-key`           | _required_       |    ✓    |  ✓   | The key, or `${VARIABLE}` to read it from the environment. See below.                          |
+| `settings.language`              | `en`             |    ✓    |  ✓   | Language of each finding's body. Accepted: `en`, `tr`; anything else falls back to English.    |
+| `settings.verify`                | `true`           |    ✓    |  ✓   | Run the [verification pass](how-it-works.md#verification).                                     |
+| `settings.exclude`               | `[]`             |    ✓    |  ✓   | Globs never sent to the model; a list or one comma-separated string.                           |
+| `settings.max-findings-per-file` | `3`              |    ✓    |  ✓   | Per-file cap; the most severe survive. `0` = no cap.                                           |
+| `settings.max-skill-chars`       | `10000`          |    ✓    |  ✓   | Cap on one skill's body. No variable.                                                          |
+| `settings.max-context-chars`     | `12000`          |    ✓    |  ✓   | Cap on the [pre-context](how-it-works.md#pre-context) block; `0` switches it off. No variable. |
+| `settings.max-definitions`       | `4`              |    ✓    |  ✓   | Imported modules whose signatures are read, per file. No variable.                             |
+| `settings.max-symbols`           | `6`              |    ✓    |  ✓   | Changed exports searched for, per file; one repository search each. No variable.               |
+| `settings.max-usages-per-symbol` | `8`              |    ✓    |  ✓   | Paths listed per changed export. No variable.                                                  |
+| `settings.max-related`           | `3`              |    ✓    |  ✓   | Related diffs included, import-bound first. No variable.                                       |
+| `settings.max-concurrent-files`  | CPU-derived      |    ✓    |  ✓   | File reviews in flight at once.                                                                |
+| `skills.path`                    | `""` (no skills) |         |  ✓   | Directory of skill documents. A relative path is taken from beside the file.                   |
+| `skills.defaults`                | `[]`             |         |  ✓   | `{ globs, skills }` entries: the baseline every matching file is held to.                      |
+| `skills.mappings`                | `{}`             |         |  ✓   | Skill name → the globs only it reviews, added to what `defaults` gave it.                      |
 
 A key the schema does not recognise is **rejected**, not ignored: the error
 names it by its place in the file (`configuration param 'settings.exlude' not
@@ -140,12 +143,10 @@ something the run will quietly **not** do -- so the whole resolved
 configuration is read once at startup and each contradiction is a WARNING, not
 a refusal:
 
-| The combination                                                            | What it silently means                                                                     |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `skills.path` empty while `skills.defaults`/`skills.mappings` scope skills | No skill is loaded, so the tables hold nothing to a rule.                                  |
-| `max-skill-chars` > `max-skills-total-chars`                               | One long skill can fill a file's whole block, leaving every other match out of the prompt. |
-| `max-skills-total-chars` = `0`                                             | Only the first matching skill ever reaches a prompt.                                       |
-| `max-skill-chars` = `0`                                                    | Every skill's body is cut to nothing: the prompt carries names and no rules.               |
+| The combination                                                            | What it silently means                                                       |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `skills.path` empty while `skills.defaults`/`skills.mappings` scope skills | No skill is loaded, so the tables hold nothing to a rule.                    |
+| `max-skill-chars` = `0`                                                    | Every skill's body is cut to nothing: the prompt carries names and no rules. |
 
 The schema, merging, precedence and validation are
 [convict](https://github.com/mozilla/node-convict)'s; the reviewer declares
@@ -211,27 +212,29 @@ The environment is the override layer: any variable below beats its
 `config.yaml` counterpart in both files. Without any file, these describe the
 whole run.
 
-| Variable                        | Default          | Purpose                                                                     |
-| ------------------------------- | ---------------- | --------------------------------------------------------------------------- |
-| `LLM_PROVIDER`                  | `local`          | `local` or `claude`.                                                        |
-| `LLM_API_KEY`                   | _required_       | Credential; must be non-empty even for a local server.                      |
-| `LLM_BASE_URL`                  | —                | Endpoint URL including the API prefix.                                      |
-| `LLM_MODEL`                     | provider default | Model name.                                                                 |
-| `REVIEW_LANG`                   | `en`             | Language of finding bodies.                                                 |
-| `REVIEW_EXCLUDE_PATHS`          | —                | Comma-separated globs skipped entirely.                                     |
-| `REVIEW_MAX_FINDINGS_PER_FILE`  | `3`              | Per-file cap; `0` = uncapped.                                               |
-| `REVIEW_SKILLS_PATH`            | —                | Directory of review skills inside the reviewed repo; empty disables skills. |
-| `REVIEW_SKILL_MAPPINGS`         | `{}`             | The repository's `skills.mappings` as JSON.                                 |
-| `REVIEW_VERIFY`                 | `true`           | Run the verification pass. `--no-verify` wins.                              |
-| `REVIEW_MAX_SKILL_CHARS`        | `10000`          | Per-skill body cap.                                                         |
-| `REVIEW_MAX_SKILLS_TOTAL_CHARS` | `18000`          | Per-file cap for the whole skills block.                                    |
-| `REVIEW_MAX_CONTEXT_CHARS`      | `6000`           | Cap on the pre-context block; `0` switches it off.                          |
-| `REVIEW_MAX_CONCURRENT_FILES`   | CPU-derived      | Simultaneous file reviews.                                                  |
-| `REVIEWER_CONFIG`               | —                | A repository `config.yaml` in place of the nearest `.review/config.yaml`.   |
-| `XDG_CONFIG_HOME`               | `~/.config`      | Base of the machine's config home.                                          |
+| Variable                       | Default          | Purpose                                                                     |
+| ------------------------------ | ---------------- | --------------------------------------------------------------------------- |
+| `LLM_PROVIDER`                 | `local`          | `local` or `claude`.                                                        |
+| `LLM_API_KEY`                  | _required_       | Credential; must be non-empty even for a local server.                      |
+| `LLM_BASE_URL`                 | —                | Endpoint URL including the API prefix.                                      |
+| `LLM_MODEL`                    | provider default | Model name.                                                                 |
+| `REVIEW_LANG`                  | `en`             | Language of finding bodies.                                                 |
+| `REVIEW_EXCLUDE_PATHS`         | —                | Comma-separated globs skipped entirely.                                     |
+| `REVIEW_MAX_FINDINGS_PER_FILE` | `3`              | Per-file cap; `0` = uncapped.                                               |
+| `REVIEW_SKILLS_PATH`           | —                | Directory of review skills inside the reviewed repo; empty disables skills. |
+| `REVIEW_SKILL_MAPPINGS`        | `{}`             | The repository's `skills.mappings` as JSON.                                 |
+| `REVIEW_VERIFY`                | `true`           | Run the verification pass. `--no-verify` wins.                              |
+| `REVIEW_MAX_CONCURRENT_FILES`  | CPU-derived      | Simultaneous file reviews.                                                  |
+| `REVIEWER_CONFIG`              | —                | A repository `config.yaml` in place of the nearest `.review/config.yaml`.   |
+| `XDG_CONFIG_HOME`              | `~/.config`      | Base of the machine's config home.                                          |
 
-`skills.defaults` has no variable: a repository's baseline is part of that
-repository and is written in its `config.yaml` only.
+A variable carries what the shell knows: which vendor, which key, which
+endpoint, how much to run at once. **The prompt budgets have none** —
+`max-skill-chars`, `max-context-chars`, `max-definitions`, `max-symbols`,
+`max-usages-per-symbol`, `max-related` — and
+neither has `skills.defaults`. How much of the repository a review reads is a
+judgement about that code: it belongs in a config file, where it is reviewed
+and versioned and a stray variable on a runner cannot flatten it.
 
 Logging is set by flags (`-v`, `-q`, `--log-level`, `--log-format`,
 `--no-color`), not by any `REVIEWER_*` variable; the conventions other tools
@@ -356,23 +359,25 @@ name in either table that no loaded skill answers to is warned about too. A
 file without valid frontmatter (a README in the skills directory) is ignored.
 
 Injection is capped so a wide match cannot flood the prompt: `max-skill-chars`
-truncates one skill's body and `max-skills-total-chars` caps the whole per-file
-block. A skill that would overflow the block is left out of the prompt, which
-means the file was **not** reviewed against it -- so it is a **warning**, named
-with the file and the cap:
+truncates one skill's body, and every matching skill is carried. The block has
+one fixed ceiling of 200000 characters -- a constant, not a setting: a block
+that long is a mapping mistake, not a budget somebody chose. A skill that would
+pass it is left out of the prompt, which means the file was **not** reviewed
+against it -- so it is a **warning**, named with the file and the ceiling:
 
 ```text
-WARNING Skill budget reached for src/api/users.ts: max-skills-total-chars=18000
-left ['naming', 'typescript-base'] out of the prompt, so that file was not
-reviewed against them. Raise the cap, shorten those skills, or narrow their
-globs. Each skill is said once; later files are not repeated.
+WARNING Skill budget reached for src/api/users.ts: the 200000-character ceiling
+on a file's skills block left ['naming', 'typescript-base'] out of the prompt,
+so that file was not reviewed against them. Shorten those skills, lower
+max-skill-chars, or narrow their globs. Each skill is said once; later files
+are not repeated.
 ```
 
 Each skill is named **once a run**, at the first file it did not fit: the same
-cap over a thousand files is one fact, and a warning per file would bury it.
+ceiling over a thousand files is one fact, and a warning per file would bury it.
 Every later file still loses the skill, and the skills the report names for a
-file are the ones the prompt actually carried -- so a skill the budget left out
-is never counted as applied.
+file are the ones the prompt actually carried -- so a skill the ceiling left
+out is never counted as applied.
 
 Keep a skill short and concrete: it is read by a model for every matching
 file.

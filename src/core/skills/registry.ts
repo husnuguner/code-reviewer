@@ -17,6 +17,13 @@ import {
   show,
 } from "../util/text";
 
+/**
+ * A safety ceiling on one file's skills block, in code points. A constant, not a setting: a block this
+ * long is a mapping mistake -- every skill pointed at one glob -- and not a budget somebody chose. What
+ * a project tunes is `max-skill-chars`, which bounds each skill's own body.
+ */
+export const MAX_SKILLS_BLOCK_CHARS = 200_000;
+
 /** The merged set of skills, selected and rendered per file. */
 export class SkillRegistry implements SkillMatcher {
   private readonly skills: readonly Skill[];
@@ -80,15 +87,14 @@ export class SkillRegistry implements SkillMatcher {
    * Renders the matching skills into a prompt block.
    *
    * @param maxSkillChars - Truncates one skill's body.
-   * @param maxTotalChars - Caps the whole block; a skill that would overflow is left out and warned about.
-   * @returns The block and the skills it carries; `""` and `[]` when nothing matches. The first matching
-   * skill is always included.
-   * @remarks A skill the budget leaves out is a rule the review silently would not have applied, so it is a
-   * warning and not a note, and it is absent from `applied` rather than reported as if the model saw it.
-   * The warning names each skill once per run: the same cap over a thousand files is one fact, not a
+   * @returns The block and the skills it carries; `""` and `[]` when nothing matches. Every matching skill
+   * is carried unless the block would pass {@link MAX_SKILLS_BLOCK_CHARS}; the first is always included.
+   * @remarks A skill the ceiling leaves out is a rule the review silently would not have applied, so it is
+   * a warning and not a note, and it is absent from `applied` rather than reported as if the model saw it.
+   * The warning names each skill once per run: the same ceiling over a thousand files is one fact, not a
    * thousand, and a flooded log is one nobody reads.
    */
-  renderFor(path: string, maxSkillChars: number, maxTotalChars: number): RenderedSkills {
+  renderFor(path: string, maxSkillChars: number): RenderedSkills {
     const matched = this.skillsFor(path);
     if (matched.length === 0) return { text: "", applied: [] };
     const blocks: string[] = [];
@@ -98,7 +104,7 @@ export class SkillRegistry implements SkillMatcher {
     for (const skill of matched) {
       const block = `## ${skill.name}\n${cutToLength(skill.body, maxSkillChars)}`;
       const size = countCodePoints(block);
-      if (used + size > maxTotalChars && blocks.length > 0) {
+      if (used + size > MAX_SKILLS_BLOCK_CHARS && blocks.length > 0) {
         skipped.push(skill.name);
         continue;
       }
@@ -110,7 +116,7 @@ export class SkillRegistry implements SkillMatcher {
     if (unreported.length > 0) {
       for (const name of unreported) this.reportedOverflow.add(name);
       this.log.warn(
-        `Skill budget reached for ${path}: max-skills-total-chars=${maxTotalChars} left ${show(unreported)} out of the prompt, so that file was not reviewed against them. Raise the cap, shorten those skills, or narrow their globs. Each skill is said once; later files are not repeated.`,
+        `Skill budget reached for ${path}: the ${MAX_SKILLS_BLOCK_CHARS}-character ceiling on a file's skills block left ${show(unreported)} out of the prompt, so that file was not reviewed against them. Shorten those skills, lower max-skill-chars, or narrow their globs. Each skill is said once; later files are not repeated.`,
       );
     }
     const header =

@@ -26,9 +26,15 @@ export interface ContextLimits {
   readonly maxRelated: number;
 }
 
-/** The built-in limits. */
+/**
+ * The built-in limits, for a caller that gathers context without a configuration.
+ *
+ * @remarks The same numbers as `DEFAULT_FILE_REVIEW_SETTINGS`, which is where a run reads them from;
+ * the two are held together by a test. Every one of them is a config-file setting, on purpose: how much
+ * of the repository a review reads is a judgement about the code, not about the shell it runs in.
+ */
 export const DEFAULT_CONTEXT_LIMITS: ContextLimits = {
-  maxChars: 6000,
+  maxChars: 12_000,
   maxDefinitions: 4,
   maxSymbols: 6,
   maxUsagesPerSymbol: 8,

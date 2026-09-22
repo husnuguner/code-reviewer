@@ -32,14 +32,5 @@ export function configIncoherences(config: Config): string[] {
       `${FIELD_PATHS.maxSkillChars} is ${config.maxSkillChars}, which cuts every skill's body to nothing: a file's prompt would carry the skills' names and none of their rules.`,
     );
   }
-  if (config.maxSkillsTotalChars <= 0) {
-    lines.push(
-      `${FIELD_PATHS.maxSkillsTotalChars} is ${config.maxSkillsTotalChars}, so only the first matching skill reaches a file's prompt however many match; the rest are left out of every review.`,
-    );
-  } else if (config.maxSkillChars > config.maxSkillsTotalChars) {
-    lines.push(
-      `${FIELD_PATHS.maxSkillChars}=${config.maxSkillChars} is larger than ${FIELD_PATHS.maxSkillsTotalChars}=${config.maxSkillsTotalChars}: one long skill can fill a file's whole block, leaving every other skill that matches it out of the prompt. Raise the block cap, or lower the per-skill one.`,
-    );
-  }
   return lines;
 }

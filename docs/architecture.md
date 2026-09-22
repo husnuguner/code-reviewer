@@ -160,6 +160,30 @@ The choices with a real trade-off behind them, and what was given up:
   steer the reviewer from inside a diff is itself a `security` finding.
 - **Pre-context is deterministic.** The reviewer decides what surrounding code
   to fetch; the model asks for nothing. The review stays one call.
+- **Pre-context follows the import graph before the file name.** A related
+  diff is chosen by the relation a change actually breaks — the import, either
+  direction — and only then by the same stem or directory; the prompt says
+  which way it points. Given up: the pure-name heuristic's independence from
+  the language. Import edges are read by a JS/TS-shaped regex, so in another
+  language the ranking falls back to the names until a language adapter lands.
+- **The prompt budgets are set in a config file and nowhere else.** How much
+  of the repository one review reads — `max-skill-chars`, `max-context-chars`
+  and the per-kind pre-context limits — is a judgement about that code, so it
+  is versioned and reviewed with it. A variable carries what the shell knows
+  (vendor, key, endpoint, concurrency) and nothing that decides what the model
+  gets to see. Given up: shrinking a review's context from a CI runner without
+  touching the repository.
+- **The blocks of a pre-context share its cap.** Each gets an equal allowance
+  and passes what it does not need to the others, most valuable first, so a
+  file importing four documented modules cannot spend the whole budget on
+  signatures and leave the related diffs out. Given up: the simpler
+  first-come-first-served fill.
+- **One knob for the skills block, not two.** `max-skill-chars` bounds a
+  skill's body; the block itself has a fixed 200k-character ceiling, a
+  constant like the diff's. Two caps for one budget meant every project had to
+  keep them consistent, and the warning that they disagreed existed only
+  because both were settings. Given up: capping a file's whole skills block
+  below the per-skill cap × the number of matching skills.
 - **The bot may request changes; it may not approve.** Given up: a fully
   automated green tick.
 

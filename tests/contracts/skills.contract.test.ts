@@ -3,7 +3,11 @@ import { describe, expect, it } from "bun:test";
 import { type Skill } from "../../src/core/domain/skill";
 import { isGlobMatch } from "../../src/core/skills/glob";
 import { FrontmatterSkillParser } from "../../src/core/skills/parser";
-import { SkillRegistry, applyMappings } from "../../src/core/skills/registry";
+import {
+  MAX_SKILLS_BLOCK_CHARS,
+  SkillRegistry,
+  applyMappings,
+} from "../../src/core/skills/registry";
 import { compareCodePoints } from "../../src/core/util/text";
 import { recordingLogger } from "../helpers/logging";
 
@@ -133,40 +137,43 @@ describe("skill registry", () => {
     },
   );
 
-  it.each(
-    casesUnder<{ path: string; max_skill_chars: number; max_total_chars: number }, string>(
-      cases,
-      "render_for",
-    ),
-  )("render_for $name", ({ input, expected }) => {
-    expect(registry.renderFor(input.path, input.max_skill_chars, input.max_total_chars).text).toBe(
-      expected,
-    );
-  });
+  it.each(casesUnder<{ path: string; max_skill_chars: number }, string>(cases, "render_for"))(
+    "render_for $name",
+    ({ input, expected }) => {
+      expect(registry.renderFor(input.path, input.max_skill_chars).text).toBe(expected);
+    },
+  );
 });
 
-/** A skill of a known size on one glob: two of them and a cap of 60 leave room for one. */
+/**
+ * A skill that fills two thirds of the block's ceiling: two of them do not fit,
+ * which is the only way a skill is ever left out now that the total is a fixed
+ * ceiling and not a setting.
+ */
 const bulkySkill = (name: string): Skill => ({
   name,
   globs: ["**/*.ts"],
-  body: "B".repeat(50),
+  body: "B".repeat(Math.floor(MAX_SKILLS_BLOCK_CHARS * 0.7)),
   source: "repo",
   description: "",
 });
 
-describe("the per-file skills budget", () => {
+/** Room for one bulky skill's body, so `max-skill-chars` is not what cuts here. */
+const ROOMY_SKILL_CHARS = MAX_SKILLS_BLOCK_CHARS;
+
+describe("the per-file skills block ceiling", () => {
   const lines: string[] = [];
   const registry = new SkillRegistry(
     [bulkySkill("aa-first"), bulkySkill("zz-second")],
     recordingLogger(lines),
   );
-  const rendered = registry.renderFor("src/a.ts", 10_000, 60);
+  const rendered = registry.renderFor("src/a.ts", ROOMY_SKILL_CHARS);
 
-  it("warns, naming the file, the cap and what it left out", () => {
+  it("warns, naming the file, the ceiling and what it left out", () => {
     // Left out means the file was not reviewed against that skill, which is a
     // warning and not a note: at the default level nobody would have seen it.
     expect(lines).toContain(
-      "WARNING Skill budget reached for src/a.ts: max-skills-total-chars=60 left ['zz-second'] out of the prompt, so that file was not reviewed against them. Raise the cap, shorten those skills, or narrow their globs. Each skill is said once; later files are not repeated.",
+      `WARNING Skill budget reached for src/a.ts: the ${MAX_SKILLS_BLOCK_CHARS}-character ceiling on a file's skills block left ['zz-second'] out of the prompt, so that file was not reviewed against them. Shorten those skills, lower max-skill-chars, or narrow their globs. Each skill is said once; later files are not repeated.`,
     );
   });
 
@@ -184,7 +191,12 @@ describe("the per-file skills budget", () => {
       [bulkySkill("aa-first"), bulkySkill("zz-second")],
       recordingLogger(quiet),
     );
-    expect(roomy.renderFor("src/a.ts", 10_000, 10_000).applied).toEqual(["aa-first", "zz-second"]);
+    // Two bodies cut to a third of the ceiling each: both fit, and the cut is
+    // `max-skill-chars` doing its own job, not the block's ceiling.
+    expect(roomy.renderFor("src/a.ts", Math.floor(MAX_SKILLS_BLOCK_CHARS / 3)).applied).toEqual([
+      "aa-first",
+      "zz-second",
+    ]);
     expect(quiet.filter((line) => line.includes("budget"))).toEqual([]);
   });
 
@@ -196,18 +208,25 @@ describe("the per-file skills budget", () => {
       [bulkySkill("aa-first"), bulkySkill("zz-second")],
       recordingLogger(spoken),
     );
-    for (const path of ["src/a.ts", "src/b.ts", "src/c.ts"]) busy.renderFor(path, 10_000, 60);
+    for (const path of ["src/a.ts", "src/b.ts", "src/c.ts"])
+      busy.renderFor(path, ROOMY_SKILL_CHARS);
     const warnings = spoken.filter((line) => line.includes("Skill budget reached"));
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain("src/a.ts");
     // Silence is about the log, not about the prompt: every later file still
     // loses the skill, and none of them reports it as applied.
-    expect(busy.renderFor("src/d.ts", 10_000, 60).applied).toEqual(["aa-first"]);
+    expect(busy.renderFor("src/d.ts", ROOMY_SKILL_CHARS).applied).toEqual(["aa-first"]);
   });
 
   it("keeps the first matching skill even when it alone overflows", () => {
-    const tight = new SkillRegistry([bulkySkill("aa-first")], recordingLogger([]));
-    expect(tight.renderFor("src/a.ts", 10_000, 1).applied).toEqual(["aa-first"]);
+    const huge: Skill = {
+      ...bulkySkill("aa-first"),
+      body: "B".repeat(MAX_SKILLS_BLOCK_CHARS + 10),
+    };
+    const tight = new SkillRegistry([huge], recordingLogger([]));
+    const only = tight.renderFor("src/a.ts", MAX_SKILLS_BLOCK_CHARS + 10);
+    expect(only.applied).toEqual(["aa-first"]);
+    expect(only.text.length).toBeGreaterThan(MAX_SKILLS_BLOCK_CHARS);
   });
 });
 

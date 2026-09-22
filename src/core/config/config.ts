@@ -80,8 +80,11 @@ export interface ConfigValues {
   readonly excludeGlobs: readonly string[];
   readonly maxFindingsPerFile: number;
   readonly maxSkillChars: number;
-  readonly maxSkillsTotalChars: number;
   readonly maxContextChars: number;
+  readonly maxDefinitions: number;
+  readonly maxSymbols: number;
+  readonly maxUsagesPerSymbol: number;
+  readonly maxRelated: number;
   readonly maxConcurrentFiles: number;
   readonly skillsPath: string;
   readonly skillDefaults: SkillDefaults;
@@ -201,8 +204,11 @@ function valuesFrom(
     excludeGlobs: shape.settings.exclude,
     maxFindingsPerFile: shape.settings["max-findings-per-file"],
     maxSkillChars: shape.settings["max-skill-chars"],
-    maxSkillsTotalChars: shape.settings["max-skills-total-chars"],
     maxContextChars: shape.settings["max-context-chars"],
+    maxDefinitions: shape.settings["max-definitions"],
+    maxSymbols: shape.settings["max-symbols"],
+    maxUsagesPerSymbol: shape.settings["max-usages-per-symbol"],
+    maxRelated: shape.settings["max-related"],
     maxConcurrentFiles:
       shape.settings["max-concurrent-files"] <= 0
         ? defaultConcurrency(cpuCount)
@@ -245,8 +251,11 @@ function withViews(values: ConfigValues): Config {
       exclude: [...values.excludeGlobs, ...extraExclude],
       language: values.reviewLang,
       maxSkillChars: values.maxSkillChars,
-      maxSkillsTotalChars: values.maxSkillsTotalChars,
       maxContextChars: values.maxContextChars,
+      maxDefinitions: values.maxDefinitions,
+      maxSymbols: values.maxSymbols,
+      maxUsagesPerSymbol: values.maxUsagesPerSymbol,
+      maxRelated: values.maxRelated,
     }),
     reportPolicy: () => ({ maxFindingsPerFile: values.maxFindingsPerFile }),
     skillSettings: () => ({

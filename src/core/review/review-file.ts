@@ -18,7 +18,7 @@ import { type Clock, SYSTEM_CLOCK, seconds, stopwatch } from "../util/timing";
 export { DEFAULT_FILE_REVIEW_SETTINGS, type FileReviewSettings } from "../config/settings";
 
 import { EXACT } from "./anchor";
-import { DEFAULT_CONTEXT_LIMITS, gatherContext, renderContext } from "./context";
+import { type ContextLimits, gatherContext, renderContext } from "./context";
 import { type ReviewFileInput } from "./file-reviewer";
 import { isSecretPath } from "./guards";
 import { type SelectedFile } from "./selection";
@@ -121,7 +121,7 @@ export async function reviewChangedFile(
     const rendered: RenderedSkills =
       skills === null
         ? { text: "", applied: [] }
-        : skills.renderFor(file.path, settings.maxSkillChars, settings.maxSkillsTotalChars);
+        : skills.renderFor(file.path, settings.maxSkillChars);
     const contextElapsed = stopwatch(now);
     const contextText = await surroundingsOf(file, options, log);
     const context = contextElapsed();
@@ -193,13 +193,13 @@ async function surroundingsOf(
   log: Logger,
 ): Promise<string> {
   const codeContext = options.codeContext ?? null;
-  const maxChars = options.settings.maxContextChars;
+  const { maxContextChars: maxChars } = options.settings;
   if (codeContext === null || maxChars <= 0) return "";
   const gathered = await gatherContext({
     file,
     changeSet: options.changeSet ?? [file],
     context: codeContext,
-    limits: { ...DEFAULT_CONTEXT_LIMITS, maxChars },
+    limits: contextLimitsOf(options.settings),
     ...(options.logger && { logger: options.logger }),
   });
   const text = renderContext(gathered, maxChars);
@@ -209,6 +209,17 @@ async function surroundingsOf(
     );
   }
   return text;
+}
+
+/** The configured pre-context budget: every limit comes from the config files, none from the environment. */
+export function contextLimitsOf(settings: FileReviewSettings): ContextLimits {
+  return {
+    maxChars: settings.maxContextChars,
+    maxDefinitions: settings.maxDefinitions,
+    maxSymbols: settings.maxSymbols,
+    maxUsagesPerSymbol: settings.maxUsagesPerSymbol,
+    maxRelated: settings.maxRelated,
+  };
 }
 
 /**

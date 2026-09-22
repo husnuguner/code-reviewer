@@ -21,19 +21,33 @@ export interface FileReviewSettings {
   readonly language: string;
   /** Per-skill body cap. */
   readonly maxSkillChars: number;
-  /** Per-file cap for the whole skills block. */
-  readonly maxSkillsTotalChars: number;
   /** Cap on the pre-context block; `0` = none. */
   readonly maxContextChars: number;
+  /** Imported modules whose signatures are read, per file. */
+  readonly maxDefinitions: number;
+  /** Changed exports searched for across the repository, per file. */
+  readonly maxSymbols: number;
+  /** Paths listed per changed export. */
+  readonly maxUsagesPerSymbol: number;
+  /** Related diffs included, import-bound first. */
+  readonly maxRelated: number;
 }
 
-/** The built-in file review settings. */
+/**
+ * The built-in file review settings.
+ *
+ * @remarks The pre-context numbers are the same ones {@link DEFAULT_CONTEXT_LIMITS} states for a caller
+ * that gathers context directly; `tests/core/review/context.test.ts` holds the two together.
+ */
 export const DEFAULT_FILE_REVIEW_SETTINGS: FileReviewSettings = {
   exclude: [],
   language: "English",
   maxSkillChars: 10_000,
-  maxSkillsTotalChars: 18_000,
-  maxContextChars: 6000,
+  maxContextChars: 12_000,
+  maxDefinitions: 4,
+  maxSymbols: 6,
+  maxUsagesPerSymbol: 8,
+  maxRelated: 3,
 };
 
 /** How many findings one file may report. */

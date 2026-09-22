@@ -35,8 +35,11 @@ export interface ConfigShape {
     exclude: string[];
     "max-findings-per-file": number;
     "max-skill-chars": number;
-    "max-skills-total-chars": number;
     "max-context-chars": number;
+    "max-definitions": number;
+    "max-symbols": number;
+    "max-usages-per-symbol": number;
+    "max-related": number;
     "max-concurrent-files": number;
   };
   skills: {
@@ -213,8 +216,11 @@ export const FIELD_PATHS = {
   excludeGlobs: "settings.exclude",
   maxFindingsPerFile: "settings.max-findings-per-file",
   maxSkillChars: "settings.max-skill-chars",
-  maxSkillsTotalChars: "settings.max-skills-total-chars",
   maxContextChars: "settings.max-context-chars",
+  maxDefinitions: "settings.max-definitions",
+  maxSymbols: "settings.max-symbols",
+  maxUsagesPerSymbol: "settings.max-usages-per-symbol",
+  maxRelated: "settings.max-related",
   maxConcurrentFiles: "settings.max-concurrent-files",
   skillsPath: "skills.path",
   skillDefaults: "skills.defaults",
@@ -225,8 +231,13 @@ export const FIELD_PATHS = {
 export type ConfigField = keyof typeof FIELD_PATHS;
 
 /**
- * Field → the environment alias that overrides it, for documentation and messages. Not every field has
- * one: `skills.defaults` is a repository's own table, set in its file and nowhere else.
+ * Field → the environment alias that overrides it, for documentation and messages.
+ *
+ * @remarks Not every field has one, and the line is deliberate: a variable carries what the shell knows
+ * (which vendor, which key, which endpoint, how much to run at once), while **how much of the
+ * repository a review reads** -- the skills budget, the pre-context budget and the skills tables --
+ * is a judgement about the code. That belongs in a config file, where it is reviewed and versioned and
+ * a stray variable on a runner cannot flatten it.
  */
 export const CONFIG_ALIASES = {
   provider: "LLM_PROVIDER",
@@ -237,9 +248,6 @@ export const CONFIG_ALIASES = {
   verifyFindings: "REVIEW_VERIFY",
   excludeGlobs: "REVIEW_EXCLUDE_PATHS",
   maxFindingsPerFile: "REVIEW_MAX_FINDINGS_PER_FILE",
-  maxSkillChars: "REVIEW_MAX_SKILL_CHARS",
-  maxSkillsTotalChars: "REVIEW_MAX_SKILLS_TOTAL_CHARS",
-  maxContextChars: "REVIEW_MAX_CONTEXT_CHARS",
   maxConcurrentFiles: "REVIEW_MAX_CONCURRENT_FILES",
   skillsPath: "REVIEW_SKILLS_PATH",
   skillMappings: "REVIEW_SKILL_MAPPINGS",
@@ -312,22 +320,34 @@ export function configSchema(providers: RegisteredProviders): convict.Schema<Con
         env: CONFIG_ALIASES.maxFindingsPerFile,
       },
       "max-skill-chars": {
-        doc: "Cap on one skill's body.",
+        doc: "Cap on one skill's body. From the files only; no environment alias.",
         format: "count",
         default: 10_000,
-        env: CONFIG_ALIASES.maxSkillChars,
-      },
-      "max-skills-total-chars": {
-        doc: "Cap on one file's whole skills block.",
-        format: "count",
-        default: 18_000,
-        env: CONFIG_ALIASES.maxSkillsTotalChars,
       },
       "max-context-chars": {
-        doc: "Cap on the pre-context block; 0 switches it off.",
+        doc: "Cap on the pre-context block; 0 switches it off. From the files only; no environment alias.",
         format: "count",
-        default: 6000,
-        env: CONFIG_ALIASES.maxContextChars,
+        default: 12_000,
+      },
+      "max-definitions": {
+        doc: "Imported modules whose signatures are read, per file. From the files only; no environment alias.",
+        format: "count",
+        default: 4,
+      },
+      "max-symbols": {
+        doc: "Changed exports searched for across the repository, per file; one search each. From the files only; no environment alias.",
+        format: "count",
+        default: 6,
+      },
+      "max-usages-per-symbol": {
+        doc: "Paths listed per changed export. From the files only; no environment alias.",
+        format: "count",
+        default: 8,
+      },
+      "max-related": {
+        doc: "Related diffs included, import-bound first. From the files only; no environment alias.",
+        format: "count",
+        default: 3,
       },
       "max-concurrent-files": {
         doc: "File reviews in flight at once; 0 or less derives it from the CPU count.",

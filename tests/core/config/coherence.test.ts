@@ -29,17 +29,18 @@ function configOf(
 /** The skills directory, without which nothing about skills can disagree. */
 const WITH_SKILLS = { REVIEW_SKILLS_PATH: "skills" };
 
+/** The per-skill cap as a repository's file states it: it has no environment alias. */
+function perSkillCap(chars: number): Record<string, unknown> {
+  return { settings: { "max-skill-chars": chars } };
+}
+
 describe("a configuration that agrees with itself", () => {
   it("says nothing about the defaults", () => {
     expect(configIncoherences(configOf({}))).toEqual([]);
   });
 
-  it("says nothing when the per-skill cap fits inside the block", () => {
-    const config = configOf({
-      ...WITH_SKILLS,
-      REVIEW_MAX_SKILL_CHARS: "10000",
-      REVIEW_MAX_SKILLS_TOTAL_CHARS: "18000",
-    });
+  it("says nothing about a per-skill cap that carries a body", () => {
+    const config = configOf(WITH_SKILLS, perSkillCap(10_000));
     expect(configIncoherences(config)).toEqual([]);
   });
 });
@@ -61,49 +62,18 @@ describe("the skills tables against the skills path", () => {
     expect(configIncoherences(config)[0]).toContain("scope 1 entry");
   });
 
-  it("says nothing about caps while skills are off: no block is built", () => {
-    // Without a skills path the caps decide nothing, so they cannot disagree.
-    const config = configOf({
-      REVIEW_MAX_SKILL_CHARS: "20000",
-      REVIEW_MAX_SKILLS_TOTAL_CHARS: "1",
-    });
+  it("says nothing about the cap while skills are off: no block is built", () => {
+    // Without a skills path the cap decides nothing, so it cannot disagree.
+    const config = configOf({}, perSkillCap(0));
     expect(configIncoherences(config)).toEqual([]);
   });
 });
 
-describe("the two skill caps against each other", () => {
-  it("warns when one skill may fill the whole block", () => {
-    const config = configOf({
-      ...WITH_SKILLS,
-      REVIEW_MAX_SKILL_CHARS: "20000",
-      REVIEW_MAX_SKILLS_TOTAL_CHARS: "18000",
-    });
-    const [line] = configIncoherences(config);
-    expect(line).toContain("settings.max-skill-chars=20000 is larger than");
-    expect(line).toContain("settings.max-skills-total-chars=18000");
-  });
-
-  it("warns that a zero block cap leaves every skill but the first out", () => {
-    const config = configOf({ ...WITH_SKILLS, REVIEW_MAX_SKILLS_TOTAL_CHARS: "0" });
+describe("the per-skill cap", () => {
+  it("warns that a zero cap sends the names and none of the rules", () => {
+    const config = configOf(WITH_SKILLS, perSkillCap(0));
     expect(configIncoherences(config)).toEqual([
-      "settings.max-skills-total-chars is 0, so only the first matching skill reaches a file's prompt however many match; the rest are left out of every review.",
-    ]);
-  });
-
-  it("warns that a zero per-skill cap sends the names and none of the rules", () => {
-    const config = configOf({ ...WITH_SKILLS, REVIEW_MAX_SKILL_CHARS: "0" });
-    expect(configIncoherences(config)[0]).toContain("settings.max-skill-chars is 0");
-  });
-
-  it("reports both zero caps, in a fixed order", () => {
-    const config = configOf({
-      ...WITH_SKILLS,
-      REVIEW_MAX_SKILL_CHARS: "0",
-      REVIEW_MAX_SKILLS_TOTAL_CHARS: "0",
-    });
-    expect(configIncoherences(config).map((line) => line.split(" ", 1)[0])).toEqual([
-      "settings.max-skill-chars",
-      "settings.max-skills-total-chars",
+      "settings.max-skill-chars is 0, which cuts every skill's body to nothing: a file's prompt would carry the skills' names and none of their rules.",
     ]);
   });
 });

@@ -14,6 +14,7 @@ import {
   buildConfig,
   defaultConcurrency,
 } from "../../../src/core/config/config";
+import { CONFIG_ALIASES, FIELD_PATHS } from "../../../src/core/config/schema";
 import { ConfigFileError } from "../../../src/core/util/errors";
 import { loadRunConfig } from "../../../src/providers/config/loader";
 import {
@@ -454,16 +455,15 @@ describe("settings that disagree with each other", () => {
     // block can hold one skill and no more.
     const s = scratchWithBoth();
     const log: string[] = [];
-    const config = load(s, {
-      env: cleanEnvironment(s, {
-        REVIEW_MAX_SKILL_CHARS: "20000",
-        REVIEW_MAX_SKILLS_TOTAL_CHARS: "18000",
-      }),
-      log,
-    });
-    expect(config.maxSkillChars).toBe(20_000);
+    // The cap has no environment alias, so the repository's file states it.
+    touch(
+      s.repoFile,
+      JSON.stringify({ ...REPO, settings: { ...REPO.settings, "max-skill-chars": 0 } }),
+    );
+    const config = load(s, { env: cleanEnvironment(s), log });
+    expect(config.maxSkillChars).toBe(0);
     expect(log.filter((line) => line.startsWith("WARNING"))).toEqual([
-      "WARNING settings.max-skill-chars=20000 is larger than settings.max-skills-total-chars=18000: one long skill can fill a file's whole block, leaving every other skill that matches it out of the prompt. Raise the block cap, or lower the per-skill one.",
+      "WARNING settings.max-skill-chars is 0, which cuts every skill's body to nothing: a file's prompt would carry the skills' names and none of their rules.",
     ]);
   });
 
@@ -536,12 +536,12 @@ describe("the environment and the command line", () => {
     // The repository's .env sits beside its config.yaml, so it is found only when that file is.
     const s = scratchWithBoth();
     writeFileSync(join(s.deep, ".env"), "REVIEW_LANG=en\nREVIEW_SKILLS_PATH=from-cwd\n", "utf8");
-    writeFileSync(s.machineEnvFile, "REVIEW_LANG=tr\nREVIEW_MAX_CONTEXT_CHARS=1\n", "utf8");
-    touch(s.repoEnvFile, "REVIEW_MAX_CONTEXT_CHARS=2\n");
+    writeFileSync(s.machineEnvFile, "REVIEW_LANG=tr\nREVIEW_MAX_FINDINGS_PER_FILE=1\n", "utf8");
+    touch(s.repoEnvFile, "REVIEW_MAX_FINDINGS_PER_FILE=2\n");
     const config = load(s, { env: environmentOnly(s) });
     expect(config.reviewLang).toBe("Turkish");
     expect(config.skillsPath).toBe("from-cwd");
-    expect(config.maxContextChars).toBe(2);
+    expect(config.maxFindingsPerFile).toBe(2);
   });
 
   it("lets the real environment override every .env file", () => {
@@ -578,8 +578,11 @@ function snapshot(config: Config): Record<string, unknown> {
     base_url: config.baseUrl,
     skills_path: config.skillsPath,
     max_skill_chars: config.maxSkillChars,
-    max_skills_total_chars: config.maxSkillsTotalChars,
     max_context_chars: config.maxContextChars,
+    max_definitions: config.maxDefinitions,
+    max_symbols: config.maxSymbols,
+    max_usages_per_symbol: config.maxUsagesPerSymbol,
+    max_related: config.maxRelated,
     max_findings_per_file: config.maxFindingsPerFile,
     verify_findings: config.verifyFindings,
     review_lang: config.reviewLang,
@@ -657,8 +660,6 @@ describe("the setting groups", () => {
       REVIEW_LANG: "tr",
       REVIEW_EXCLUDE_PATHS: "docs/**, *.lock",
       REVIEW_MAX_FINDINGS_PER_FILE: "3",
-      REVIEW_MAX_SKILL_CHARS: "1000",
-      REVIEW_MAX_SKILLS_TOTAL_CHARS: "2000",
       REVIEW_MAX_CONCURRENT_FILES: "5",
     },
     cpu: 4,
@@ -668,11 +669,38 @@ describe("the setting groups", () => {
     expect(config.fileReviewSettings(["*.min.js"])).toEqual({
       exclude: ["docs/**", "*.lock", "*.min.js"],
       language: "Turkish",
-      maxSkillChars: 1000,
-      maxSkillsTotalChars: 2000,
-      maxContextChars: 6000,
+      maxSkillChars: 10_000,
+      maxContextChars: 12_000,
+      maxDefinitions: 4,
+      maxSymbols: 6,
+      maxUsagesPerSymbol: 8,
+      maxRelated: 3,
     });
     expect(config.fileReviewSettings().exclude).toEqual(["docs/**", "*.lock"]);
+  });
+
+  /**
+   * How much of the repository a review reads -- the skills block and the
+   * pre-context around the diff -- is a judgement about the code, written in a
+   * file that is reviewed and versioned. A variable on a runner must not be
+   * able to flatten it to nothing.
+   */
+  it("gives the prompt budgets no environment alias", () => {
+    const budgets = [
+      "maxSkillChars",
+      "maxContextChars",
+      "maxDefinitions",
+      "maxSymbols",
+      "maxUsagesPerSymbol",
+      "maxRelated",
+    ] as const;
+    for (const field of budgets) {
+      expect(FIELD_PATHS[field]).toStartWith("settings.max-");
+      expect(CONFIG_ALIASES).not.toHaveProperty(field);
+    }
+    // The knobs a runner does set keep theirs.
+    expect(CONFIG_ALIASES.maxConcurrentFiles).toBe("REVIEW_MAX_CONCURRENT_FILES");
+    expect(CONFIG_ALIASES.maxFindingsPerFile).toBe("REVIEW_MAX_FINDINGS_PER_FILE");
   });
 
   it("maps the report policy", () => {

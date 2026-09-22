@@ -6,8 +6,8 @@
 /**
  * What one file's skills block came to.
  *
- * @remarks The names are what the block carries, not what matched: a skill the total budget left out is in
- * neither, so nothing downstream can report a skill the model never saw.
+ * @remarks The names are what the block carries, not what matched: a skill the block's ceiling left out is
+ * in neither, so nothing downstream can report a skill the model never saw.
  */
 export interface RenderedSkills {
   /** The block, or `""` when nothing matched. */
@@ -21,8 +21,7 @@ export interface SkillMatcher {
   /**
    * The matching skills as a prompt block.
    *
-   * @param maxSkillChars - Cap on one skill's body.
-   * @param maxTotalChars - Cap on the whole block.
+   * @param maxSkillChars - Cap on one skill's body; the whole block has a fixed ceiling, not a setting.
    */
-  renderFor(path: string, maxSkillChars: number, maxTotalChars: number): RenderedSkills;
+  renderFor(path: string, maxSkillChars: number): RenderedSkills;
 }
