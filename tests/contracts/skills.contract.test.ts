@@ -158,7 +158,7 @@ const bulkySkill = (name: string): Skill => ({
   description: "",
 });
 
-/** Room for one bulky skill's body, so `max-skill-chars` is not what cuts here. */
+/** Room for one bulky skill's body, so `skills.max-chars` is not what cuts here. */
 const ROOMY_SKILL_CHARS = MAX_SKILLS_BLOCK_CHARS;
 
 describe("the per-file skills block ceiling", () => {
@@ -173,7 +173,7 @@ describe("the per-file skills block ceiling", () => {
     // Left out means the file was not reviewed against that skill, which is a
     // warning and not a note: at the default level nobody would have seen it.
     expect(lines).toContain(
-      `WARNING Skill budget reached for src/a.ts: the ${MAX_SKILLS_BLOCK_CHARS}-character ceiling on a file's skills block left ['zz-second'] out of the prompt, so that file was not reviewed against them. Shorten those skills, lower max-skill-chars, or narrow their globs. Each skill is said once; later files are not repeated.`,
+      `WARNING Skill budget reached for src/a.ts: the ${MAX_SKILLS_BLOCK_CHARS}-character ceiling on a file's skills block left ['zz-second'] out of the prompt, so that file was not reviewed against them. Shorten those skills, lower skills.max-chars, or narrow their globs. Each skill is said once; later files are not repeated.`,
     );
   });
 
@@ -192,7 +192,7 @@ describe("the per-file skills block ceiling", () => {
       recordingLogger(quiet),
     );
     // Two bodies cut to a third of the ceiling each: both fit, and the cut is
-    // `max-skill-chars` doing its own job, not the block's ceiling.
+    // `skills.max-chars` doing its own job, not the block's ceiling.
     expect(roomy.renderFor("src/a.ts", Math.floor(MAX_SKILLS_BLOCK_CHARS / 3)).applied).toEqual([
       "aa-first",
       "zz-second",

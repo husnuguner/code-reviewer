@@ -34,7 +34,6 @@ export interface ConfigShape {
     verify: boolean;
     exclude: string[];
     "max-findings-per-file": number;
-    "max-skill-chars": number;
     context: {
       "max-chars": number;
       "max-definitions": number;
@@ -46,6 +45,7 @@ export interface ConfigShape {
   };
   skills: {
     path: string;
+    "max-chars": number;
     defaults: SkillDefaultShape[];
     mappings: Record<string, string | string[]>;
   };
@@ -217,7 +217,7 @@ export const FIELD_PATHS = {
   verifyFindings: "settings.verify",
   excludeGlobs: "settings.exclude",
   maxFindingsPerFile: "settings.max-findings-per-file",
-  maxSkillChars: "settings.max-skill-chars",
+  maxSkillChars: "skills.max-chars",
   maxContextChars: "settings.context.max-chars",
   maxDefinitions: "settings.context.max-definitions",
   maxSymbols: "settings.context.max-symbols",
@@ -321,11 +321,6 @@ export function configSchema(providers: RegisteredProviders): convict.Schema<Con
         default: 3,
         env: CONFIG_ALIASES.maxFindingsPerFile,
       },
-      "max-skill-chars": {
-        doc: "Cap on one skill's body. From the files only; no environment alias.",
-        format: "count",
-        default: 10_000,
-      },
       // The pre-context budget, together: a block cap and what may fill it. From the files only; the
       // whole section has no environment alias.
       context: {
@@ -368,6 +363,11 @@ export function configSchema(providers: RegisteredProviders): convict.Schema<Con
         format: String,
         default: "",
         env: CONFIG_ALIASES.skillsPath,
+      },
+      "max-chars": {
+        doc: "Cap on one skill's body; the whole block's ceiling is a constant. From the files only; no environment alias.",
+        format: "count",
+        default: 10_000,
       },
       defaults: {
         doc: "Glob → the skills every file it matches is held to, whatever mappings add. From the files only; no environment alias.",

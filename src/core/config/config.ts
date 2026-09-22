@@ -203,7 +203,7 @@ function valuesFrom(
     verifyFindings: shape.settings.verify,
     excludeGlobs: shape.settings.exclude,
     maxFindingsPerFile: shape.settings["max-findings-per-file"],
-    maxSkillChars: shape.settings["max-skill-chars"],
+    maxSkillChars: shape.skills["max-chars"],
     maxContextChars: shape.settings.context["max-chars"],
     maxDefinitions: shape.settings.context["max-definitions"],
     maxSymbols: shape.settings.context["max-symbols"],

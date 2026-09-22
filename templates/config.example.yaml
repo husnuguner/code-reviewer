@@ -51,12 +51,6 @@ settings:
 
   max-findings-per-file: 3 # the most severe survive; 0 = no cap. Default 3
 
-  # The prompt budgets: how much of this repository one file review reads.
-  # Neither this cap nor the context section below has an environment alias --
-  # what a review needs to see is a judgement about this code, so it is written
-  # here and nowhere else.
-  max-skill-chars: 10000 # per-skill body cap. Default 10000
-
   # The pre-context read from the checkout for each file: the signatures of the
   # modules it imports, who else uses the exports it changes, and the diffs of
   # the changed files an import binds to it.
@@ -78,6 +72,10 @@ skills:
   # file, so in .review/config.yaml `skills` means .review/skills. Default "":
   # no skills.
   path: skills
+  # Cap on one skill's body, in characters. The block a file carries has one
+  # fixed ceiling (200000) rather than a second setting: a block that long is a
+  # mapping mistake, not a budget. No environment alias. Default 10000.
+  max-chars: 10000
   # The baseline: the skills every file these globs match is held to, whatever
   # `mappings` adds. This is where a language's or an area's standing rules go,
   # stated once instead of repeated under each skill that shares them. Each

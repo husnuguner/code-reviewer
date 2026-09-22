@@ -29,9 +29,9 @@ function configOf(
 /** The skills directory, without which nothing about skills can disagree. */
 const WITH_SKILLS = { REVIEW_SKILLS_PATH: "skills" };
 
-/** The per-skill cap as a repository's file states it: it has no environment alias. */
+/** The per-skill cap as a repository's file states it: it lives beside the skills, alias-free. */
 function perSkillCap(chars: number): Record<string, unknown> {
-  return { settings: { "max-skill-chars": chars } };
+  return { skills: { "max-chars": chars } };
 }
 
 describe("a configuration that agrees with itself", () => {
@@ -73,7 +73,7 @@ describe("the per-skill cap", () => {
   it("warns that a zero cap sends the names and none of the rules", () => {
     const config = configOf(WITH_SKILLS, perSkillCap(0));
     expect(configIncoherences(config)).toEqual([
-      "settings.max-skill-chars is 0, which cuts every skill's body to nothing: a file's prompt would carry the skills' names and none of their rules.",
+      "skills.max-chars is 0, which cuts every skill's body to nothing: a file's prompt would carry the skills' names and none of their rules.",
     ]);
   });
 });

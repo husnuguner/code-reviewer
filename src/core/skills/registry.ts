@@ -20,7 +20,7 @@ import {
 /**
  * A safety ceiling on one file's skills block, in code points. A constant, not a setting: a block this
  * long is a mapping mistake -- every skill pointed at one glob -- and not a budget somebody chose. What
- * a project tunes is `max-skill-chars`, which bounds each skill's own body.
+ * a project tunes is `skills.max-chars`, which bounds each skill's own body.
  */
 export const MAX_SKILLS_BLOCK_CHARS = 200_000;
 
@@ -116,7 +116,7 @@ export class SkillRegistry implements SkillMatcher {
     if (unreported.length > 0) {
       for (const name of unreported) this.reportedOverflow.add(name);
       this.log.warn(
-        `Skill budget reached for ${path}: the ${MAX_SKILLS_BLOCK_CHARS}-character ceiling on a file's skills block left ${show(unreported)} out of the prompt, so that file was not reviewed against them. Shorten those skills, lower max-skill-chars, or narrow their globs. Each skill is said once; later files are not repeated.`,
+        `Skill budget reached for ${path}: the ${MAX_SKILLS_BLOCK_CHARS}-character ceiling on a file's skills block left ${show(unreported)} out of the prompt, so that file was not reviewed against them. Shorten those skills, lower skills.max-chars, or narrow their globs. Each skill is said once; later files are not repeated.`,
       );
     }
     const header =

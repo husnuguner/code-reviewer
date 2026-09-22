@@ -37,4 +37,4 @@ applies. `[]` in `mappings` switches one off, baseline included, without
 deleting it. This README is not a skill (no frontmatter) and is ignored.
 
 Keep a skill short and concrete: it is read by a model for every matching
-file, and a long one is cut at `max-skill-chars`.
+file, and a long one is cut at `skills.max-chars`.

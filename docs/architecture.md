@@ -167,7 +167,7 @@ The choices with a real trade-off behind them, and what was given up:
   the language. Import edges are read by a JS/TS-shaped regex, so in another
   language the ranking falls back to the names until a language adapter lands.
 - **The prompt budgets are set in a config file and nowhere else.** How much
-  of the repository one review reads — `max-skill-chars` and the whole
+  of the repository one review reads — `skills.max-chars` and the whole
   `settings.context` section — is a judgement about that code, so it
   is versioned and reviewed with it. A variable carries what the shell knows
   (vendor, key, endpoint, concurrency) and nothing that decides what the model
@@ -178,7 +178,7 @@ The choices with a real trade-off behind them, and what was given up:
   file importing four documented modules cannot spend the whole budget on
   signatures and leave the related diffs out. Given up: the simpler
   first-come-first-served fill.
-- **One knob for the skills block, not two.** `max-skill-chars` bounds a
+- **One knob for the skills block, not two.** `skills.max-chars` bounds a
   skill's body; the block itself has a fixed 200k-character ceiling, a
   constant like the diff's. Two caps for one budget meant every project had to
   keep them consistent, and the warning that they disagreed existed only

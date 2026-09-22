@@ -456,14 +456,11 @@ describe("settings that disagree with each other", () => {
     const s = scratchWithBoth();
     const log: string[] = [];
     // The cap has no environment alias, so the repository's file states it.
-    touch(
-      s.repoFile,
-      JSON.stringify({ ...REPO, settings: { ...REPO.settings, "max-skill-chars": 0 } }),
-    );
+    touch(s.repoFile, JSON.stringify({ ...REPO, skills: { ...REPO.skills, "max-chars": 0 } }));
     const config = load(s, { env: cleanEnvironment(s), log });
     expect(config.maxSkillChars).toBe(0);
     expect(log.filter((line) => line.startsWith("WARNING"))).toEqual([
-      "WARNING settings.max-skill-chars is 0, which cuts every skill's body to nothing: a file's prompt would carry the skills' names and none of their rules.",
+      "WARNING skills.max-chars is 0, which cuts every skill's body to nothing: a file's prompt would carry the skills' names and none of their rules.",
     ]);
   });
 
@@ -695,12 +692,14 @@ describe("the setting groups", () => {
       "maxRelated",
     ] as const;
     for (const field of budgets) {
-      expect(FIELD_PATHS[field]).toMatch(/^settings\.(?:context\.)?max-/u);
+      expect(FIELD_PATHS[field]).toMatch(/^(?:settings\.(?:context\.)?|skills\.)max-/u);
       expect(CONFIG_ALIASES).not.toHaveProperty(field);
     }
     // The pre-context budget is one section, so a project tunes it in one place.
     expect(FIELD_PATHS.maxContextChars).toBe("settings.context.max-chars");
     expect(FIELD_PATHS.maxRelated).toBe("settings.context.max-related");
+    // The skills' own cap sits with the skills, which is a repository's section.
+    expect(FIELD_PATHS.maxSkillChars).toBe("skills.max-chars");
     // The knobs a runner does set keep theirs.
     expect(CONFIG_ALIASES.maxConcurrentFiles).toBe("REVIEW_MAX_CONCURRENT_FILES");
     expect(CONFIG_ALIASES.maxFindingsPerFile).toBe("REVIEW_MAX_FINDINGS_PER_FILE");

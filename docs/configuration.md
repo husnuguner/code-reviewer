@@ -119,7 +119,6 @@ Keys are kebab-case. Everything under `settings` may be set in either file;
 | `settings.verify`                        | `true`           |    ✓    |  ✓   | Run the [verification pass](how-it-works.md#verification).                                                                |
 | `settings.exclude`                       | `[]`             |    ✓    |  ✓   | Globs never sent to the model; a list or one comma-separated string.                                                      |
 | `settings.max-findings-per-file`         | `3`              |    ✓    |  ✓   | Per-file cap; the most severe survive. `0` = no cap.                                                                      |
-| `settings.max-skill-chars`               | `10000`          |    ✓    |  ✓   | Cap on one skill's body. No variable.                                                                                     |
 | `settings.context.max-chars`             | `12000`          |    ✓    |  ✓   | Cap on the whole [pre-context](how-it-works.md#pre-context) block, shared by its parts; `0` switches it off. No variable. |
 | `settings.context.max-definitions`       | `4`              |    ✓    |  ✓   | Imported modules whose signatures are read, per file. No variable.                                                        |
 | `settings.context.max-symbols`           | `6`              |    ✓    |  ✓   | Changed exports searched for, per file; one repository search each. No variable.                                          |
@@ -127,6 +126,7 @@ Keys are kebab-case. Everything under `settings` may be set in either file;
 | `settings.context.max-related`           | `3`              |    ✓    |  ✓   | Related diffs included, import-bound first. No variable.                                                                  |
 | `settings.max-concurrent-files`          | CPU-derived      |    ✓    |  ✓   | File reviews in flight at once.                                                                                           |
 | `skills.path`                            | `""` (no skills) |         |  ✓   | Directory of skill documents. A relative path is taken from beside the file.                                              |
+| `skills.max-chars`                       | `10000`          |         |  ✓   | Cap on one skill's body; the block's ceiling is a constant. No variable.                                                  |
 | `skills.defaults`                        | `[]`             |         |  ✓   | `{ globs, skills }` entries: the baseline every matching file is held to.                                                 |
 | `skills.mappings`                        | `{}`             |         |  ✓   | Skill name → the globs only it reviews, added to what `defaults` gave it.                                                 |
 
@@ -146,7 +146,7 @@ a refusal:
 | The combination                                                            | What it silently means                                                       |
 | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `skills.path` empty while `skills.defaults`/`skills.mappings` scope skills | No skill is loaded, so the tables hold nothing to a rule.                    |
-| `max-skill-chars` = `0`                                                    | Every skill's body is cut to nothing: the prompt carries names and no rules. |
+| `skills.max-chars` = `0`                                                   | Every skill's body is cut to nothing: the prompt carries names and no rules. |
 
 The schema, merging, precedence and validation are
 [convict](https://github.com/mozilla/node-convict)'s; the reviewer declares
@@ -230,7 +230,7 @@ whole run.
 
 A variable carries what the shell knows: which vendor, which key, which
 endpoint, how much to run at once. **The prompt budgets have none** —
-`max-skill-chars` and the whole `settings.context` section — and
+`skills.max-chars` and the whole `settings.context` section — and
 neither has `skills.defaults`. How much of the repository a review reads is a
 judgement about that code: it belongs in a config file, where it is reviewed
 and versioned and a stray variable on a runner cannot flatten it.
@@ -357,7 +357,7 @@ paths. A skill named in neither table never applies and is warned about; a
 name in either table that no loaded skill answers to is warned about too. A
 file without valid frontmatter (a README in the skills directory) is ignored.
 
-Injection is capped so a wide match cannot flood the prompt: `max-skill-chars`
+Injection is capped so a wide match cannot flood the prompt: `skills.max-chars`
 truncates one skill's body, and every matching skill is carried. The block has
 one fixed ceiling of 200000 characters -- a constant, not a setting: a block
 that long is a mapping mistake, not a budget somebody chose. A skill that would
@@ -368,7 +368,7 @@ against it -- so it is a **warning**, named with the file and the ceiling:
 WARNING Skill budget reached for src/api/users.ts: the 200000-character ceiling
 on a file's skills block left ['naming', 'typescript-base'] out of the prompt,
 so that file was not reviewed against them. Shorten those skills, lower
-max-skill-chars, or narrow their globs. Each skill is said once; later files
+skills.max-chars, or narrow their globs. Each skill is said once; later files
 are not repeated.
 ```
 
