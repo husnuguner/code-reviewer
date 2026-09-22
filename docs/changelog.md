@@ -7,6 +7,21 @@ the release when there is none — so the section is written in the release
 commit, beside the version bump. What is in a section is what a user of the
 action or the CLI has to know; the commit log has the rest.
 
+## v0.0.11
+
+No change to the reviewer, the actions or the NDJSON contract. This release is about how releases
+are made.
+
+- **A pushed tag is a release.** The `Release` workflow checks the tagged commit against the tag
+  (`package.json`'s version, a changelog section), publishes the GitHub Release with that section
+  as its notes and moves `v0` to it. Releasing is a version bump, a changelog section, a tag.
+- **The changelog is in the repository.** `docs/changelog.md` holds every release's notes, this
+  one and all before it; the three tags that never had a GitHub Release (`v0.0.1`, `v0.0.2`,
+  `v0.0.9`) have a paragraph each.
+- **The examples pin `@v0`.** The README and the action page reference the actions by the moving
+  major tag instead of one release, so they stay true as tags land; a test refuses an exact version
+  there. Pinning a release still works exactly as before: take a `vX.Y.Z` from the Releases page.
+
 ## v0.0.10
 
 ### What's new
