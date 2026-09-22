@@ -97,19 +97,37 @@ snapshots are the project's judgement and belong in its `exclude`.
 A diff rarely explains itself. Before each call the reviewer fetches, from the
 checkout at the reviewed ref:
 
-| Block           | What                                                                                                      | Answers                                             |
-| --------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| **Definitions** | Exported signatures (with doc comments) of the local modules the added lines import                       | "What does the thing I am calling take and return?" |
-| **Usages**      | Paths of other files that mention an exported symbol the change adds, removes or edits                    | "Does this signature change break anyone?"          |
-| **Related**     | Diffs of the other changed files beside this one (same directory, or same stem: `foo.ts` / `foo.test.ts`) | "Was the counterpart updated too?"                  |
+| Block           | What                                                                                                                       | Answers                                             |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| **Definitions** | Exported signatures (with doc comments, and an `enum`/`interface`/`type`'s members) of the local modules the patch imports | "What does the thing I am calling take and return?" |
+| **Usages**      | Paths of other source files that mention an exported symbol the change adds, removes or edits                              | "Does this signature change break anyone?"          |
+| **Related**     | Diffs of the other changed files bound to this one: an import either way first, then the same stem or directory            | "Was the counterpart updated too?"                  |
 
 Pre-context is deterministic: the reviewer decides what to fetch and the model
 asks for nothing, so the review stays one call and the output contract is
 untouched. The block is capped by `max-context-chars` (default 6000; `0`
-switches it off) and read through local git (`git show`, `git grep`).
+switches it off) and read through local git (`git show`, `git grep`). The three
+blocks share that cap: each gets an equal allowance, and whatever one does not
+need goes to the others, most valuable first — so a file importing four
+documented modules cannot spend the whole budget on signatures and leave the
+related diffs out.
 
 Related diffs are built from the _selected_ files, so an excluded or
 credential file can never reach a prompt as somebody else's "related change".
+
+The three blocks are read off the patch itself, so they need no language server:
+
+- **Imports** are read from the added lines first and the surrounding context
+  lines second, as written (`./x`, `../x`) or from the repository root
+  (`src/x`). A specifier on a line of its own — how a formatter breaks a long
+  `await import(...)` — is found too.
+- **Related** names the relation in the prompt (`(this file imports it)`,
+  `(it imports this file)`), and an import outranks the name heuristics: the
+  route and the service it calls share neither stem nor directory, and the cap
+  is three.
+- **Usages** skips export names every file has (`GET`, `POST`, `default`, …)
+  and hits in documentation, generated specs and dotfiles: they match the whole
+  repository and answer nothing.
 
 ## The prompt
 

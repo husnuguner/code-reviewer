@@ -11,11 +11,13 @@ import { type CodeContext, type CodeSearchHit } from "../../../src/core/ports/co
 import {
   DEFAULT_CONTEXT_LIMITS,
   EMPTY_CONTEXT,
+  type ReviewContext,
   changedExports,
   exportSignatures,
   gatherContext,
   localImports,
   relatedChanges,
+  relationTo,
   renderContext,
   resolveSpecifier,
 } from "../../../src/core/review/context";
@@ -82,12 +84,38 @@ function recordingContext(): {
 }
 
 describe("what the patch says", () => {
-  it("lists the local modules the added lines import, once each", () => {
-    expect(localImports(PATCH)).toEqual(["../services/service", "./types.js", "./lazy"]);
+  it("lists the local modules the patch imports, the ones it touched first", () => {
+    // `./util/helper` is on a context line: a dependency all the same, but it
+    // ranks behind the three the change wrote, so a cap keeps what was touched.
+    expect(localImports(PATCH)).toEqual([
+      "../services/service",
+      "./types.js",
+      "./lazy",
+      "./util/helper",
+    ]);
   });
 
-  it("ignores package imports and context lines", () => {
-    expect(localImports('+import x from "zod";\n import y from "./ctx";')).toEqual([]);
+  it("ignores package imports and imports the change removed", () => {
+    expect(localImports('+import x from "zod";\n import y from "./ctx";')).toEqual(["./ctx"]);
+    expect(localImports('-import gone from "./gone";')).toEqual([]);
+  });
+
+  /**
+   * A formatter breaks a long dynamic import across lines, and Medusa-style
+   * projects import from the repository root. Both were invisible while the
+   * scan was line-by-line and relative-only.
+   */
+  it("reads a specifier on its own line and a root-relative one", () => {
+    const patch = [
+      "+    const { run } = await import(",
+      "+      '../../workflows/cancel.workflow.js'",
+      "+    );",
+      "+import { helper } from 'src/common/helper';",
+    ].join("\n");
+    expect(localImports(patch)).toEqual([
+      "../../workflows/cancel.workflow.js",
+      "src/common/helper",
+    ]);
   });
 
   it("names the exports the patch adds, removes or edits", () => {
@@ -117,6 +145,12 @@ describe("what the patch says", () => {
     expect(resolveSpecifier("src/a/b.ts", "./x")).toBe("src/a/x");
     expect(resolveSpecifier("src/a/b.ts", "../services/service")).toBe("src/services/service");
     expect(resolveSpecifier("a.ts", "../../x")).toBe("x");
+  });
+
+  it("leaves a root-relative specifier alone", () => {
+    expect(resolveSpecifier("src/api/deep/route.ts", "src/common/helper")).toBe(
+      "src/common/helper",
+    );
   });
 });
 
@@ -151,6 +185,43 @@ describe("what the repository says", () => {
     expect(signatures).not.toContain("function run() {}");
   });
 
+  /**
+   * The name of an enum answers nothing: the caller writes `Modules.CORE` and
+   * the question is whether `CORE` is there.
+   */
+  it("keeps the members of an enum, an interface and a type, with the closing brace", () => {
+    const module = [
+      "export enum Modules {",
+      "  PLAN = 'planModule',",
+      "  CORE = 'coreModule',",
+      "}",
+      "export interface Options {",
+      "  id: string;",
+      "}",
+      "export class Service {",
+      "  private secret = 1;",
+      "}",
+    ].join("\n");
+    const signatures = exportSignatures(module, 10_000);
+    expect(signatures).toContain("  CORE = 'coreModule',");
+    expect(signatures).toContain("  id: string;");
+    // A class body is implementation, not surface.
+    expect(signatures).not.toContain("private secret");
+  });
+
+  it("elides a member block longer than the cap instead of running on", () => {
+    const long = [
+      "export enum Big {",
+      ...Array.from({ length: 40 }, (_, index) => `  K${index} = '${index}',`),
+      "}",
+    ].join("\n");
+    const signatures = exportSignatures(long, 10_000);
+    expect(signatures).toContain("  K15 = '15',");
+    expect(signatures).not.toContain("  K16 = '16',");
+    expect(signatures).toContain("  // ...");
+    expect(signatures.trimEnd().endsWith("}")).toBe(true);
+  });
+
   it("falls back to the head of a module that exports nothing recognisable, and caps", () => {
     const text = Array.from({ length: 50 }, (_, index) => `line ${index}`).join("\n");
     const head = exportSignatures(text, 10_000);
@@ -159,6 +230,11 @@ describe("what the repository says", () => {
     expect(exportSignatures(text, 12)).toHaveLength(12);
   });
 });
+
+/** Filler of a given length, for the budget tests. */
+function long(size: number): string {
+  return "x".repeat(size);
+}
 
 /** A modified file with a one-line patch, for the related-change tests. */
 function modified(path: string, patch = "+x"): ChangedFile {
@@ -182,6 +258,54 @@ describe("related changes", () => {
       "src/other/route.spec.ts",
       "src/api/admin/validation-schemas.ts",
     ]);
+  });
+
+  /**
+   * The relation a change breaks: neither stem nor directory connects a route
+   * to the service it calls, and with a cap of three the siblings of a crowded
+   * directory would push the dependency out of the prompt.
+   */
+  it("ranks an imported and an importing file above the name heuristics", () => {
+    const handler = modified("src/api/handler.ts", '+import { users } from "../services/users";');
+    const service = modified("src/services/users.ts");
+    const caller = modified("src/jobs/nightly.ts", '+import { GET } from "../api/handler";');
+    const set = [
+      handler,
+      modified("src/api/handler.test.ts"),
+      modified("src/api/other.ts"),
+      service,
+      caller,
+    ];
+    expect(relatedChanges(handler, set).map((f) => f.path)).toEqual([
+      "src/jobs/nightly.ts",
+      "src/services/users.ts",
+      "src/api/handler.test.ts",
+      "src/api/other.ts",
+    ]);
+    expect(relationTo(handler, service)).toBe("imports");
+    expect(relationTo(handler, caller)).toBe("imported-by");
+    expect(relationTo(handler, modified("src/api/other.ts"))).toBe("sibling");
+  });
+
+  it("draws an edge through a root-relative specifier and an index module", () => {
+    const deep = modified(
+      "src/api/store/orders/[id]/route.ts",
+      "+import { Modules } from 'src/modules/subscription';\n+import { x } from 'src/common/helper';",
+    );
+    const barrel = modified("src/modules/subscription/index.ts");
+    const helper = modified("src/common/helper.ts");
+    expect(relatedChanges(deep, [deep, barrel, helper]).map((f) => f.path)).toEqual([
+      "src/common/helper.ts",
+      "src/modules/subscription/index.ts",
+    ]);
+  });
+
+  /** A markdown file quoting `from "./x"` in a fenced block is not an importer. */
+  it("draws no edge to or from a file the resolver does not understand", () => {
+    const document = modified("docs/design.md", '+see `import { a } from "../src/a"`');
+    const code = modified("src/a.ts");
+    expect(relationTo(document, code)).toBe("sibling");
+    expect(relatedChanges(document, [document, code])).toEqual([]);
   });
 });
 
@@ -210,7 +334,48 @@ describe("gathering", () => {
     expect(context.definitions[0]?.signatures).toBe("/** The service. */\nexport class Service {}");
     // The file's own mention of `total` is not a "user".
     expect(context.usages).toEqual([{ symbol: "total", paths: ["src/jobs/nightly.ts"] }]);
-    expect(context.related).toEqual([{ path: "src/api/route.test.ts", patch: "+it()" }]);
+    expect(context.related).toEqual([
+      { path: "src/api/route.test.ts", relation: "sibling", patch: "+it()" },
+    ]);
+  });
+
+  /**
+   * Every Medusa route exports `GET` and `POST`, so the needle matches the whole
+   * repository: two searches spent to fill the block with prose.
+   */
+  it("does not search for an export name every file has", async () => {
+    const route = new ChangedFile(
+      "src/api/store/thing/route.ts",
+      "added",
+      "+export const GET = async () => {};\n+export const POST = async () => {};\n+export const parseFilters = () => {};",
+    );
+    const { context, searched } = recordingContext();
+    const gathered = await gatherContext({ file: route, changeSet: [route], context });
+    expect(searched).toEqual(["parseFilters"]);
+    expect(gathered.usages.map((usage) => usage.symbol)).toEqual(["parseFilters"]);
+  });
+
+  it("keeps only the users a signature change could break", async () => {
+    const file = new ChangedFile(
+      "src/common/status.ts",
+      "modified",
+      "+export const isTerminal = (s: string) => true;",
+    );
+    const noisy: CodeContext = {
+      readFile: () => Promise.resolve(null),
+      search: (needle) =>
+        Promise.resolve(
+          [
+            ".cursorrules",
+            "docs/DESIGN.md",
+            "combined.oas.json",
+            ".review/skills/route.md",
+            "src/api/route.ts",
+          ].map((path, index) => ({ path, line: index + 1, text: needle })),
+        ),
+    };
+    const gathered = await gatherContext({ file, changeSet: [file], context: noisy });
+    expect(gathered.usages).toEqual([{ symbol: "isTerminal", paths: ["src/api/route.ts"] }]);
   });
 
   it("gathers nothing when switched off, and survives a failing port", async () => {
@@ -308,10 +473,10 @@ describe("gathering", () => {
 });
 
 describe("rendering", () => {
-  const context = {
+  const context: ReviewContext = {
     definitions: [{ specifier: "./s", path: "src/s.ts", signatures: "export const s = 1;" }],
     usages: [{ symbol: "total", paths: ["a.ts", "b.ts"] }],
-    related: [{ path: "src/r.ts", patch: "+r" }],
+    related: [{ path: "src/r.ts", relation: "sibling", patch: "+r" }],
   };
 
   it("orders definitions, usages, related and fences the diffs", () => {
@@ -322,6 +487,47 @@ describe("rendering", () => {
     expect(text).toContain("--- src/s.ts (imported as ./s)\nexport const s = 1;");
     expect(text).toContain("- total: a.ts, b.ts");
     expect(text).toContain("--- src/r.ts\n```diff\n+r\n```");
+  });
+
+  it("says which way an import relation points", () => {
+    const text = renderContext(
+      {
+        ...context,
+        related: [
+          { path: "src/dep.ts", relation: "imports", patch: "+d" },
+          { path: "src/caller.ts", relation: "imported-by", patch: "+c" },
+        ],
+      },
+      10_000,
+    );
+    expect(text).toContain("--- src/dep.ts (this file imports it)");
+    expect(text).toContain("--- src/caller.ts (it imports this file)");
+  });
+
+  /**
+   * A file importing four documented modules can render 6000 characters of
+   * signatures on its own. Under a first-come budget it took the whole block
+   * and the related diffs never reached the model.
+   */
+  it("does not let one long section starve the others", () => {
+    const text = renderContext(
+      {
+        definitions: Array.from({ length: 4 }, (_, index) => ({
+          specifier: `./m${index}`,
+          path: `src/m${index}.ts`,
+          signatures: long(1400),
+        })),
+        usages: [{ symbol: "total", paths: ["a.ts"] }],
+        related: [{ path: "src/dep.ts", relation: "imports", patch: long(1000) }],
+      },
+      6000,
+    );
+    expect(text.length).toBeLessThanOrEqual(6000);
+    expect(text).toContain("--- src/dep.ts (this file imports it)");
+    expect(text).toContain("- total: a.ts");
+    // Some definitions still fit; what did not is dropped whole, not cut.
+    expect(text).toContain("--- src/m0.ts");
+    expect(text).not.toContain("--- src/m3.ts");
   });
 
   it("drops whole sections past the cap, cutting only when the first would not fit", () => {
