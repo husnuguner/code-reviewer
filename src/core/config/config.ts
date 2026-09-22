@@ -77,6 +77,8 @@ export interface ConfigValues {
   /** The language's English name, for the prompt. */
   readonly reviewLang: string;
   readonly verifyFindings: boolean;
+  /** Whether `reviewer: by-pass` markers in the code are honoured. */
+  readonly bypassMarkers: boolean;
   readonly excludeGlobs: readonly string[];
   readonly maxFindingsPerFile: number;
   readonly maxSkillChars: number;
@@ -201,6 +203,7 @@ function valuesFrom(
     baseUrl: orNull(llm["base-url"]),
     reviewLang: languageName(shape.settings.language),
     verifyFindings: shape.settings.verify,
+    bypassMarkers: shape.settings["bypass-markers"],
     excludeGlobs: shape.settings.exclude,
     maxFindingsPerFile: shape.settings["max-findings-per-file"],
     maxSkillChars: shape.skills["max-chars"],
@@ -250,6 +253,7 @@ function withViews(values: ConfigValues): Config {
     fileReviewSettings: (extraExclude: readonly string[] = []) => ({
       exclude: [...values.excludeGlobs, ...extraExclude],
       language: values.reviewLang,
+      bypassMarkers: values.bypassMarkers,
       maxSkillChars: values.maxSkillChars,
       maxContextChars: values.maxContextChars,
       maxDefinitions: values.maxDefinitions,

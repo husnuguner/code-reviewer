@@ -58,6 +58,8 @@ Key modules under `review/`:
 | `file-reviewer.ts` | The only place the model is asked for findings; parses and anchors the reply. |
 | `verify.ts`        | The verification pass; fails open.                                            |
 | `anchor.ts`        | Two signals (line, quote) settled into one anchor.                            |
+| `bypass.ts`        | `reviewer: by-pass` markers and the block each one names. Pure.               |
+| `braces.ts`        | Braces counted as structure, not characters; shared by context and bypass.    |
 | `branch-review.ts` | The flow: git → select → review in parallel → cap → stream records.           |
 | `volume.ts`        | `max-findings-per-file`.                                                      |
 | `render.ts`        | Text report and preview.                                                      |
@@ -184,8 +186,15 @@ The choices with a real trade-off behind them, and what was given up:
   keep them consistent, and the warning that they disagreed existed only
   because both were settings. Given up: capping a file's whole skills block
   below the per-skill cap × the number of matching skills.
-- **The bot may request changes; it may not approve.** Given up: a fully
-  automated green tick.
+- **The code may take a block out of its own review, in the open.** A
+  `reviewer: by-pass - <reason>` comment names the block after it; the reason
+  is required, the marker sits in the diff, and every report lists the
+  regions it honoured with their reasons. Whether markers count at all is the
+  repository's policy (`settings.bypass-markers`), read from the base branch,
+  so a pull request cannot grant itself the right. Given up: the model still
+  reads a bypassed block and may spend tokens on it -- its findings there are
+  dropped, not prevented -- and a bypass is a judgement the human reviewer
+  must check, which is why it is shouted rather than hidden.
 
 ## Tests
 

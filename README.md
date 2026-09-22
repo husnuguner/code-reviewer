@@ -61,8 +61,11 @@ src/api/users/handler.ts:58
   (the line number and a verbatim quote) and repaired when one is wrong.
 - **Verified findings.** A second pass drops findings the diff itself refutes.
   It can only remove, never invent or re-rate, and fails open.
-- **Nothing dropped in silence.** Skipped, refuted, capped, mislabelled and
-  unanchored are all counted in the summary.
+- **Bypass from the code.** A comment reading `reviewer: by-pass - <reason>`
+  takes the block after it out of review; every run names the regions it
+  honoured, so a bypass is a visible decision.
+- **Nothing dropped in silence.** Skipped, refuted, capped, mislabelled,
+  bypassed and unanchored are all counted in the summary.
 - **Free preview.** `--preview` prints exactly what would be reviewed, and
   why the rest would not, without calling a model.
 - **Three output formats.** Text for a terminal, NDJSON for a program, GitHub

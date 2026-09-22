@@ -117,6 +117,7 @@ Keys are kebab-case. Everything under `settings` may be set in either file;
 | `settings.llm.api-key`                   | _required_       |    ✓    |  ✓   | The key, or `${VARIABLE}` to read it from the environment. See below.                                                     |
 | `settings.language`                      | `en`             |    ✓    |  ✓   | Language of each finding's body. Accepted: `en`, `tr`; anything else falls back to English.                               |
 | `settings.verify`                        | `true`           |    ✓    |  ✓   | Run the [verification pass](how-it-works.md#verification).                                                                |
+| `settings.bypass-markers`                | `true`           |    ✓    |  ✓   | Honour [`reviewer: by-pass` markers](how-it-works.md#bypassing-a-block-from-the-code) in the code. No variable.           |
 | `settings.exclude`                       | `[]`             |    ✓    |  ✓   | Globs never sent to the model; a list or one comma-separated string.                                                      |
 | `settings.max-findings-per-file`         | `3`              |    ✓    |  ✓   | Per-file cap; the most severe survive. `0` = no cap.                                                                      |
 | `settings.context.max-chars`             | `12000`          |    ✓    |  ✓   | Cap on the whole [pre-context](how-it-works.md#pre-context) block, shared by its parts; `0` switches it off. No variable. |

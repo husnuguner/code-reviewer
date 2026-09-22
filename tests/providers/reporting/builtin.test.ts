@@ -34,8 +34,10 @@ const SUMMARY: SummaryRecord = {
   refuted: 0,
   capped: 0,
   mislabelled: 0,
+  bypassed: 0,
   skipped: {},
   policy_changed: [],
+  bypass_regions: [],
 };
 
 /** A context that collects instead of writing anywhere. */

@@ -108,6 +108,7 @@
         "max_related": 3,
         "max_findings_per_file": 3,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "English",
         "exclude_globs": [],
         "max_concurrent_files": 8
@@ -136,6 +137,7 @@
         "max_related": 3,
         "max_findings_per_file": 3,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "English",
         "exclude_globs": [
           "**/*.md",
@@ -169,6 +171,7 @@
         "max_related": 3,
         "max_findings_per_file": 3,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "English",
         "exclude_globs": [],
         "max_concurrent_files": 8
@@ -196,6 +199,7 @@
         "max_related": 3,
         "max_findings_per_file": 3,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "English",
         "exclude_globs": [],
         "max_concurrent_files": 8
@@ -223,6 +227,7 @@
         "max_related": 3,
         "max_findings_per_file": 3,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "English",
         "exclude_globs": [],
         "max_concurrent_files": 8
@@ -250,6 +255,7 @@
         "max_related": 3,
         "max_findings_per_file": 3,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "English",
         "exclude_globs": [],
         "max_concurrent_files": 8
@@ -277,6 +283,7 @@
         "max_related": 3,
         "max_findings_per_file": 3,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "English",
         "exclude_globs": [],
         "max_concurrent_files": 8
@@ -304,6 +311,7 @@
         "max_related": 3,
         "max_findings_per_file": 3,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "English",
         "exclude_globs": [],
         "max_concurrent_files": 8
@@ -332,6 +340,7 @@
         "max_related": 3,
         "max_findings_per_file": 3,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "English",
         "exclude_globs": [],
         "max_concurrent_files": 8
@@ -383,6 +392,7 @@
         "max_related": 3,
         "max_findings_per_file": 3,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "Turkish",
         "exclude_globs": [],
         "max_concurrent_files": 8
@@ -411,6 +421,7 @@
         "max_related": 3,
         "max_findings_per_file": 3,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "English",
         "exclude_globs": [],
         "max_concurrent_files": 8
@@ -440,6 +451,7 @@
         "max_related": 3,
         "max_findings_per_file": 2,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "English",
         "exclude_globs": [],
         "max_concurrent_files": 9
@@ -483,6 +495,7 @@
         "max_related": 3,
         "max_findings_per_file": 3,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "English",
         "exclude_globs": [],
         "max_concurrent_files": 8
@@ -511,6 +524,7 @@
         "max_related": 3,
         "max_findings_per_file": 3,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "English",
         "exclude_globs": [],
         "max_concurrent_files": 8
@@ -538,6 +552,7 @@
         "max_related": 3,
         "max_findings_per_file": 3,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "English",
         "exclude_globs": [],
         "max_concurrent_files": 8
@@ -566,6 +581,7 @@
         "max_related": 3,
         "max_findings_per_file": 3,
         "verify_findings": true,
+        "bypass_markers": true,
         "review_lang": "Turkish",
         "exclude_globs": [],
         "max_concurrent_files": 8

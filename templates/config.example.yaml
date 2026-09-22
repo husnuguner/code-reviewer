@@ -34,6 +34,9 @@ settings:
 
   language: tr # findings' language, ISO code or name. Default en
   verify: true # a second pass drops findings their diff disproves. Default true
+  # A comment in the code reading `reviewer: by-pass - <reason>` takes the block
+  # after it out of review; the run names every such region. Default true
+  bypass-markers: true
 
   # Files never sent to the model. Globs, as a list or one comma-separated
   # string; `--exclude` adds more for a run. Default []. Set in the machine's

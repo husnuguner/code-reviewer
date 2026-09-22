@@ -10,6 +10,7 @@ import {
   type SummaryRecord,
   type SummaryWriter,
 } from "../../../core/ports/review-reporter";
+import { bypassWarning } from "../../../core/review/bypass";
 import { policyWarning } from "../../../core/review/policy";
 import { severityLabel, severityRankOf } from "../../../core/review/severity";
 import { compareCodePoints } from "../../../core/util/text";
@@ -39,7 +40,7 @@ export function annotationFor(finding: Omit<FindingRecord, "type">): string | nu
 
 /**
  * Markdown for the job summary: a severity-sorted table of every finding, then the run's tallies. A change
- * that edits the review policy is called out first.
+ * that edits the review policy, or that bypasses its own review with markers, is called out first.
  *
  * @remarks Unanchored findings are listed as `(no line)`, never dropped.
  */
@@ -50,6 +51,8 @@ export function summaryFor(
   const lines = ["## Code review", ""];
   const policy = policyWarning(summary?.policy_changed ?? []);
   if (policy !== "") lines.push(`> **${policy}**`, "");
+  const bypass = bypassWarning(summary?.bypass_regions ?? []);
+  if (bypass !== "") lines.push(`> **${bypass}**`, "");
   if (findings.length === 0) {
     lines.push("No issues found in the reviewed files.", "");
   } else {
@@ -79,6 +82,7 @@ export function summaryFor(
         (summary.failed > 0 ? `; ${summary.failed} could not be reviewed` : "") +
         (summary.refuted > 0 ? `; ${summary.refuted} finding(s) refuted by verification` : "") +
         (summary.capped > 0 ? `; ${summary.capped} withheld by max-findings-per-file` : "") +
+        (summary.bypassed > 0 ? `; ${summary.bypassed} in bypassed regions` : "") +
         (summary.mislabelled > 0
           ? `; ${summary.mislabelled} reported under a severity the model invented`
           : "") +

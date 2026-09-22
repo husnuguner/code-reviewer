@@ -17,6 +17,7 @@ import { type Logger, NULL_LOGGER } from "../ports/logger";
 import {
   type BranchReviewRecord,
   type BranchReviewReporter,
+  type BypassRegionRecord,
   type FindingRecord,
   type SummaryRecord,
 } from "../ports/review-reporter";
@@ -25,13 +26,14 @@ import { asCompleted } from "../util/as-completed";
 import { errorMessage } from "../util/errors";
 import { compareCodePoints } from "../util/text";
 
+import { bypassWarning, regionRecords, sortedRegions } from "./bypass";
 import { type PolicyPath, policyChanges, policyWarning } from "./policy";
 import { previewReport, textBody } from "./render";
 import {
+  type FileOutcome,
   type FileReviewSettings,
   type PerFileReviewer,
   type PerFileVerifier,
-  type ReviewedFile,
   countAnchors,
   reviewChangedFile,
 } from "./review-file";
@@ -91,7 +93,7 @@ export async function* iterBranchReview(
 
   const limit = pLimit(options.maxConcurrentFiles);
   const changeSet = selected.map((decision) => decision.file);
-  const reviewOne = async (decision: SelectedFile): Promise<ReviewedFile | null> =>
+  const reviewOne = async (decision: SelectedFile): Promise<FileOutcome> =>
     reviewChangedFile(decision, {
       reviewer: options.reviewer,
       verifier: options.verifier ?? null,
@@ -112,6 +114,10 @@ export async function* iterBranchReview(
   let capped = 0;
   let mislabelled = 0;
   let failed = 0;
+  // Findings that fell in a bypassed region, and files whose every added line did.
+  let bypassed = 0;
+  let bypassedFiles = 0;
+  const regions: BypassRegionRecord[] = [];
   // A credential the per-file step refused although selection passed it; counted under `secret`.
   let guarded = 0;
   const anchors = new Map<string, number>();
@@ -125,13 +131,20 @@ export async function* iterBranchReview(
       log.warn(`Reviewing a file on '${branch}' failed: ${detail}`);
       continue;
     }
-    const result = outcome.value;
-    if (result === null) {
+    if (outcome.value.kind === "guarded") {
       guarded++;
       continue;
     }
+    if (outcome.value.kind === "bypassed") {
+      bypassedFiles++;
+      regions.push(...regionRecords(outcome.value.path, outcome.value.regions));
+      continue;
+    }
+    const result = outcome.value.file;
     filesReviewed++;
     refuted += result.refuted;
+    bypassed += result.bypassed;
+    regions.push(...regionRecords(result.path, result.bypassRegions));
     const volume = capPerFile(result.findings, options.maxFindingsPerFile ?? 0);
     capped += volume.capped;
     // Per-finding tallies are taken over reported findings only, so they describe one population.
@@ -176,23 +189,29 @@ export async function* iterBranchReview(
     refuted,
     capped,
     mislabelled,
+    bypassed,
     skipped: Object.fromEntries(
-      [...withGuarded(skipCounts(decisions), guarded)].toSorted(([a], [b]) =>
-        compareCodePoints(a, b),
-      ),
+      [
+        ...withPerFileSkips(skipCounts(decisions), { secret: guarded, bypassed: bypassedFiles }),
+      ].toSorted(([a], [b]) => compareCodePoints(a, b)),
     ),
     policy_changed: policy,
+    bypass_regions: sortedRegions(regions),
   };
 }
 
-/** The skip counts with the per-file step's credential refusals folded into `secret`. */
-function withGuarded(
+/**
+ * The skip counts with the per-file step's own refusals folded in: a credential it would not read under
+ * `secret`, a file whose every added line was bypassed under `bypassed`.
+ */
+function withPerFileSkips(
   counts: ReadonlyMap<string, number>,
-  guarded: number,
+  extra: Readonly<Record<string, number>>,
 ): ReadonlyMap<string, number> {
-  if (guarded === 0) return counts;
   const merged = new Map(counts);
-  merged.set("secret", (merged.get("secret") ?? 0) + guarded);
+  for (const [reason, n] of Object.entries(extra)) {
+    if (n > 0) merged.set(reason, (merged.get(reason) ?? 0) + n);
+  }
   return merged;
 }
 
@@ -283,10 +302,14 @@ export interface BranchReviewResult {
   readonly capped: number;
   /** Reported findings re-rated from an unknown severity. */
   readonly mislabelled: number;
+  /** Findings that fell in a bypassed region and were not reported. */
+  readonly bypassed: number;
   /** Files not reviewed, by reason. */
   readonly skipped: Readonly<Record<string, number>>;
   /** The policy files this change edits; `[]` when none. */
   readonly policy_changed: readonly string[];
+  /** The regions bypass markers took out of review; `[]` when none. */
+  readonly bypass_regions: readonly BypassRegionRecord[];
 }
 
 /** Runs {@link iterBranchReview} to completion and collects the result. */
@@ -319,8 +342,10 @@ function collect(
     refuted: summary?.refuted ?? 0,
     capped: summary?.capped ?? 0,
     mislabelled: summary?.mislabelled ?? 0,
+    bypassed: summary?.bypassed ?? 0,
     skipped: summary?.skipped ?? {},
     policy_changed: summary?.policy_changed ?? [],
+    bypass_regions: summary?.bypass_regions ?? [],
   };
 }
 
@@ -355,15 +380,26 @@ export interface TextReportInput {
   readonly failed?: number;
   /** The policy files this change edits. */
   readonly policy_changed?: readonly string[];
+  /** Findings that fell in a bypassed region. */
+  readonly bypassed?: number;
+  /** The regions bypass markers took out of review. */
+  readonly bypass_regions?: readonly BypassRegionRecord[];
 }
 
-/** What a reader must know before believing the findings: failed files, and a policy the change itself edits. */
+/**
+ * What a reader must know before believing the findings: failed files, a policy the change itself edits,
+ * and the regions the code took out of its own review.
+ */
 function caveats(result: TextReportInput): string[] {
   const failed = result.failed ?? 0;
-  const warning = policyWarning(result.policy_changed ?? []);
+  const bypassed = result.bypassed ?? 0;
+  const policy = policyWarning(result.policy_changed ?? []);
+  const bypass = bypassWarning(result.bypass_regions ?? []);
   return [
     ...(failed > 0 ? [`${failed} file(s) could not be reviewed; the log says why.`] : []),
-    ...(warning === "" ? [] : [warning]),
+    ...(policy === "" ? [] : [policy]),
+    ...(bypass === "" ? [] : [bypass]),
+    ...(bypassed > 0 ? [`${bypassed} finding(s) in bypassed regions were not reported.`] : []),
   ];
 }
 

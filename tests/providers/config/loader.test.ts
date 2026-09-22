@@ -582,6 +582,7 @@ function snapshot(config: Config): Record<string, unknown> {
     max_related: config.maxRelated,
     max_findings_per_file: config.maxFindingsPerFile,
     verify_findings: config.verifyFindings,
+    bypass_markers: config.bypassMarkers,
     review_lang: config.reviewLang,
     exclude_globs: config.excludeGlobs,
     max_concurrent_files: config.maxConcurrentFiles,
@@ -666,6 +667,7 @@ describe("the setting groups", () => {
     expect(config.fileReviewSettings(["*.min.js"])).toEqual({
       exclude: ["docs/**", "*.lock", "*.min.js"],
       language: "Turkish",
+      bypassMarkers: true,
       maxSkillChars: 10_000,
       maxContextChars: 12_000,
       maxDefinitions: 4,
@@ -700,6 +702,9 @@ describe("the setting groups", () => {
     expect(FIELD_PATHS.maxRelated).toBe("settings.context.max-related");
     // The skills' own cap sits with the skills, which is a repository's section.
     expect(FIELD_PATHS.maxSkillChars).toBe("skills.max-chars");
+    // Whether the code may take a block out of its own review is the repository's call too.
+    expect(FIELD_PATHS.bypassMarkers).toBe("settings.bypass-markers");
+    expect(CONFIG_ALIASES).not.toHaveProperty("bypassMarkers");
     // The knobs a runner does set keep theirs.
     expect(CONFIG_ALIASES.maxConcurrentFiles).toBe("REVIEW_MAX_CONCURRENT_FILES");
     expect(CONFIG_ALIASES.maxFindingsPerFile).toBe("REVIEW_MAX_FINDINGS_PER_FILE");

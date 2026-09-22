@@ -56,8 +56,10 @@ const SUMMARY: SummaryRecord = {
   refuted: 0,
   capped: 0,
   mislabelled: 0,
+  bypassed: 0,
   skipped: { excluded: 2 },
   policy_changed: [],
+  bypass_regions: [],
 };
 
 /** One finding of a given severity, anchored at `line` (`null` = unanchored). */
@@ -148,6 +150,27 @@ describe("the job summary", () => {
     expect(heading).toBe("## Code review");
     expect(warning).toContain("edits the review policy (.review/config.yaml)");
     expect(summaryFor([record()], SUMMARY)).not.toContain("review policy");
+  });
+
+  it("calls out bypassed regions with their reasons, after the policy warning, and tallies the findings they cost", () => {
+    const markdown = summaryFor([record()], {
+      ...SUMMARY,
+      policy_changed: [".review/config.yaml"],
+      bypassed: 2,
+      bypass_regions: [
+        { path: "src/b.ts", start_line: 1, end_line: 4, reason: "generated" },
+        { path: "src/a.ts", start_line: 41, end_line: 80, reason: "legacy" },
+      ],
+    });
+    const lines = markdown.split("\n", 5);
+    const policy = lines[2];
+    const bypass = lines[4];
+    expect(policy).toContain("edits the review policy");
+    expect(bypass).toBe(
+      "> **Review was bypassed by markers in the code in 2 region(s): src/a.ts:41-80 (legacy), src/b.ts:1-4 (generated); read those yourself.**",
+    );
+    expect(markdown).toContain("; 2 in bypassed regions");
+    expect(summaryFor([record()], SUMMARY)).not.toContain("bypass");
   });
 });
 

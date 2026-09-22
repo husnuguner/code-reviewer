@@ -4,7 +4,12 @@
  */
 
 import { type ReviewEvent } from "../ports/review-poster";
-import { type FindingRecord, type SummaryRecord } from "../ports/review-reporter";
+import {
+  type BypassRegionRecord,
+  type FindingRecord,
+  type SummaryRecord,
+} from "../ports/review-reporter";
+import { regionLocation, sortedRegions } from "../review/bypass";
 import { severityGate, severityLabel, severityRankOf } from "../review/severity";
 import { type JsonObject, type JsonValue, isJsonArray, isJsonObject } from "../util/json";
 import { compareCodePoints } from "../util/text";
@@ -145,9 +150,25 @@ function toSummary(record: JsonObject): SummaryRecord {
     refuted: count(record["refuted"]),
     capped: count(record["capped"]),
     mislabelled: count(record["mislabelled"]),
+    bypassed: count(record["bypassed"]),
     skipped: {},
     policy_changed: stringList(record["policy_changed"]),
+    bypass_regions: regionList(record["bypass_regions"]),
   };
+}
+
+/** The well-formed regions of a JSON list: a path, two positive lines in order, a reason; anything else is dropped. */
+function regionList(value: JsonValue | undefined): BypassRegionRecord[] {
+  if (!isJsonArray(value)) return [];
+  return value.flatMap((item): BypassRegionRecord[] => {
+    if (!isJsonObject(item)) return [];
+    const path = text_(item["path"]);
+    const start = lineNumber(item["start_line"]);
+    const end = lineNumber(item["end_line"]);
+    return path === "" || start === null || end === null || end < start
+      ? []
+      : [{ path, start_line: start, end_line: end, reason: text_(item["reason"]) }];
+  });
 }
 
 /** The strings of a JSON list; anything else reads as none. */
@@ -245,11 +266,13 @@ function reviewBody(
   const { findings, summary } = records;
   const tally = tallies(summary, records.unreadable);
   const policy = policyNote(summary?.policy_changed ?? []);
+  const bypass = bypassNote(summary?.bypass_regions ?? []);
   return [
     "### Automated review",
     "",
     headline(findings),
     ...(policy === "" ? [] : ["", policy]),
+    ...(bypass === "" ? [] : ["", bypass]),
     ...(loose.length > 0
       ? ["", details(`${loose.length} finding(s) that could not be anchored to a line`, loose)]
       : []),
@@ -265,6 +288,15 @@ function policyNote(changed: readonly string[]): string {
   if (changed.length === 0) return "";
   const files = changed.map((path) => `\`${path}\``).join(", ");
   return `> **This pull request edits the review policy** (${files}). A policy can weaken the review that reads it, so read those files yourself.`;
+}
+
+/** The note a change carrying bypass markers earns: every region named with its reason, so a reader can judge each. */
+function bypassNote(regions: readonly BypassRegionRecord[]): string {
+  if (regions.length === 0) return "";
+  const listed = sortedRegions(regions)
+    .map((region) => `\`${regionLocation(region)}\` (${region.reason})`)
+    .join(", ");
+  return `> **Review was bypassed by markers in the code** in ${regions.length} region(s): ${listed}. A bypass is the author's call, not the reviewer's, so read those yourself.`;
 }
 
 function headline(findings: readonly Finding[]): string {
@@ -307,6 +339,7 @@ function tallies(summary: SummaryRecord | null, unreadable: number): string {
           `${summary.files_reviewed} of ${summary.files_changed} changed file(s) reviewed against \`${summary.base}\``,
           ...(summary.refuted > 0 ? [`${summary.refuted} refuted by verification`] : []),
           ...(summary.capped > 0 ? [`${summary.capped} withheld by the per-file cap`] : []),
+          ...(summary.bypassed > 0 ? [`${summary.bypassed} in bypassed regions`] : []),
         ]),
     ...(unreadable > 0 ? [`${unreadable} unreadable record(s)`] : []),
   ];

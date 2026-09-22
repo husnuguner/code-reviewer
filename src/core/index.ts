@@ -22,6 +22,7 @@ export type { SkillMatcher } from "./ports/skill-matcher";
 export type {
   BranchReviewRecord,
   BranchReviewReporter,
+  BypassRegionRecord,
   FindingRecord,
   LineWriter,
   PreviewReporter,

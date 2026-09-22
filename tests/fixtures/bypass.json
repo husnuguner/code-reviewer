@@ -1,0 +1,1016 @@
+{
+  "module": "bypass",
+  "cases": [
+    {
+      "name": "scan/a marker names the function below it",
+      "input": [
+        "a();",
+        "// reviewer: by-pass - legacy",
+        "function f() {",
+        "  if (x) {",
+        "    y();",
+        "  }",
+        "}",
+        "after();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 2,
+            "end": 7,
+            "reason": "legacy"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/a marker on the head line names that statement",
+      "input": [
+        "function f() { // reviewer: by-pass - legacy",
+        "  y();",
+        "}",
+        "after();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 3,
+            "reason": "legacy"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/a marker on a statement line names the one statement",
+      "input": [
+        "const url = \"http://x\"; // reviewer: by-pass - y",
+        "next();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 1,
+            "reason": "y"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/an if block",
+      "input": [
+        "// reviewer: by-pass - x",
+        "if (a) {",
+        "  b();",
+        "}",
+        "c();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 4,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/Allman braces and an else-if chain",
+      "input": [
+        "// reviewer: by-pass - x",
+        "if (a)",
+        "{",
+        "  b();",
+        "}",
+        "else if (c)",
+        "{",
+        "  d();",
+        "}",
+        "else",
+        "{",
+        "  e();",
+        "}",
+        "after();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 13,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/} else { and } catch { carry the block on",
+      "input": [
+        "// reviewer: by-pass - x",
+        "try {",
+        "  a();",
+        "} catch (e) {",
+        "  b();",
+        "} finally {",
+        "  c();",
+        "}",
+        "after();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 8,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/} else with its brace on the next line",
+      "input": [
+        "// reviewer: by-pass - x",
+        "if (a) {",
+        "  b();",
+        "} else",
+        "{",
+        "  c();",
+        "}",
+        "d();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 7,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/else without braces after a one-line if",
+      "input": [
+        "// reviewer: by-pass - x",
+        "if (a) b();",
+        "else c();",
+        "d();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 3,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/a wrapped signature opens on its last line",
+      "input": [
+        "// reviewer: by-pass - x",
+        "export function foo(",
+        "  a: Record<string, { x: number }>,",
+        "  b: string,",
+        "): void {",
+        "  body();",
+        "}",
+        "after();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 7,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/braces in strings and comments are not structure",
+      "input": [
+        "// reviewer: by-pass - x",
+        "function f() {",
+        "  const s = \"{\"; // }",
+        "  const t = '}'; /* { */",
+        "  return `{`;",
+        "}",
+        "after();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 6,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/a private field is code, not a comment",
+      "input": [
+        "// reviewer: by-pass - x",
+        "class A {",
+        "  #opts = {",
+        "    a: 1,",
+        "  };",
+        "  m() {}",
+        "}",
+        "after();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 7,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/a wrapped call is one statement",
+      "input": [
+        "// reviewer: by-pass - x",
+        "const v = foo(",
+        "  a,",
+        "  b,",
+        ");",
+        "after();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 5,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/a one-liner block is one statement",
+      "input": [
+        "// reviewer: by-pass - x",
+        "if (a) { b(); }",
+        "c();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 2,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/an arrow function body",
+      "input": [
+        "// reviewer: by-pass - x",
+        "const f = async (a) => {",
+        "  await a();",
+        "};",
+        "g();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 4,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/decorators belong to the declaration below",
+      "input": [
+        "// reviewer: by-pass - x",
+        "@Component({",
+        "  selector: \"x\",",
+        "})",
+        "export class A {",
+        "  m() {}",
+        "}",
+        "after();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 7,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/a marker inside a doc comment names the declaration after it",
+      "input": [
+        "/**",
+        " * Docs.",
+        " * reviewer: by-pass - x",
+        " */",
+        "function f() {",
+        "  y();",
+        "}",
+        "after();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 3,
+            "end": 7,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/a switch with a case block",
+      "input": [
+        "// reviewer: by-pass - x",
+        "switch (a) {",
+        "  case 1: {",
+        "    b();",
+        "  }",
+        "}",
+        "c();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 6,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/a block that never closes runs to the end",
+      "input": [
+        "// reviewer: by-pass - x",
+        "function f() {",
+        "  a();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 3,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/python: an indentation block with blank lines and a trailing comment",
+      "input": [
+        "# reviewer: by-pass - x",
+        "def f(a):  # note {",
+        "    if a:",
+        "        return 1",
+        "",
+        "    return 2",
+        "other = 3"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 6,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/python: if, elif, else at the head's indent",
+      "input": [
+        "# reviewer: by-pass - x",
+        "if a:",
+        "    b()",
+        "elif c:",
+        "    d()",
+        "else:",
+        "    e()",
+        "f()"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 7,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/python: try, except, finally",
+      "input": [
+        "# reviewer: by-pass - x",
+        "try:",
+        "    a()",
+        "except E:",
+        "    b()",
+        "finally:",
+        "    c()",
+        "d()"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 7,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/python: a decorator, then the def",
+      "input": [
+        "# reviewer: by-pass - x",
+        "@app.route(\"/\")",
+        "def f():",
+        "    pass",
+        "g()"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 4,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/python: one statement without a terminator",
+      "input": [
+        "# reviewer: by-pass - x",
+        "x = compute(a, b)",
+        "y = 2"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 2,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/markup has no block: the next line",
+      "input": [
+        "<!-- reviewer: by-pass - x -->",
+        "<div>",
+        "  hi",
+        "</div>"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 2,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/a block comment closer is not part of the reason",
+      "input": [
+        "/* reviewer: by-pass - legacy code */",
+        "foo();",
+        "bar();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 2,
+            "reason": "legacy code"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/the reason keeps its own dashes; spelling and case are free",
+      "input": [
+        "// REVIEWER: BYPASS: reason with - dashes - inside",
+        "foo();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 2,
+            "reason": "reason with - dashes - inside"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/no separator still reads the reason",
+      "input": [
+        "// reviewer: by-pass legacy",
+        "foo();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 2,
+            "reason": "legacy"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/a marker without a reason is not honoured",
+      "input": [
+        "// reviewer: by-pass",
+        "foo();",
+        "// reviewer: by-pass -",
+        "bar();",
+        "/* reviewer: by-pass */",
+        "baz();"
+      ],
+      "expected": {
+        "regions": [],
+        "unreasoned": [
+          1,
+          3,
+          5
+        ]
+      }
+    },
+    {
+      "name": "scan/a marker inside a string literal is data",
+      "input": [
+        "const s = \"reviewer: by-pass - x\";",
+        "foo();"
+      ],
+      "expected": {
+        "regions": [],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/prose that says bypassed is not a marker",
+      "input": [
+        "// the reviewer: bypassed nothing here",
+        "foo();"
+      ],
+      "expected": {
+        "regions": [],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/a marker on the last line names only itself",
+      "input": [
+        "foo();",
+        "// reviewer: by-pass - x"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 2,
+            "end": 2,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/a marker followed only by comments names only itself",
+      "input": [
+        "// reviewer: by-pass - x",
+        "// nothing here",
+        ""
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 1,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/nested markers merge into one region with both reasons",
+      "input": [
+        "// reviewer: by-pass - outer",
+        "function f() {",
+        "  // reviewer: by-pass - inner",
+        "  if (x) {",
+        "    y();",
+        "  }",
+        "}",
+        "after();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 7,
+            "reason": "outer; inner"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/two markers with the same reason merge without repeating it",
+      "input": [
+        "// reviewer: by-pass - same",
+        "function f() {",
+        "  // reviewer: by-pass - same",
+        "  y();",
+        "}"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 5,
+            "reason": "same"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/separate regions stay separate",
+      "input": [
+        "// reviewer: by-pass - a",
+        "function f() {",
+        "}",
+        "g();",
+        "// reviewer: by-pass - b",
+        "function h() {",
+        "}"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 3,
+            "reason": "a"
+          },
+          {
+            "start": 5,
+            "end": 7,
+            "reason": "b"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/adjacent regions are not merged",
+      "input": [
+        "// reviewer: by-pass - a",
+        "f();",
+        "// reviewer: by-pass - b",
+        "g();"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 2,
+            "reason": "a"
+          },
+          {
+            "start": 3,
+            "end": 4,
+            "reason": "b"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/a malformed opener on the last line does not loop",
+      "input": [
+        "// reviewer: by-pass - x",
+        "} else { {"
+      ],
+      "expected": {
+        "regions": [
+          {
+            "start": 1,
+            "end": 2,
+            "reason": "x"
+          }
+        ],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "scan/an empty file",
+      "input": [],
+      "expected": {
+        "regions": [],
+        "unreasoned": []
+      }
+    },
+    {
+      "name": "without_bypassed/inside, on the bounds and outside",
+      "input": {
+        "findings": [
+          {
+            "id": "in",
+            "line": 15,
+            "start_line": null
+          },
+          {
+            "id": "start",
+            "line": 10,
+            "start_line": null
+          },
+          {
+            "id": "end",
+            "line": 20,
+            "start_line": null
+          },
+          {
+            "id": "before",
+            "line": 9,
+            "start_line": null
+          },
+          {
+            "id": "after",
+            "line": 21,
+            "start_line": null
+          }
+        ],
+        "regions": [
+          {
+            "start": 10,
+            "end": 20,
+            "reason": "r"
+          }
+        ]
+      },
+      "expected": {
+        "kept": [
+          "before",
+          "after"
+        ],
+        "bypassed": [
+          "in",
+          "start",
+          "end"
+        ]
+      }
+    },
+    {
+      "name": "without_bypassed/a multi-line anchor is bypassed when any line is",
+      "input": {
+        "findings": [
+          {
+            "id": "overlap-start",
+            "line": 12,
+            "start_line": 5
+          },
+          {
+            "id": "overlap-end",
+            "line": 25,
+            "start_line": 18
+          },
+          {
+            "id": "around",
+            "line": 25,
+            "start_line": 5
+          },
+          {
+            "id": "clear",
+            "line": 8,
+            "start_line": 3
+          }
+        ],
+        "regions": [
+          {
+            "start": 10,
+            "end": 20,
+            "reason": "r"
+          }
+        ]
+      },
+      "expected": {
+        "kept": [
+          "clear"
+        ],
+        "bypassed": [
+          "overlap-start",
+          "overlap-end",
+          "around"
+        ]
+      }
+    },
+    {
+      "name": "without_bypassed/an unanchored finding is kept",
+      "input": {
+        "findings": [
+          {
+            "id": "loose",
+            "line": null,
+            "start_line": null
+          }
+        ],
+        "regions": [
+          {
+            "start": 10,
+            "end": 20,
+            "reason": "r"
+          }
+        ]
+      },
+      "expected": {
+        "kept": [
+          "loose"
+        ],
+        "bypassed": []
+      }
+    },
+    {
+      "name": "without_bypassed/no regions keeps everything",
+      "input": {
+        "findings": [
+          {
+            "id": "a",
+            "line": 15,
+            "start_line": null
+          },
+          {
+            "id": "b",
+            "line": null,
+            "start_line": null
+          }
+        ],
+        "regions": []
+      },
+      "expected": {
+        "kept": [
+          "a",
+          "b"
+        ],
+        "bypassed": []
+      }
+    },
+    {
+      "name": "wholly_bypassed/every added line inside",
+      "input": {
+        "lines": [
+          10,
+          11,
+          20
+        ],
+        "regions": [
+          {
+            "start": 10,
+            "end": 20,
+            "reason": "r"
+          }
+        ]
+      },
+      "expected": true
+    },
+    {
+      "name": "wholly_bypassed/one line outside",
+      "input": {
+        "lines": [
+          10,
+          21
+        ],
+        "regions": [
+          {
+            "start": 10,
+            "end": 20,
+            "reason": "r"
+          }
+        ]
+      },
+      "expected": false
+    },
+    {
+      "name": "wholly_bypassed/no lines at all is not wholly bypassed",
+      "input": {
+        "lines": [],
+        "regions": [
+          {
+            "start": 10,
+            "end": 20,
+            "reason": "r"
+          }
+        ]
+      },
+      "expected": false
+    },
+    {
+      "name": "wholly_bypassed/no regions",
+      "input": {
+        "lines": [
+          10
+        ],
+        "regions": []
+      },
+      "expected": false
+    },
+    {
+      "name": "describe/a range",
+      "input": {
+        "path": "src/a.ts",
+        "start_line": 41,
+        "end_line": 80,
+        "reason": "validated upstream"
+      },
+      "expected": "src/a.ts:41-80 (validated upstream)"
+    },
+    {
+      "name": "describe/one line",
+      "input": {
+        "path": "src/a.ts",
+        "start_line": 41,
+        "end_line": 41,
+        "reason": "x"
+      },
+      "expected": "src/a.ts:41 (x)"
+    },
+    {
+      "name": "warning/none",
+      "input": [],
+      "expected": ""
+    },
+    {
+      "name": "warning/two regions sorted by path then line",
+      "input": [
+        {
+          "path": "src/b.ts",
+          "start_line": 1,
+          "end_line": 3,
+          "reason": "b"
+        },
+        {
+          "path": "src/a.ts",
+          "start_line": 41,
+          "end_line": 80,
+          "reason": "legacy"
+        },
+        {
+          "path": "src/a.ts",
+          "start_line": 5,
+          "end_line": 5,
+          "reason": "one"
+        }
+      ],
+      "expected": "Review was bypassed by markers in the code in 3 region(s): src/a.ts:5 (one), src/a.ts:41-80 (legacy), src/b.ts:1-3 (b); read those yourself."
+    }
+  ]
+}

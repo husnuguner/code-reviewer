@@ -45,8 +45,10 @@ const SUMMARY: SummaryRecord = {
   refuted: 0,
   capped: 0,
   mislabelled: 0,
+  bypassed: 0,
   skipped: {},
   policy_changed: [],
+  bypass_regions: [],
 };
 
 /** The record stream as the reviewer writes it. */
@@ -189,12 +191,70 @@ describe("building the review", () => {
   it("repeats the run's tallies, including what it could not read", () => {
     const review = buildReview({
       findings: [finding()],
-      summary: { ...SUMMARY, refuted: 2, capped: 3 },
+      summary: { ...SUMMARY, refuted: 2, capped: 3, bypassed: 4 },
       unreadable: 1,
     });
     expect(review.body).toContain("2 refuted by verification");
     expect(review.body).toContain("3 withheld by the per-file cap");
+    expect(review.body).toContain("4 in bypassed regions");
     expect(review.body).toContain("1 unreadable record(s)");
+  });
+
+  it("names every bypassed region with its reason, sorted, after the policy warning", () => {
+    const review = buildReview({
+      findings: [finding()],
+      summary: {
+        ...SUMMARY,
+        policy_changed: [".review/config.yaml"],
+        bypass_regions: [
+          { path: "src/b.ts", start_line: 3, end_line: 3, reason: "one line" },
+          { path: "src/a.ts", start_line: 41, end_line: 80, reason: "legacy" },
+        ],
+      },
+      unreadable: 0,
+    });
+    const lines = review.body.split("\n", 7);
+    const policy = lines[4];
+    const bypass = lines[6];
+    expect(policy).toContain("edits the review policy");
+    expect(bypass).toBe(
+      "> **Review was bypassed by markers in the code** in 2 region(s): `src/a.ts:41-80` (legacy), `src/b.ts:3` (one line). A bypass is the author's call, not the reviewer's, so read those yourself.",
+    );
+    // A caveat, not a finding: the review itself is unchanged.
+    expect(review.comments).toHaveLength(1);
+  });
+
+  it("says nothing about bypassing when no region was bypassed", () => {
+    const review = buildReview({ findings: [finding()], summary: SUMMARY, unreadable: 0 });
+    expect(review.body).not.toContain("bypass");
+  });
+
+  it("reads bypassed and bypass_regions off the stream, dropping malformed regions", () => {
+    const records = parseRecords(
+      JSON.stringify({
+        ...SUMMARY,
+        bypassed: 3,
+        bypass_regions: [
+          { path: "src/a.ts", start_line: 41, end_line: 80, reason: "legacy" },
+          { path: "src/a.ts", start_line: 5, end_line: 5 },
+          { path: "", start_line: 1, end_line: 2, reason: "no path" },
+          { path: "src/c.ts", start_line: 9, end_line: 4, reason: "ends before it starts" },
+          { path: "src/d.ts", start_line: "7", end_line: 8, reason: "string line" },
+          "not an object",
+          null,
+        ],
+      }),
+    );
+    expect(records.summary?.bypassed).toBe(3);
+    expect(records.summary?.bypass_regions).toEqual([
+      { path: "src/a.ts", start_line: 41, end_line: 80, reason: "legacy" },
+      { path: "src/a.ts", start_line: 5, end_line: 5, reason: "" },
+    ]);
+    const legacy = parseRecords(
+      JSON.stringify({ ...SUMMARY, bypassed: undefined, bypass_regions: undefined }),
+    );
+    expect(legacy.summary?.bypassed).toBe(0);
+    expect(legacy.summary?.bypass_regions).toEqual([]);
   });
 
   it("posts a comment unless a finding's severity is in the gate", () => {

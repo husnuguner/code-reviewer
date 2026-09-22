@@ -7,8 +7,10 @@ import { type Finding, finding } from "../../src/core/domain/finding";
 import { type ReviewFileInput } from "../../src/core/review/file-reviewer";
 import {
   DEFAULT_FILE_REVIEW_SETTINGS,
+  type FileOutcome,
   MAX_CONTENT_CHARS,
   type PerFileReviewer,
+  type ReviewedFile,
   countAnchors,
   reviewChangedFile,
 } from "../../src/core/review/review-file";
@@ -55,6 +57,12 @@ async function review(
     ...options,
   });
   return { result, reviewer };
+}
+
+/** The reviewed file an outcome carries; anything else is a failed expectation. */
+function reviewedOf(result: FileOutcome): ReviewedFile {
+  if (result.kind !== "reviewed") throw new Error(`expected a review, got '${result.kind}'`);
+  return result.file;
 }
 
 describe("anchor tallies", () => {
@@ -124,7 +132,7 @@ describe("the shared per-file step", () => {
       limit: pLimit(2),
       logger: recordingLogger(lines),
     });
-    expect(result).toBeNull();
+    expect(result).toEqual({ kind: "guarded", path: ".env" });
     expect(reviewer.seen).toHaveLength(0);
     expect(lines).toEqual([
       "INFO skip .env: names a credential file; its contents are never sent.",
@@ -209,8 +217,8 @@ describe("the shared per-file step", () => {
       [1, "old"],
       [2, "added line"],
     ]);
-    expect(result?.findings.map((f) => f.line)).toEqual([2]);
-    expect(result?.skillNames).toEqual([]);
+    expect(reviewedOf(result).findings.map((f) => f.line)).toEqual([2]);
+    expect(reviewedOf(result).skillNames).toEqual([]);
   });
 
   it("tells the reviewer the run's per-file cap, and asks for no limit without one", async () => {
@@ -232,7 +240,7 @@ describe("the shared per-file step", () => {
     const { result, reviewer } = await review(new ChangedFile("a.ts", "modified", PATCH), {
       skills,
     });
-    expect(result?.skillNames).toEqual(["http-route"]);
+    expect(reviewedOf(result).skillNames).toEqual(["http-route"]);
     expect(reviewer.seen[0]?.skillsText).toBe("skills-text");
   });
 });

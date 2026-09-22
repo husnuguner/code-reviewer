@@ -19,6 +19,8 @@ export interface FileReviewSettings {
   readonly exclude: readonly string[];
   /** Language of each finding's body. */
   readonly language: string;
+  /** Whether a `reviewer: by-pass - <reason>` marker in the code takes the block after it out of review. */
+  readonly bypassMarkers: boolean;
   /** Per-skill body cap. */
   readonly maxSkillChars: number;
   /** Cap on the pre-context block; `0` = none. */
@@ -42,6 +44,7 @@ export interface FileReviewSettings {
 export const DEFAULT_FILE_REVIEW_SETTINGS: FileReviewSettings = {
   exclude: [],
   language: "English",
+  bypassMarkers: true,
   maxSkillChars: 10_000,
   maxContextChars: 12_000,
   maxDefinitions: 4,

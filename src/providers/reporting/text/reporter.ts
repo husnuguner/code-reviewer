@@ -20,6 +20,8 @@ export class TextReporter extends CollectingReporter {
       anchors: summary.anchors,
       failed: summary.failed,
       policy_changed: summary.policy_changed,
+      bypassed: summary.bypassed,
+      bypass_regions: summary.bypass_regions,
     });
     for (const line of lines) this.write(line);
   }

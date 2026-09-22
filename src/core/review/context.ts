@@ -12,6 +12,8 @@ import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { errorMessage } from "../util/errors";
 import { cutToLength, sortedByCodePoint } from "../util/text";
 
+import { braceDepthChange } from "./braces";
+
 /** How much context one file review may gather. */
 export interface ContextLimits {
   /** Cap on the rendered block; `0` switches gathering off. */
@@ -297,24 +299,6 @@ function continuationOf(lines: readonly string[], index: number): string[] {
     if (/[;{)]\s*$/u.test(continuation)) break;
   }
   return out;
-}
-
-/** A string literal, so a brace inside one is not counted as structure. */
-const STRING_LITERAL = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/gu;
-
-/**
- * How much deeper in braces a line ends than it began.
- *
- * @remarks An enum member `OPEN = '{'` or a field typed `"{"` is a value, not a block: counted as
- * structure it would keep the block open until the line cap elided it.
- */
-function braceDepthChange(line: string): number {
-  let change = 0;
-  for (const found of line.replaceAll(STRING_LITERAL, "")) {
-    if (found === "{") change += 1;
-    else if (found === "}") change -= 1;
-  }
-  return change;
 }
 
 /**

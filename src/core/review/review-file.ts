@@ -18,6 +18,7 @@ import { type Clock, SYSTEM_CLOCK, seconds, stopwatch } from "../util/timing";
 export { DEFAULT_FILE_REVIEW_SETTINGS, type FileReviewSettings } from "../config/settings";
 
 import { EXACT } from "./anchor";
+import { type BypassRegion, isWhollyBypassed, scanBypass, withoutBypassed } from "./bypass";
 import { type ContextLimits, gatherContext, renderContext } from "./context";
 import { type ReviewFileInput } from "./file-reviewer";
 import { isSecretPath } from "./guards";
@@ -47,13 +48,30 @@ export interface PerFileVerifier {
 /** The outcome for one reviewed file. */
 export interface ReviewedFile {
   readonly path: string;
-  /** What survived verification. */
+  /** What survived the bypass markers and verification. */
   readonly findings: readonly Finding[];
   /** The skills the prompt actually carried; one the budget left out is not among them. */
   readonly skillNames: readonly string[];
   /** How many findings verification removed; `0` without a verifier. */
   readonly refuted: number;
+  /** How many findings fell in a bypassed region and were dropped before verification. */
+  readonly bypassed: number;
+  /** The regions `reviewer: by-pass` markers took out of review in this file. */
+  readonly bypassRegions: readonly BypassRegion[];
 }
+
+/**
+ * What became of one selected file.
+ *
+ * - `reviewed`: the model was asked and answered.
+ * - `guarded`: the path names a credential file; nothing was read or sent (counted under `secret`).
+ * - `bypassed`: every added line lies in a bypassed region, so there was nothing to ask about; the
+ *   model was not called (counted under `bypassed`).
+ */
+export type FileOutcome =
+  | { readonly kind: "reviewed"; readonly file: ReviewedFile }
+  | { readonly kind: "guarded"; readonly path: string }
+  | { readonly kind: "bypassed"; readonly path: string; readonly regions: readonly BypassRegion[] };
 
 /** Options for {@link reviewChangedFile}. */
 export interface ReviewChangedFileOptions {
@@ -96,28 +114,32 @@ function describeTimings(timings: StepTimings): string {
 /**
  * Reviews one selected file.
  *
- * @returns The reviewed file, or `null` when the path names a credential file.
+ * @returns What became of it: reviewed, guarded as a credential file, or bypassed whole.
  * @remarks The secret check is re-asked here, where the prompt is built, so a hand-built decision cannot leak one.
- * Both model calls share the one concurrency slot.
+ * Both model calls share the one concurrency slot. Bypass markers are read before the model is asked and
+ * applied before verification, so a bypassed finding costs no verification call.
  */
 export async function reviewChangedFile(
   selected: SelectedFile,
   options: ReviewChangedFileOptions,
-): Promise<ReviewedFile | null> {
+): Promise<FileOutcome> {
   const { reviewer, settings, skills, limit } = options;
   const log = (options.logger ?? NULL_LOGGER).child("review.changed_file");
   const { file, annotatedPatch: annotated, addedLines: allowed } = selected;
 
   if (isSecretPath(file.path)) {
     log.info(`skip ${file.path}: names a credential file; its contents are never sent.`);
-    return null;
+    return { kind: "guarded", path: file.path };
   }
 
   const verifier = options.verifier ?? null;
   const now = options.now ?? SYSTEM_CLOCK;
 
-  const { verdict, timings, skillNames } = await limit(async () => {
-    const content = await contentOf(file, options, log);
+  const outcome = await limit(async (): Promise<ModelRound> => {
+    const text = await newSideOf(selected, options, log);
+    const regions = bypassRegionsOf(selected, text, settings, log);
+    if (isWhollyBypassed(allowed, regions)) return { kind: "bypassed", regions };
+    const content = promptContentOf(file, text, log);
     const rendered: RenderedSkills =
       skills === null
         ? { text: "", applied: [] }
@@ -126,7 +148,7 @@ export async function reviewChangedFile(
     const contextText = await surroundingsOf(file, options, log);
     const context = contextElapsed();
     const modelElapsed = stopwatch(now);
-    const findings = await reviewer.reviewFile({
+    const answered = await reviewer.reviewFile({
       path: file.path,
       annotatedPatch: annotated,
       allowedLines: allowed,
@@ -139,51 +161,153 @@ export async function reviewChangedFile(
     });
     const model = modelElapsed();
     const skillNames = rendered.applied;
+    const { kept: findings, bypassed } = withoutBypassed(answered, regions);
+    if (bypassed.length > 0) {
+      log.info(
+        `${file.path}: ${bypassed.length} finding(s) fell in a bypassed region and were not reported.`,
+      );
+    }
+    const base = { kind: "reviewed" as const, skillNames, regions, bypassed: bypassed.length };
     if (verifier === null) {
-      return {
-        verdict: keepAll(findings),
-        timings: { context, model, verify: null },
-        skillNames,
-      };
+      return { ...base, verdict: keepAll(findings), timings: { context, model, verify: null } };
     }
     const verifyElapsed = stopwatch(now);
     const checked = await verifier.verify({ path: file.path, annotatedPatch: annotated, findings });
-    return {
-      verdict: checked,
-      timings: { context, model, verify: verifyElapsed() },
-      skillNames,
-    };
+    return { ...base, verdict: checked, timings: { context, model, verify: verifyElapsed() } };
   });
 
+  if (outcome.kind === "bypassed") {
+    log.info(
+      `skip ${file.path}: every added line lies in a bypassed region; the model was not called.`,
+    );
+    return { kind: "bypassed", path: file.path, regions: outcome.regions };
+  }
+  const { verdict, timings, skillNames, regions, bypassed } = outcome;
   const refuted = verdict.refuted.length;
   const checked = refuted === 0 ? "" : `, ${refuted} refuted`;
+  const skipped = bypassed === 0 ? "" : `, ${bypassed} bypassed`;
   log.info(
-    `review ${file.path}: +${allowed.size} line(s), skills=${show(skillNames)}, ${verdict.kept.length} finding(s)${checked} (${describeTimings(timings)}).`,
+    `review ${file.path}: +${allowed.size} line(s), skills=${show(skillNames)}, ${verdict.kept.length} finding(s)${checked}${skipped} (${describeTimings(timings)}).`,
   );
-  return { path: file.path, findings: verdict.kept, skillNames, refuted };
+  return {
+    kind: "reviewed",
+    file: {
+      path: file.path,
+      findings: verdict.kept,
+      skillNames,
+      refuted,
+      bypassed,
+      bypassRegions: regions,
+    },
+  };
+}
+
+/** What the concurrency-limited round of one file produced: a model answer, or no call at all. */
+type ModelRound =
+  | {
+      readonly kind: "reviewed";
+      readonly verdict: Verdict;
+      readonly timings: StepTimings;
+      readonly skillNames: readonly string[];
+      readonly regions: readonly BypassRegion[];
+      readonly bypassed: number;
+    }
+  | { readonly kind: "bypassed"; readonly regions: readonly BypassRegion[] };
+
+/** The file's new side, whole, as lines; `null` when it could not be read. */
+interface NewSideText {
+  /** Line `n` is `lines[n - 1]`. */
+  readonly lines: readonly string[];
+  /** The text as read, for the prompt. */
+  readonly text: string;
+}
+
+/**
+ * The file's whole new side.
+ *
+ * @remarks An added file's patch is the whole file, so its lines come from the diff; a modified file's
+ * are read from the checkout. `null` when a modified file could not be read.
+ */
+async function newSideOf(
+  selected: SelectedFile,
+  options: ReviewChangedFileOptions,
+  log: Logger,
+): Promise<NewSideText | null> {
+  const { file } = selected;
+  if (file.status === "added") {
+    const length = Math.max(0, ...selected.newSide.map(([line]) => line));
+    const lines = Array.from({ length }, () => "");
+    for (const [line, text] of selected.newSide) lines[line - 1] = text;
+    return { lines, text: lines.join("\n") };
+  }
+  const readContent = options.readContent ?? null;
+  if (readContent === null) return null;
+  const text = await readContent(file.path, file.status);
+  if (text === null) {
+    log.debug(`content ${file.path}: could not be read; the diff alone was reviewed.`);
+    return null;
+  }
+  return { lines: fileLines(text), text };
+}
+
+/** Lines as git numbers them: split on `\n` alone, a trailing newline producing no extra line. */
+function fileLines(text: string): string[] {
+  const lines = text.split("\n").map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
+  if (lines.at(-1) === "") lines.pop();
+  return lines;
 }
 
 /**
  * The file's full text for the prompt, or `null`.
  *
- * @remarks An added file's patch is the whole file, so content is fetched only for modified files. Text
+ * @remarks An added file's patch is the whole file, so content is attached only for modified files. Text
  * over {@link MAX_CONTENT_CHARS} is withheld whole and said so at INFO; the diff alone is reviewed.
  */
-async function contentOf(
-  file: ChangedFile,
-  options: ReviewChangedFileOptions,
-  log: Logger,
-): Promise<string | null> {
-  const readContent = options.readContent ?? null;
-  if (readContent === null || file.status === "added") return null;
-  const content = await readContent(file.path, file.status);
-  if (content === null) return null;
-  const chars = countCodePoints(content);
-  if (chars <= MAX_CONTENT_CHARS) return content;
+function promptContentOf(file: ChangedFile, text: NewSideText | null, log: Logger): string | null {
+  if (text === null || file.status === "added") return null;
+  const chars = countCodePoints(text.text);
+  if (chars <= MAX_CONTENT_CHARS) return text.text;
   log.info(
     `content ${file.path}: ${formatCount(chars)} chars exceeds the ${formatCount(MAX_CONTENT_CHARS)} ceiling; the diff alone was reviewed.`,
   );
   return null;
+}
+
+/**
+ * The regions `reviewer: by-pass` markers take out of this file's review, each logged; `[]` when the
+ * setting is off or the file could not be read.
+ *
+ * @remarks With the whole file unavailable a block's end cannot be found, and guessing it from the hunks
+ * alone would bypass too much or too little; the markers are then not honoured, and the log says so.
+ */
+function bypassRegionsOf(
+  selected: SelectedFile,
+  text: NewSideText | null,
+  settings: FileReviewSettings,
+  log: Logger,
+): readonly BypassRegion[] {
+  const { path } = selected;
+  if (text === null) {
+    const visible = scanBypass(selected.newSide.map(([, line]) => line));
+    if (visible.regions.length > 0 || visible.unreasoned.length > 0) {
+      log.warn(`${path}: could not be read whole; its bypass markers were not honoured.`);
+    }
+    return [];
+  }
+  const scan = scanBypass(text.lines);
+  if (!settings.bypassMarkers) {
+    if (scan.regions.length > 0 || scan.unreasoned.length > 0) {
+      log.info(`${path}: bypass markers present, but bypass-markers is off; reviewed in full.`);
+    }
+    return [];
+  }
+  for (const line of scan.unreasoned) {
+    log.warn(`${path}:${line}: 'reviewer: by-pass' without a reason; not honoured.`);
+  }
+  for (const region of scan.regions) {
+    log.info(`${path}: lines ${region.start}-${region.end} bypassed (${region.reason}).`);
+  }
+  return scan.regions;
 }
 
 /** The pre-context block for one file, or `""`. Failure here never fails the review. */

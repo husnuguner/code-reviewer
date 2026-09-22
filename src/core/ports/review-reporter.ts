@@ -17,11 +17,22 @@ export interface FindingRecord {
   readonly skills: readonly string[];
 }
 
+/** One region a `reviewer: by-pass` marker took out of review. Field names are the NDJSON wire spelling. */
+export interface BypassRegionRecord {
+  readonly path: string;
+  /** First bypassed line on the new side: the marker's own. */
+  readonly start_line: number;
+  /** Last bypassed line on the new side, inclusive. */
+  readonly end_line: number;
+  /** The reason the marker gave; never empty, a marker without one is not honoured. */
+  readonly reason: string;
+}
+
 /**
  * The closing record of a branch review.
  *
  * @remarks `files_changed = files_reviewed + failed + sum(skipped)`. `anchors`, `unanchored` and
- * `mislabelled` are counted over reported findings; `refuted` and `capped` over what never was.
+ * `mislabelled` are counted over reported findings; `refuted`, `capped` and `bypassed` over what never was.
  */
 export interface SummaryRecord {
   readonly type: "summary";
@@ -43,10 +54,14 @@ export interface SummaryRecord {
   readonly capped: number;
   /** Reported findings re-rated to the mildest severity because the model named an unknown one. */
   readonly mislabelled: number;
+  /** Findings that fell in a bypassed region and were not reported. */
+  readonly bypassed: number;
   /** Files not reviewed, by reason; reasons that skipped none omitted. */
   readonly skipped: Readonly<Record<string, number>>;
   /** The review-policy files this change edits (`.review/**` and the run's own), sorted; `[]` when none. */
   readonly policy_changed: readonly string[];
+  /** The regions `reviewer: by-pass` markers took out of review, by path then line; `[]` when none. */
+  readonly bypass_regions: readonly BypassRegionRecord[];
 }
 
 /** Any branch-review record. */

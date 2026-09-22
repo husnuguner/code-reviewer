@@ -32,6 +32,7 @@ export interface ConfigShape {
     };
     language: string;
     verify: boolean;
+    "bypass-markers": boolean;
     exclude: string[];
     "max-findings-per-file": number;
     context: {
@@ -215,6 +216,7 @@ export const FIELD_PATHS = {
   baseUrl: "settings.llm.base-url",
   reviewLang: "settings.language",
   verifyFindings: "settings.verify",
+  bypassMarkers: "settings.bypass-markers",
   excludeGlobs: "settings.exclude",
   maxFindingsPerFile: "settings.max-findings-per-file",
   maxSkillChars: "skills.max-chars",
@@ -308,6 +310,11 @@ export function configSchema(providers: RegisteredProviders): convict.Schema<Con
         format: "yes-no",
         default: true,
         env: CONFIG_ALIASES.verifyFindings,
+      },
+      "bypass-markers": {
+        doc: "Honour `reviewer: by-pass - <reason>` markers in the code, which take the block after them out of review. From the files only; no environment alias.",
+        format: "yes-no",
+        default: true,
       },
       exclude: {
         doc: "Globs never sent to the model; a list, or one comma-separated string.",
