@@ -193,13 +193,19 @@ export function changedExports(patch: string): string[] {
 
 // -- what the repository says -------------------------------------------------
 
+/**
+ * What a specifier may resolve to, tried in order. Every extension in {@link CODE_EXTENSIONS} is here:
+ * a file the import graph draws an edge to must be one Definitions can read.
+ */
 const MODULE_SUFFIXES = [
   "",
   ".ts",
   ".tsx",
   ".mts",
+  ".cts",
   ".js",
   ".mjs",
+  ".cjs",
   ".jsx",
   "/index.ts",
   "/index.tsx",
@@ -268,11 +274,12 @@ export function exportSignatures(text: string, maxChars: number): string {
   const kept: string[] = [];
   for (const [index, line] of lines.entries()) {
     if (!/^\s*export\b/u.test(line)) continue;
+    const continuation = continuationOf(lines, index);
     kept.push(
       ...documentBlockAbove(lines, index),
       line.trimEnd(),
-      ...continuationOf(lines, index),
-      ...memberBlockOf(lines, index),
+      ...continuation,
+      ...memberBlockOf(lines, index, index + continuation.length),
     );
   }
   const body = kept.length > 0 ? kept.join("\n") : lines.slice(0, 30).join("\n");
@@ -292,30 +299,44 @@ function continuationOf(lines: readonly string[], index: number): string[] {
   return out;
 }
 
-/** How many times a character occurs in a line. */
-function occurrences(text: string, character: string): number {
-  let count = 0;
-  for (const found of text) if (found === character) count += 1;
-  return count;
+/** A string literal, so a brace inside one is not counted as structure. */
+const STRING_LITERAL = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/gu;
+
+/**
+ * How much deeper in braces a line ends than it began.
+ *
+ * @remarks An enum member `OPEN = '{'` or a field typed `"{"` is a value, not a block: counted as
+ * structure it would keep the block open until the line cap elided it.
+ */
+function braceDepthChange(line: string): number {
+  let change = 0;
+  for (const found of line.replaceAll(STRING_LITERAL, "")) {
+    if (found === "{") change += 1;
+    else if (found === "}") change -= 1;
+  }
+  return change;
 }
 
 /**
  * The body of a declaration whose members are its signature.
  *
+ * @param index - The `export` line.
+ * @param opensAt - The line the declaration's head ends on: the `export` line itself, or the last line
+ * of a wrapped signature (`export interface Long<\n  T,\n> {`). The body is read from there.
  * @remarks `export enum SubscriptionModules {` on its own names the type and nothing else: the model
  * cannot tell whether the `SubscriptionModules.CORE` in the diff exists. Functions and classes are
  * left out on purpose -- their bodies are implementation, not surface.
  * @returns The body with its closing brace, elided past {@link MEMBER_LINES_KEPT}; `[]` for anything
  * that is not a member declaration opening a block.
  */
-function memberBlockOf(lines: readonly string[], index: number): string[] {
-  const line = lines[index] ?? "";
-  if (!MEMBER_DECLARATION.test(line) || !/\{\s*$/u.test(line)) return [];
+function memberBlockOf(lines: readonly string[], index: number, opensAt: number): string[] {
+  if (!MEMBER_DECLARATION.test(lines[index] ?? "")) return [];
+  if (!/\{\s*$/u.test(lines[opensAt] ?? "")) return [];
   const body: string[] = [];
   let depth = 1;
-  const following = lines.slice(index + 1);
+  const following = lines.slice(opensAt + 1);
   for (const next of following) {
-    depth += occurrences(next, "{") - occurrences(next, "}");
+    depth += braceDepthChange(next);
     if (depth > 0 && body.length >= MEMBER_LINES_KEPT) {
       body.push("  // ...", "}");
       break;

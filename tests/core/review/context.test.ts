@@ -151,6 +151,24 @@ describe("what the patch says", () => {
     expect(resolveSpecifier("a.ts", "../../x")).toBe("x");
   });
 
+  /** Every extension an edge may be drawn to is one a definition can be read from. */
+  it("resolves the CommonJS spellings the import graph accepts", async () => {
+    const file = new ChangedFile(
+      "src/a.ts",
+      "modified",
+      '+import { x } from "./legacy.cjs";\n+import { y } from "./typed.cts";',
+    );
+    const context = await gatherContext({
+      file,
+      changeSet: [file],
+      context: fakeContext({
+        "src/legacy.cjs": "module.exports = { x: 1 };\nexport const x = 1;\n",
+        "src/typed.cts": "export const y = 2;\n",
+      }),
+    });
+    expect(context.definitions.map((d) => d.path)).toEqual(["src/legacy.cjs", "src/typed.cts"]);
+  });
+
   it("leaves a root-relative specifier alone", () => {
     expect(resolveSpecifier("src/api/deep/route.ts", "src/common/helper")).toBe(
       "src/common/helper",
@@ -211,6 +229,37 @@ describe("what the repository says", () => {
     expect(signatures).toContain("  id: string;");
     // A class body is implementation, not surface.
     expect(signatures).not.toContain("private secret");
+  });
+
+  /**
+   * A brace inside a value is not structure. Counted as one, `OPEN = '{'` kept
+   * the block open until the line cap elided it -- the members were there, but
+   * followed by a false `// ...` and a brace that closed nothing.
+   */
+  it("does not mistake a brace in a string for the block's", () => {
+    const module = [
+      "export enum Marker {",
+      "  OPEN = '{',",
+      '  CLOSE = "}",',
+      "  TICK = `${x}`,",
+      "}",
+      "export const after = 1;",
+    ].join("\n");
+    const signatures = exportSignatures(module, 10_000);
+    expect(signatures).toContain("  OPEN = '{',");
+    expect(signatures).toContain('  CLOSE = "}",');
+    expect(signatures).not.toContain("// ...");
+    // The block closed where it should, so the next export follows it once.
+    expect(signatures.split("export const after = 1;")).toHaveLength(2);
+  });
+
+  /** The `{` may sit on the last line of a wrapped signature, not the `export` line. */
+  it("reads the members of a declaration whose head wraps onto more lines", () => {
+    const module = ["export interface Long<", "  T,", "> {", "  a: T;", "}"].join("\n");
+    const signatures = exportSignatures(module, 10_000);
+    expect(signatures).toContain("> {");
+    expect(signatures).toContain("  a: T;");
+    expect(signatures.trimEnd().endsWith("}")).toBe(true);
   });
 
   it("elides a member block longer than the cap instead of running on", () => {
