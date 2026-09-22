@@ -10,9 +10,13 @@ import { describe, expect, it } from "bun:test";
 
 import { type SummaryRecord } from "../../../src/core/ports/review-reporter";
 import {
+  COMMENT_MARKER,
   type Finding,
+  OVERLAP_THRESHOLD,
+  type PostedComment,
   buildReview,
   commentBody,
+  isAlreadyPosted,
   parseRecords,
   reviewEventFor,
 } from "../../../src/core/posting/review-payload";
@@ -224,6 +228,57 @@ describe("building the review", () => {
     expect(review.comments).toHaveLength(1);
   });
 
+  it("does not repeat a finding an earlier review already placed, and counts it", () => {
+    const records = parseRecords(
+      ndjson(
+        { type: "finding", ...finding({ line: 12 }) },
+        { type: "finding", ...finding({ line: 40, body: "Second." }) },
+        SUMMARY,
+      ),
+    );
+    const review = buildReview(records, {
+      posted: [{ path: "src/a.ts", line: 12, start_line: null }],
+    });
+    expect(review.comments.map((c) => c.line)).toEqual([40]);
+    expect(review.alreadyPosted).toBe(1);
+    expect(review.overflow).toBe(0);
+    expect(review.body).toContain("1 already posted inline by an earlier review and not repeated");
+    // The repeated finding is still a finding: the headline and the verdict count it.
+    expect(review.body).toContain("**2 finding(s)**");
+    expect(buildReview(records, { posted: [], requestChangesOn: ["bug"] }).event).toBe(
+      "request-changes",
+    );
+    expect(
+      buildReview(records, {
+        posted: [{ path: "src/a.ts", line: 12, start_line: null }],
+        requestChangesOn: ["bug"],
+      }).event,
+    ).toBe("request-changes");
+  });
+
+  it("gives the inline cap's slots to findings not yet posted", () => {
+    const records = parseRecords(
+      ndjson(
+        { type: "finding", ...finding({ line: 12 }) },
+        { type: "finding", ...finding({ line: 40, body: "Second." }) },
+      ),
+    );
+    const review = buildReview(records, {
+      maxInline: 1,
+      posted: [{ path: "src/a.ts", line: 12, start_line: null }],
+    });
+    expect(review.comments.map((c) => c.line)).toEqual([40]);
+    expect(review.overflow).toBe(0);
+    expect(review.alreadyPosted).toBe(1);
+  });
+
+  it("posts everything, and says nothing about repeats, when nothing was posted before", () => {
+    const records = parseRecords(ndjson({ type: "finding", ...finding() }));
+    const review = buildReview(records);
+    expect(review.alreadyPosted).toBe(0);
+    expect(review.body).not.toContain("already posted");
+  });
+
   it("says nothing about bypassing when no region was bypassed", () => {
     const review = buildReview({ findings: [finding()], summary: SUMMARY, unreadable: 0 });
     expect(review.body).not.toContain("bypass");
@@ -303,5 +358,62 @@ describe("building the review", () => {
     const body = commentBody(finding({ example: "if (x == null) return;" }));
     expect(body).toContain("```\nif (x == null) return;\n```");
     expect(body).not.toContain("```suggestion");
+  });
+
+  it("signs every inline comment with an invisible marker, last", () => {
+    expect(COMMENT_MARKER).toMatch(/^<!--.*-->$/u);
+    expect(commentBody(finding())).toEndWith(`\n\n${COMMENT_MARKER}`);
+    expect(commentBody(finding({ skills: ["a"], example: "x" }))).toEndWith(COMMENT_MARKER);
+  });
+});
+
+/** A posted comment on `src/a.ts`. */
+function posted(line: number | null, start_line: number | null = null): PostedComment {
+  return { path: "src/a.ts", line, start_line };
+}
+
+/** An anchored finding on `src/a.ts`. */
+function anchored(line: number, start_line: number | null = null): Finding & { line: number } {
+  return { ...finding({ line, start_line }), line };
+}
+
+describe("what an earlier review already put on the pull request", () => {
+  it("matches a single-line comment on the same line of the same path, and nothing else", () => {
+    expect(isAlreadyPosted(anchored(12), [posted(12)])).toBe(true);
+    expect(isAlreadyPosted(anchored(12), [posted(13)])).toBe(false);
+    expect(isAlreadyPosted(anchored(12), [{ ...posted(12), path: "src/b.ts" }])).toBe(false);
+    expect(isAlreadyPosted(anchored(12), [])).toBe(false);
+  });
+
+  it("never matches a comment the host has marked outdated: its code is gone", () => {
+    expect(isAlreadyPosted(anchored(12), [posted(null)])).toBe(false);
+    expect(isAlreadyPosted(anchored(12, 10), [posted(null, null)])).toBe(false);
+  });
+
+  it("never matches a single-line comment against a multi-line one, either way round", () => {
+    expect(isAlreadyPosted(anchored(12), [posted(14, 10)])).toBe(false);
+    expect(isAlreadyPosted(anchored(14, 10), [posted(12)])).toBe(false);
+  });
+
+  it("matches two ranges when they overlap by more than the threshold, and not at it", () => {
+    expect(OVERLAP_THRESHOLD).toBe(0.6);
+    // 10-20 vs 10-16: overlap 7 of a union of 11 = 0.636.
+    expect(isAlreadyPosted(anchored(20, 10), [posted(16, 10)])).toBe(true);
+    // 10-20 vs 10-15: overlap 6 of 11 = 0.545.
+    expect(isAlreadyPosted(anchored(20, 10), [posted(15, 10)])).toBe(false);
+    // 1-5 vs 1-3: overlap 3 of 5 = 0.6 exactly, which is not "more than".
+    expect(isAlreadyPosted(anchored(5, 1), [posted(3, 1)])).toBe(false);
+    // Disjoint ranges.
+    expect(isAlreadyPosted(anchored(20, 10), [posted(30, 21)])).toBe(false);
+  });
+
+  it("reads a range whichever way round the host spelled it", () => {
+    expect(isAlreadyPosted(anchored(20, 10), [posted(10, 20)])).toBe(true);
+    expect(isAlreadyPosted(anchored(10, 20), [posted(20, 10)])).toBe(true);
+  });
+
+  it("treats start_line equal to line as a single line", () => {
+    expect(isAlreadyPosted(anchored(12, 12), [posted(12)])).toBe(true);
+    expect(isAlreadyPosted(anchored(12), [posted(12, 12)])).toBe(true);
   });
 });

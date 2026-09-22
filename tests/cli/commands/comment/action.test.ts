@@ -68,6 +68,7 @@ describe("actions/comment/action.yml", () => {
     // The command's spelled-out "never", and its two false-by-default flags.
     expect(inputs["request-changes-on"]?.default).toBe("none");
     expect(inputs["supersede"]?.default).toBe("false");
+    expect(inputs["allow-duplicates"]?.default).toBe("false");
     expect(inputs["dry-run"]?.default).toBe("false");
   });
 

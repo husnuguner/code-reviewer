@@ -122,7 +122,8 @@ The choices with a real trade-off behind them, and what was given up:
 
 - **The reviewer reads local git and posts nothing.** A job that feeds
   untrusted diff text to a model must not hold a write credential. Given up:
-  reading a PR's existing comments to avoid repeating them.
+  the review job reading a PR's existing comments; the comment job, which
+  holds the token anyway, does that instead (below).
 - **The reviewed side is always the checkout.** `HEAD` against a base, or the
   working tree against `HEAD`; there is no `--branch`. The diff, the file
   contents and the pre-context then come from one tree, and cannot disagree
@@ -186,6 +187,16 @@ The choices with a real trade-off behind them, and what was given up:
   keep them consistent, and the warning that they disagreed existed only
   because both were settings. Given up: capping a file's whole skills block
   below the per-skill cap × the number of matching skills.
+- **A comment is repeated or not by where it sits, not by what it says.** The
+  comment job asks GitHub for the inline comments earlier runs left, at
+  GitHub's current positions, and does not post a finding again on a line
+  (or a range) one of them already covers. The model rewords a finding every
+  run, so its text is no identity; a line is, and GitHub moves that line with
+  the branch and marks it outdated when the code is gone, which is the two
+  things an identity has to survive. Given up: a new, different finding on a
+  line an earlier run already commented on is not posted inline either -- it
+  is counted in the body -- and a run's own reviews are recognised by a marker
+  in the body, so comments posted before the marker existed are repeated once.
 - **The code may take a block out of its own review, in the open.** A
   `reviewer: by-pass - <reason>` comment names the block after it; the reason
   is required, the marker sits in the diff, and every report lists the

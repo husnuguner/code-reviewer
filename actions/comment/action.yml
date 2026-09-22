@@ -57,6 +57,14 @@ inputs:
       CHANGES_REQUESTED and APPROVED reviews can be dismissed; comments stay.
     required: false
     default: "false"
+  allow-duplicates:
+    description: >-
+      Post every finding inline even where an earlier automated review already
+      commented on the same lines. By default such findings are counted in the
+      review body and not repeated, so a pull request does not collect the same
+      comment once per push.
+    required: false
+    default: "false"
   base-url:
     description: >-
       API root, for a self-hosted instance (default: the provider's public
@@ -102,6 +110,7 @@ runs:
         MAX_INLINE: ${{ inputs.max-inline }}
         REQUEST_CHANGES_ON: ${{ inputs.request-changes-on }}
         SUPERSEDE: ${{ inputs.supersede }}
+        ALLOW_DUPLICATES: ${{ inputs.allow-duplicates }}
         BASE_URL: ${{ inputs.base-url }}
         DRY_RUN: ${{ inputs.dry-run }}
         POSTER: ${{ github.action_path }}/../../src/cli/main.ts
@@ -122,6 +131,7 @@ runs:
           args+=(--request-changes-on "${REQUEST_CHANGES_ON}")
         fi
         [ "${SUPERSEDE}" = "true" ] && args+=(--supersede)
+        [ "${ALLOW_DUPLICATES}" = "true" ] && args+=(--allow-duplicates)
         [ -n "${BASE_URL}" ] && args+=(--base-url "${BASE_URL}")
         [ "${DRY_RUN}" = "true" ] && args+=(--dry-run)
         bun --no-env-file "${POSTER}" comment "${args[@]}"

@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from "bun:test";
 
+import { COMMENT_MARKER } from "../../../../src/core/posting/review-payload";
 import {
   GithubError,
   GithubReviewClient,
@@ -374,5 +375,82 @@ describe("posting the review", () => {
       }),
     ).rejects.toThrow(GithubError);
     expect(calls).toHaveLength(0);
+  });
+});
+
+/** One inline comment as `GET /pulls/{n}/comments` lists it, ours unless told otherwise. */
+function comment(
+  path: string,
+  line: number | null,
+  start_line: number | null = null,
+  body = `**[Bug]** x\n\n${COMMENT_MARKER}`,
+): unknown {
+  return { id: 1, path, line, start_line, body, user: { login: "github-actions[bot]" } };
+}
+
+/** A pull request with two of ours, one outdated, a human's, and a comment without a path. */
+function mixedComments(): Response {
+  return Response.json(
+    [
+      comment("src/a.ts", 12),
+      comment("src/a.ts", 20, 14),
+      comment("src/b.ts", null, null),
+      comment("src/c.ts", 3, null, "A human wrote this on the same line."),
+      { id: 9, body: COMMENT_MARKER }, // no path: cannot be placed
+    ],
+    { status: 200 },
+  );
+}
+
+describe("what earlier runs already put on the pull request", () => {
+  const target = { repository: "acme/app", pullNumber: 7 };
+
+  it("reads the inline comments, keeps only those carrying our marker, at their current lines", async () => {
+    const calls: RecordedCall[] = [];
+    const ours = await clientWith(mixedComments, calls).postedComments(target);
+    expect(ours).toEqual([
+      { path: "src/a.ts", line: 12, start_line: null },
+      { path: "src/a.ts", line: 20, start_line: 14 },
+      { path: "src/b.ts", line: null, start_line: null },
+    ]);
+    expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
+      "GET https://api.github.com/repos/acme/app/pulls/7/comments?per_page=100&page=1",
+    ]);
+  });
+
+  it("walks every full page and stops at the first short one", async () => {
+    const calls: RecordedCall[] = [];
+    const full = Array.from({ length: 100 }, (_, index) => comment("src/a.ts", index + 1));
+    const responder = (call: RecordedCall): Response =>
+      pageOf(call) === "1"
+        ? Response.json(full, { status: 200 })
+        : Response.json([comment("src/a.ts", 500)], { status: 200 });
+    const ours = await clientWith(responder, calls).postedComments(target);
+    expect(ours).toHaveLength(101);
+    expect(calls.map(pageOf)).toEqual(["1", "2"]);
+  });
+
+  it("answers with nothing, and says so, when GitHub refuses the listing", async () => {
+    const lines: string[] = [];
+    const client = new GithubReviewClient({
+      token: "t",
+      fetch: () => Promise.resolve(new Response("nope", { status: 403 })),
+      logger: recordingLogger(lines),
+    });
+    expect(await client.postedComments(target)).toEqual([]);
+    expect(lines).toEqual([
+      "WARNING Could not list the pull request's inline comments (GitHub answered 403: nope); posting every finding.",
+    ]);
+  });
+
+  it("answers with nothing for a slug it cannot read, without a request", async () => {
+    const calls: RecordedCall[] = [];
+    const ours = await clientWith(ok, calls).postedComments({ ...target, repository: "a/../b" });
+    expect(ours).toEqual([]);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("answers with nothing when the listing is not a list", async () => {
+    expect(await clientWith(ok).postedComments(target)).toEqual([]);
   });
 });

@@ -35,6 +35,8 @@ export interface CommentArguments {
   readonly requestChangesOn: readonly Severity[];
   /** Dismiss this identity's earlier pending reviews first. */
   readonly supersede: boolean;
+  /** Post every finding inline, even where an earlier automated review already commented on its lines. */
+  readonly allowDuplicates: boolean;
   readonly baseUrl: string | null;
   /** Print the review instead of posting it; needs no token. */
   readonly dryRun: boolean;
@@ -75,6 +77,11 @@ function commentOptions(command: Command): Command {
     .option(
       "--supersede",
       "Dismiss this identity's earlier pending reviews on the pull request first, so it shows one current verdict. A clean run then lifts an earlier block.",
+      false,
+    )
+    .option(
+      "--allow-duplicates",
+      "Post every finding inline even where an earlier automated review already commented on the same lines. By default such findings are counted in the body and not repeated.",
       false,
     )
     .option(

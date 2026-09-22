@@ -26,6 +26,7 @@ describe("the command line", () => {
     const parsed = comment(required);
     expect(parsed.requestChangesOn).toEqual([]);
     expect(parsed.supersede).toBe(false);
+    expect(parsed.allowDuplicates).toBe(false);
     expect(parsed.dryRun).toBe(false);
     expect(parsed.provider).toBe("github");
   });
@@ -49,5 +50,9 @@ describe("the command line", () => {
 
   it("supersedes when asked", () => {
     expect(comment([...required, "--supersede"]).supersede).toBe(true);
+  });
+
+  it("repeats what an earlier review already said only when asked", () => {
+    expect(comment([...required, "--allow-duplicates"]).allowDuplicates).toBe(true);
   });
 });

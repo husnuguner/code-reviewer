@@ -1,13 +1,17 @@
 /**
- * `reviewer comment`: reads the records, builds the review, posts it. A stream with no findings is
- * still posted.
+ * `reviewer comment`: reads the records, asks the host what earlier runs already said, builds the review,
+ * posts it. A stream with no findings is still posted.
  * @packageDocumentation
  */
 
 import { readFileSync } from "node:fs";
 
 import { type ReviewPoster } from "../../../core/ports/review-poster";
-import { buildReview, parseRecords } from "../../../core/posting/review-payload";
+import {
+  type PostedComment,
+  buildReview,
+  parseRecords,
+} from "../../../core/posting/review-payload";
 import { errorMessage } from "../../../core/util/errors";
 import { type LogSettings } from "../../../providers/logging/log-settings";
 import { PinoLogger } from "../../../providers/logging/pino-logger";
@@ -37,18 +41,22 @@ export async function runComment(
   }
 
   const records = parseRecords(text);
-  const review = buildReview(records, {
-    maxInline: arguments_.maxInline,
-    requestChangesOn: arguments_.requestChangesOn,
-  });
-  log.info(
-    `${String(records.findings.length)} finding(s) read; ${String(review.comments.length)} inline, ${String(review.overflow)} in the body; posting as ${review.event}.`,
-  );
   if (records.unreadable > 0) {
     log.warn(`${String(records.unreadable)} line(s) of ${arguments_.findings} were not records.`);
   }
+  const build = (posted: readonly PostedComment[]): ReturnType<typeof buildReview> =>
+    buildReview(records, {
+      maxInline: arguments_.maxInline,
+      requestChangesOn: arguments_.requestChangesOn,
+      posted,
+    });
+  const describe = (review: ReturnType<typeof buildReview>): string =>
+    `${String(records.findings.length)} finding(s) read; ${String(review.comments.length)} inline, ${String(review.overflow)} in the body, ${String(review.alreadyPosted)} already posted; posting as ${review.event}.`;
 
   if (arguments_.dryRun) {
+    // No token, so no host to ask: a dry run shows every finding as if the pull request were empty.
+    const review = build([]);
+    log.info(describe(review));
     process.stdout.write(`[${review.event}]\n${review.body}\n`);
     for (const comment of review.comments) {
       process.stdout.write(`\n--- ${comment.path}:${String(comment.line)}\n${comment.body}\n`);
@@ -67,6 +75,13 @@ export async function runComment(
     baseUrl: arguments_.baseUrl,
     logger,
   });
+  const target = { repository: arguments_.repo, pullNumber: arguments_.pr };
+  const posted = arguments_.allowDuplicates ? [] : await poster.postedComments(target);
+  if (posted.length > 0) {
+    log.info(`${String(posted.length)} inline comment(s) from earlier automated reviews found.`);
+  }
+  const review = build(posted);
+  log.info(describe(review));
   const { inline, superseded } = await poster.submit({
     repository: arguments_.repo,
     pullNumber: arguments_.pr,

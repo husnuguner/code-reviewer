@@ -1,6 +1,7 @@
 /**
- * GitHub's `ReviewPoster`: one endpoint, `POST /repos/{owner}/{repo}/pulls/{n}/reviews`. Reads no diffs,
- * calls no model. The transport is injected and has already retried; what reaches here is an answer.
+ * GitHub's `ReviewPoster`: `POST /repos/{owner}/{repo}/pulls/{n}/reviews` to post, and
+ * `GET .../pulls/{n}/comments` to see what earlier runs already said. Reads no diffs, calls no model. The
+ * transport is injected and has already retried; what reaches here is an answer.
  * @packageDocumentation
  */
 
@@ -10,7 +11,9 @@ import {
   type PostingResult,
   type ReviewPoster,
   type ReviewSubmission,
+  type ReviewTarget,
 } from "../../../core/ports/review-poster";
+import { COMMENT_MARKER, type PostedComment } from "../../../core/posting/review-payload";
 import { errorMessage } from "../../../core/util/errors";
 import { type FetchLike } from "../../http/fetch-like";
 
@@ -85,6 +88,19 @@ export interface ReviewClientOptions {
   readonly logger?: Logger;
 }
 
+/** A listed comment as a {@link PostedComment}, or nothing when it is not ours or names no path. */
+function postedOf(record: CommentRecord): PostedComment[] {
+  if (typeof record.path !== "string" || record.path === "") return [];
+  if (typeof record.body !== "string" || !record.body.includes(COMMENT_MARKER)) return [];
+  return [
+    {
+      path: record.path,
+      line: typeof record.line === "number" ? record.line : null,
+      start_line: typeof record.start_line === "number" ? record.start_line : null,
+    },
+  ];
+}
+
 /** GitHub's name for each of the port's events. */
 const GITHUB_EVENT = { comment: "COMMENT", "request-changes": "REQUEST_CHANGES" } as const;
 
@@ -98,6 +114,18 @@ interface ReviewRecord {
   readonly user?: { readonly login?: string } | null;
 }
 
+/**
+ * One inline comment in `GET /pulls/{n}/comments`, as far as this client reads it. `line` and
+ * `start_line` are GitHub's **current** positions, moved with the branch; both are `null` once the
+ * comment is outdated.
+ */
+interface CommentRecord {
+  readonly path?: string;
+  readonly line?: number | null;
+  readonly start_line?: number | null;
+  readonly body?: string;
+}
+
 const DEFAULT_BASE_URL = "https://api.github.com";
 
 /** The largest page GitHub serves. */
@@ -108,6 +136,9 @@ const CONTENT_REFUSAL: ReadonlySet<number> = new Set([400, 422]);
 
 /** Pages of reviews `supersede` walks before giving up; hitting it is logged. */
 const MAX_REVIEW_PAGES = 20;
+
+/** Pages of inline comments read before giving up; hitting it is logged. Same reasoning as the reviews'. */
+const MAX_COMMENT_PAGES = 20;
 
 /** Posts one review per call. */
 export class GithubReviewClient implements ReviewPoster {
@@ -161,6 +192,47 @@ export class GithubReviewClient implements ReviewPoster {
       await this.request("POST", reviews, { event, body: body + note, comments: [] });
       return { inline: 0, superseded };
     }
+  }
+
+  /**
+   * The inline comments earlier runs left on the pull request, recognised by the marker every
+   * `commentBody()` carries, at GitHub's current positions.
+   *
+   * @returns `[]` when GitHub refuses the listing or the slug is unreadable; the caller posts as if the
+   * pull request were empty, which is what every run did before this existed.
+   * @remarks A human's comment is never counted, whatever its position: only our marker qualifies.
+   */
+  async postedComments(target: ReviewTarget): Promise<PostedComment[]> {
+    let owner: string;
+    let repo: string;
+    try {
+      ({ owner, repo } = parseRepository(target.repository));
+    } catch {
+      return [];
+    }
+    const comments = `/repos/${owner}/${repo}/pulls/${String(target.pullNumber)}/comments`;
+    const ours: PostedComment[] = [];
+    for (let page = 1; page <= MAX_COMMENT_PAGES; page++) {
+      const query = `per_page=${String(REVIEWS_PER_PAGE)}&page=${String(page)}`;
+      let listed: unknown;
+      try {
+        listed = await this.request("GET", `${comments}?${query}`);
+      } catch (error) {
+        if (!(error instanceof GithubError)) throw error;
+        this.log.warn(
+          `Could not list the pull request's inline comments (${error.message}); posting every finding.`,
+        );
+        return [];
+      }
+      if (!Array.isArray(listed)) return ours;
+      const records = listed as CommentRecord[];
+      ours.push(...records.flatMap((record) => postedOf(record)));
+      if (records.length < REVIEWS_PER_PAGE) return ours;
+    }
+    this.log.warn(
+      `Stopped after ${String(MAX_COMMENT_PAGES)} pages of inline comments; an earlier comment may be repeated.`,
+    );
+    return ours;
   }
 
   /**

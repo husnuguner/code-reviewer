@@ -168,6 +168,7 @@ reviewer comment --findings code-review.ndjson --repo acme/app --pr 7   # needs 
 | `--max-inline`         | Cap on inline comments (default 50); the rest are listed in the body.                                       |
 | `--request-changes-on` | Severities that make the review a **request for changes** (`bug,security`, or `none`, the default).         |
 | `--supersede`          | Dismiss this identity's earlier pending reviews on the PR first, so it shows one current verdict.           |
+| `--allow-duplicates`   | Post every finding inline even where an earlier automated review already commented on its lines.            |
 | `--base-url`           | REST root, for GitHub Enterprise.                                                                           |
 | `--dry-run`            | Print the review instead of posting it. Needs no token.                                                     |
 
@@ -180,6 +181,14 @@ fails when the two drift apart.
 What it does with a stream:
 
 - an **anchored** finding becomes an inline comment, most severe first;
+- one that an **earlier automated review already commented on** -- the same
+  file and the same line, or a range overlapping it by more than 60% -- is
+  **not posted again**; the body counts it as "already posted". Positions are
+  GitHub's current ones, so a comment that moved with the branch still counts
+  and one GitHub marked outdated no longer does. Every inline comment the
+  reviewer posts carries an invisible marker (`<!-- code-reviewer -->`), which
+  is how its own comments are told from a human's; `--allow-duplicates` switches the
+  check off;
 - an **unanchored** one is listed in the body;
 - what the inline cap leaves out is **named in the body**, not dropped;
 - if GitHub refuses the inline comments (a stale anchor after a force-push),

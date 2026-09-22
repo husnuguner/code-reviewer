@@ -63,6 +63,7 @@ function commentEnvironment(overrides: Record<string, string> = {}): Record<stri
     MAX_INLINE: "50",
     REQUEST_CHANGES_ON: "none",
     SUPERSEDE: "false",
+    ALLOW_DUPLICATES: "false",
     BASE_URL: "",
     DRY_RUN: "false",
     POSTER: "/action/src/cli/main.ts",
@@ -279,6 +280,7 @@ describe("actions/comment/action.yml, the Post step", () => {
     expect(step.calls[0]).not.toContain("--supersede");
     expect(step.calls[0]).not.toContain("--dry-run");
     expect(step.calls[0]).not.toContain("--base-url");
+    expect(step.calls[0]).not.toContain("--allow-duplicates");
     expect(step.exitCode).toBe(0);
   });
 
@@ -286,6 +288,7 @@ describe("actions/comment/action.yml, the Post step", () => {
     const step = runStep(run, {
       env: commentEnvironment({
         SUPERSEDE: "true",
+        ALLOW_DUPLICATES: "true",
         DRY_RUN: "true",
         BASE_URL: "https://github.example.com/api/v3",
       }),
@@ -293,6 +296,7 @@ describe("actions/comment/action.yml, the Post step", () => {
     });
 
     expect(step.calls[0]).toContain("--supersede");
+    expect(step.calls[0]).toContain("--allow-duplicates");
     expect(step.calls[0]).toContain("--dry-run");
     expect(step.calls[0]).toContain("--base-url");
     expect(step.exitCode).toBe(0);

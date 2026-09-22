@@ -355,8 +355,9 @@ jobs:
 
 The `review` job produces annotations (optional), a job summary and an NDJSON
 artifact. The `comment` job turns anchored findings into inline review
-comments, lists unanchored ones in the body, and may request changes. **It
-never approves.**
+comments, lists unanchored ones in the body, skips a line an earlier run
+already commented on so a pull request does not collect the same comment once
+per push, and may request changes. **It never approves.**
 
 Inputs, the `reviewer comment` flags, and pinning advice:
 [docs/github-action.md](docs/github-action.md).

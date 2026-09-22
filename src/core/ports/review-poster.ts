@@ -3,7 +3,7 @@
  * @packageDocumentation
  */
 
-import { type InlineComment } from "../posting/review-payload";
+import { type InlineComment, type PostedComment } from "../posting/review-payload";
 
 /** A response the hosting system refused. */
 export class PostingError extends Error {
@@ -50,7 +50,21 @@ export interface PostingResult {
   readonly superseded: number;
 }
 
-/** Posts one review per call. */
+/** The change request a poster reads from or writes to. */
+export interface ReviewTarget {
+  /** The repository as the host names it (`owner/name` on GitHub). */
+  readonly repository: string;
+  readonly pullNumber: number;
+}
+
+/** Posts one review per call; can say what its earlier reviews already put on the change request. */
 export interface ReviewPoster {
   submit(submission: ReviewSubmission): Promise<PostingResult>;
+  /**
+   * The inline comments earlier automated reviews left on the change request, at the host's current
+   * positions.
+   *
+   * @returns `[]` when the host cannot be asked; the caller then posts as if nothing were there.
+   */
+  postedComments(target: ReviewTarget): Promise<PostedComment[]>;
 }

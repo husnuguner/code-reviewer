@@ -48,9 +48,35 @@ export interface ReviewPayload {
   readonly comments: readonly InlineComment[];
   /** Anchored findings the inline cap left out; named in the body. */
   readonly overflow: number;
+  /** Anchored findings not posted inline because an earlier automated review already sits on their lines. */
+  readonly alreadyPosted: number;
   /** `request-changes` when any finding's severity is gated, else `comment`. */
   readonly event: ReviewEvent;
 }
+
+/**
+ * An inline comment already on the change request, as the host places it **now**: the host moves a
+ * comment's line as the branch changes, and marks it outdated (`line: null`) when its lines are gone.
+ */
+export interface PostedComment {
+  readonly path: string;
+  readonly line: number | null;
+  readonly start_line: number | null;
+}
+
+/**
+ * Appended to every inline comment body, so a later run can tell its own comments from a human's without
+ * trusting a login. Invisible when rendered.
+ */
+export const COMMENT_MARKER = "<!-- code-reviewer -->";
+
+/**
+ * Two multi-line comments are the same when their line ranges overlap by more than this share of their
+ * union (intersection over union). Strict: a pair exactly at the threshold is not a duplicate.
+ * Single-line comments match on the line alone; a single-line and a multi-line comment never match, so a
+ * finer note on one line is not swallowed by an earlier block comment.
+ */
+export const OVERLAP_THRESHOLD = 0.6;
 
 /** Default cap on inline comments; a review with too many is refused whole by the API. */
 export const MAX_INLINE = 50;
@@ -188,7 +214,51 @@ export function commentBody(finding: Finding): string {
   const example = finding.example === "" ? "" : `\n\n\`\`\`\n${finding.example}\n\`\`\``;
   const skills =
     finding.skills.length === 0 ? "" : `\n\n<sub>skills: ${finding.skills.join(", ")}</sub>`;
-  return `${head}${example}${skills}`;
+  return `${head}${example}${skills}\n\n${COMMENT_MARKER}`;
+}
+
+/** A comment's span on the new side: its first and last line, and whether it covers more than one. */
+interface Span {
+  readonly start: number;
+  readonly end: number;
+  readonly isMultiLine: boolean;
+}
+
+/** The span of an anchored finding or a posted comment; `null` for one the host has marked outdated. */
+function spanOf(comment: { line: number | null; start_line?: number | null }): Span | null {
+  if (comment.line === null) return null;
+  const start = comment.start_line ?? comment.line;
+  const [low, high] = start <= comment.line ? [start, comment.line] : [comment.line, start];
+  return { start: low, end: high, isMultiLine: low !== high };
+}
+
+/** Whether two spans are one comment's place: the same line, or ranges alike past {@link OVERLAP_THRESHOLD}. */
+function isSameSpan(a: Span, b: Span): boolean {
+  if (a.isMultiLine !== b.isMultiLine) return false;
+  if (!a.isMultiLine) return a.start === b.start;
+  const overlap = Math.min(a.end, b.end) - Math.max(a.start, b.start) + 1;
+  if (overlap <= 0) return false;
+  const union = a.end - a.start + 1 + (b.end - b.start + 1) - overlap;
+  return overlap / union > OVERLAP_THRESHOLD;
+}
+
+/**
+ * Whether an earlier automated comment already sits where this finding would go.
+ *
+ * @remarks The posted comment's place is the host's current one, so a line that moved with the branch
+ * still matches, and an outdated comment (no current line) matches nothing: its code is gone.
+ */
+export function isAlreadyPosted(
+  finding: AnchoredFinding,
+  posted: readonly PostedComment[],
+): boolean {
+  const span = spanOf(finding);
+  if (span === null) return false;
+  return posted.some((comment) => {
+    if (comment.path !== finding.path) return false;
+    const other = spanOf(comment);
+    return other !== null && isSameSpan(span, other);
+  });
 }
 
 /** Most severe first, then by path and line. */
@@ -206,6 +276,11 @@ export interface BuildReviewOptions {
   readonly maxInline?: number;
   /** Severities that make the review a request for changes. Empty (default) always posts a comment. */
   readonly requestChangesOn?: readonly string[];
+  /**
+   * The automated inline comments already on the change request. A finding one of them already covers is
+   * not posted inline again; it is counted in the body instead. Default none.
+   */
+  readonly posted?: readonly PostedComment[];
 }
 
 /**
@@ -233,12 +308,16 @@ export function buildReview(
   options: BuildReviewOptions = {},
 ): ReviewPayload {
   const maxInline = options.maxInline ?? MAX_INLINE;
+  const posted = options.posted ?? [];
   const ordered = records.findings.toSorted(bySeverityThenPlace);
   const anchored = ordered.filter((finding) => isAnchored(finding));
   const loose = ordered.filter((finding) => !isAnchored(finding));
 
-  const inline = maxInline <= 0 ? [] : anchored.slice(0, maxInline);
-  const spilled = anchored.slice(inline.length);
+  // Findings an earlier run already placed leave the cap's slots to the new ones.
+  const fresh = anchored.filter((finding) => !isAlreadyPosted(finding, posted));
+  const alreadyPosted = anchored.length - fresh.length;
+  const inline = maxInline <= 0 ? [] : fresh.slice(0, maxInline);
+  const spilled = fresh.slice(inline.length);
 
   const comments: InlineComment[] = inline.map((finding) => ({
     path: finding.path,
@@ -250,9 +329,10 @@ export function buildReview(
   }));
 
   return {
-    body: reviewBody(records, loose, spilled),
+    body: reviewBody(records, loose, spilled, alreadyPosted),
     comments,
     overflow: spilled.length,
+    alreadyPosted,
     event: reviewEventFor(ordered, options.requestChangesOn ?? []),
   };
 }
@@ -262,9 +342,10 @@ function reviewBody(
   records: ReviewRecords,
   loose: readonly Finding[],
   spilled: readonly Finding[],
+  alreadyPosted: number,
 ): string {
   const { findings, summary } = records;
-  const tally = tallies(summary, records.unreadable);
+  const tally = tallies(summary, records.unreadable, alreadyPosted);
   const policy = policyNote(summary?.policy_changed ?? []);
   const bypass = bypassNote(summary?.bypass_regions ?? []);
   return [
@@ -331,7 +412,7 @@ function oneLine(body: string): string {
 }
 
 /** The run's counters, so the finding count reads in context. */
-function tallies(summary: SummaryRecord | null, unreadable: number): string {
+function tallies(summary: SummaryRecord | null, unreadable: number, alreadyPosted: number): string {
   const notes = [
     ...(summary === null
       ? []
@@ -341,6 +422,9 @@ function tallies(summary: SummaryRecord | null, unreadable: number): string {
           ...(summary.capped > 0 ? [`${summary.capped} withheld by the per-file cap`] : []),
           ...(summary.bypassed > 0 ? [`${summary.bypassed} in bypassed regions`] : []),
         ]),
+    ...(alreadyPosted > 0
+      ? [`${alreadyPosted} already posted inline by an earlier review and not repeated`]
+      : []),
     ...(unreadable > 0 ? [`${unreadable} unreadable record(s)`] : []),
   ];
   return notes.length === 0 ? "" : `<sub>${notes.join("; ")}.</sub>`;
