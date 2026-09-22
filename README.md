@@ -326,7 +326,7 @@ jobs:
         with:
           fetch-depth: 0 # the reviewer needs the merge-base
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: husnuguner/code-reviewer/actions/review@v0.0.9
+      - uses: husnuguner/code-reviewer/actions/review@v0.0.10
         with:
           provider: claude # the workflow names the model: a runner has no ~/.config/reviewer
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -346,7 +346,7 @@ jobs:
         id: findings
         with: { name: code-review-findings }
         continue-on-error: true
-      - uses: husnuguner/code-reviewer/actions/comment@v0.0.9
+      - uses: husnuguner/code-reviewer/actions/comment@v0.0.10
         if: ${{ steps.findings.outcome == 'success' }}
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
