@@ -133,6 +133,20 @@ describe("actions/review/action.yml, the Review step", () => {
     expect(step.exitCode).toBe(0);
   });
 
+  it("adds the exclude input's globs as --exclude flags, one each, to the repository's own", () => {
+    // Exported as REVIEW_EXCLUDE_PATHS it replaced the repository's settings.exclude.
+    const step = runStep(run, {
+      env: reviewEnvironment({ IN_EXCLUDE: "**/*.snap, dist/**\n  vendor/**  \n" }),
+      stub: "bun",
+    });
+    const call = step.calls[0] ?? [];
+    const globs = call.flatMap((argument, index) =>
+      call[index - 1] === "--exclude" ? [argument] : [],
+    );
+    expect(globs).toEqual(["**/*.snap", "dist/**", "vendor/**"]);
+    expect(step.exitCode).toBe(0);
+  });
+
   it("stops at the preview, which spawns the reviewer with no output file", () => {
     const step = runStep(run, {
       env: reviewEnvironment({ PREVIEW: "true" }),

@@ -86,7 +86,9 @@ inputs:
     required: false
     default: ""
   exclude:
-    description: "Newline- or comma-separated globs to skip entirely."
+    description: >-
+      Newline- or comma-separated globs to skip entirely, added to the
+      repository's settings.exclude (not in place of it).
     required: false
     default: ""
   max-findings-per-file:
@@ -381,7 +383,6 @@ runs:
         set_if_given LLM_BASE_URL "${IN_BASE_URL}"
         set_if_given REVIEW_LANG "${IN_LANGUAGE}"
         set_if_given REVIEW_SKILLS_PATH "${IN_SKILLS_PATH}"
-        set_if_given REVIEW_EXCLUDE_PATHS "${IN_EXCLUDE}"
         set_if_given REVIEW_MAX_FINDINGS_PER_FILE "${IN_MAX_FINDINGS}"
         set_if_given REVIEW_VERIFY "${IN_VERIFY}"
         # The reviewed side is the checkout: what actions/checkout put here. The
@@ -392,6 +393,15 @@ runs:
         args=(review --base "origin/${BASE_REF}")
         if [ -n "${SINCE:-}" ]; then
           args+=(--since "${SINCE}")
+        fi
+        # Added to the repository's excludes, as --exclude does; an input that
+        # replaced them would quietly review what the repository excluded.
+        if [ -n "${IN_EXCLUDE}" ]; then
+          while IFS= read -r glob; do
+            glob="${glob#"${glob%%[![:space:]]*}"}"
+            glob="${glob%"${glob##*[![:space:]]}"}"
+            [ -n "${glob}" ] && args+=(--exclude "${glob}")
+          done < <(printf '%s\n' "${IN_EXCLUDE}" | tr ',' '\n')
         fi
         args+=(--fail-on "${FAIL_ON}")
         args+=(--log-format github)
