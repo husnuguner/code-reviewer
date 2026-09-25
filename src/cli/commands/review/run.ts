@@ -169,9 +169,10 @@ export async function runReview(arguments_: ReviewArguments): Promise<number> {
     await runPreview(arguments_, cradle);
     return 0;
   }
-  const { config, logger } = cradle;
-  logger
-    .child("run")
-    .debug(`LLM provider: ${config.provider} (model: ${config.model ?? "<provider default>"}).`);
+  const { config, logger, modelProviders } = cradle;
+  // At INFO: which model, and where the key goes. `local` without a base URL is the OpenAI API, which a
+  // reader of the name alone would not guess.
+  const target = modelProviders.get(config.provider).target(config.llmSettings());
+  logger.child("run").info(`Model: ${target} (provider ${config.provider}).`);
   return runBranchReview(arguments_, cradle);
 }

@@ -17,6 +17,8 @@ export class LocalProvider extends AiSdkProvider {
   readonly name = "local";
   readonly description = `any OpenAI-compatible endpoint (LLM_BASE_URL; default ${OPENAI_BASE_URL})`;
   readonly defaultModel = "gpt-4.1";
+  /** The OpenAI API itself: `local` names the protocol, not where the model runs. */
+  override readonly defaultEndpoint = OPENAI_BASE_URL;
 
   protected languageModel({ apiKey, baseUrl, model }: ModelRequest): LanguageModel {
     return createOpenAICompatible({

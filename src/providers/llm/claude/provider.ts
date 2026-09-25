@@ -25,6 +25,7 @@ export class ClaudeProvider extends AiSdkProvider {
   readonly name = "claude";
   readonly description = "Anthropic Claude; LLM_API_KEY is an Anthropic key";
   readonly defaultModel = "claude-sonnet-4-6";
+  override readonly defaultEndpoint = "https://api.anthropic.com/v1";
 
   protected languageModel({ apiKey, baseUrl, model }: ModelRequest): LanguageModel {
     return createAnthropic({ apiKey, ...(baseUrl !== null && { baseURL: baseUrl }) })(model);

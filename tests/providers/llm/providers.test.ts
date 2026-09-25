@@ -275,6 +275,22 @@ describe("the model provider registry", () => {
     ]);
   });
 
+  it("names the model and the endpoint a run talks to, the vendor's own when none is set", () => {
+    // `local` without a base URL is the OpenAI API: a reader of the name alone would not guess, and a
+    // key meant for a local server sent there is refused.
+    const registry = builtinModelProviders();
+    const bare = { apiKey: "k", baseUrl: null, model: null };
+    expect(registry.get("local").target(bare)).toBe("gpt-4.1 at https://api.openai.com/v1");
+    expect(registry.get("claude").target(bare)).toBe(
+      "claude-sonnet-4-6 at https://api.anthropic.com/v1",
+    );
+    expect(
+      registry
+        .get("local")
+        .target({ ...bare, baseUrl: "http://localhost:11434/v1", model: "qwen2.5-coder" }),
+    ).toBe("qwen2.5-coder at http://localhost:11434/v1");
+  });
+
   it("describes every provider it accepts, so a refusal and the docs cannot drift from it", () => {
     const described = builtinModelProviders().describe();
     for (const name of builtinModelProviders().names()) expect(described).toContain(`'${name}'`);
