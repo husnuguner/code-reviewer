@@ -4,6 +4,8 @@
  */
 
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { COMMENT } from "../../src/cli/commands/comment/command";
 import { INIT } from "../../src/cli/commands/init/command";
@@ -20,6 +22,34 @@ describe("naming the command", () => {
     expect(() => parseArguments([])).toThrow(UsageError);
     expect(() => parseArguments(["--preview"])).toThrow(/unknown option '--preview'/u);
     expect(parseArguments(["review", "--base", "develop"]).command).toBe("review");
+  });
+
+  it("prints its version with -V or --version, and exits 0", () => {
+    // `-v` is --verbose; `-V` is the version, as Commander spells it.
+    const version = (
+      JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "package.json"), "utf8")) as {
+        version: string;
+      }
+    ).version;
+    for (const flag of ["-V", "--version"]) {
+      let thrown: unknown;
+      const written: string[] = [];
+      const write = process.stdout.write.bind(process.stdout);
+      process.stdout.write = (text: string | Uint8Array): boolean => {
+        written.push(String(text));
+        return true;
+      };
+      try {
+        parseArguments([flag]);
+      } catch (error) {
+        thrown = error;
+      } finally {
+        process.stdout.write = write;
+      }
+      expect(thrown).toBeInstanceOf(UsageError);
+      expect((thrown as UsageError).exitCode).toBe(0);
+      expect(written.join("")).toBe(`${version}\n`);
+    }
   });
 
   it("knows init", () => {

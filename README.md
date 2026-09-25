@@ -176,6 +176,7 @@ reviewer review --uncommitted                      # the work that is not in a c
 | `reviewer review`  | Review the checkout against a base.                                                     |
 | `reviewer comment` | Post a findings file to a pull request. Needs `GITHUB_TOKEN`; runs no model.            |
 | `reviewer init`    | Write the config file: `.review/` inside a checkout, `~/.config/reviewer/` outside one. |
+| `reviewer -V`      | Print the version (`--version`); `-v` is `--verbose`.                                   |
 
 ### Review flags
 

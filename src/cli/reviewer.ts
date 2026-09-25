@@ -6,6 +6,7 @@
 
 import { type Command } from "commander";
 
+import { packageVersion } from "../providers/assets/shipped-files";
 import { LOG_FORMATS, LOG_LEVELS } from "../providers/logging/log-settings";
 
 import {
@@ -53,6 +54,8 @@ export function buildProgram(onParsed: (invocation: Invocation) => void): Comman
         "the config files (`init`), or post a run's findings to a pull request (`comment`).",
     ),
   );
+  // `-V`: `-v` is --verbose. Worth asking of a tool a workflow runs from a moving `@v0` tag.
+  program.version(packageVersion(), "-V, --version", "Print the reviewer's version and stop.");
   for (const command of COMMANDS) register(program, command, onParsed);
   return program;
 }

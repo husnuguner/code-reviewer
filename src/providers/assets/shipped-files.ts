@@ -60,3 +60,14 @@ export type ShippedFile =
 export function shippedFile(name: ShippedFile): string {
   return readFileSync(join(packageRoot(), name), "utf8");
 }
+
+/** This package's version, as its `package.json` states it; `"unknown"` when that cannot be read. */
+export function packageVersion(): string {
+  try {
+    const manifest = readFileSync(join(packageRoot(), "package.json"), "utf8");
+    const { version } = JSON.parse(manifest) as { version?: unknown };
+    return typeof version === "string" && version !== "" ? version : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
