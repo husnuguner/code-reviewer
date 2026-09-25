@@ -421,6 +421,47 @@ describe("gathering", () => {
     ]);
   });
 
+  it("never reads a credential file, whatever the patch imports", async () => {
+    // Selection keeps credential files out of the change set; pre-context reads beyond it, and an
+    // import of `../.env` used to put the file's first lines in the prompt as a "definition".
+    const asked: string[] = [];
+    const secrets = fakeContext({
+      ".env": "DATABASE_PASSWORD=super-secret\n",
+      "src/cert.pem": "-----BEGIN PRIVATE KEY-----\n",
+      "src/data.json": '{ "token": "t" }\n',
+    });
+    const recording: CodeContext = {
+      readFile: (path) => {
+        asked.push(path);
+        return secrets.readFile(path);
+      },
+      search: (needle, limit) => secrets.search(needle, limit),
+    };
+    const leaky = new ChangedFile(
+      "src/app.ts",
+      "modified",
+      '@@ -1 +1,4 @@\n+const cfg = require("../.env");\n+import key from "./cert.pem";\n+import data from "./data.json";\n export {};',
+    );
+    const context = await gatherContext({ file: leaky, changeSet: [leaky], context: recording });
+    expect(context.definitions).toEqual([]);
+    expect(asked).not.toContain(".env");
+    expect(asked).not.toContain("src/cert.pem");
+    expect(asked).not.toContain("src/data.json");
+  });
+
+  it("never lists a credential file among a changed export's users", async () => {
+    const exporting = new ChangedFile("src/rate.ts", "modified", "+export const RATE = 3;");
+    const context = await gatherContext({
+      file: exporting,
+      changeSet: [exporting],
+      context: fakeContext({
+        "src/use.ts": "RATE;\n",
+        "config/prod.key": "RATE\n",
+      }),
+    });
+    expect(context.usages).toEqual([{ symbol: "RATE", paths: ["src/use.ts"] }]);
+  });
+
   /**
    * Every Medusa route exports `GET` and `POST`, so the needle matches the whole
    * repository: two searches spent to fill the block with prose.

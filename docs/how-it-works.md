@@ -91,7 +91,10 @@ Two exclusions are not the project's to make (`src/core/review/guards.ts`):
   `**/.pypirc`, `**/.dockercfg`, `**/.docker/config.json`,
   `**/.git-credentials`, `**/.htpasswd`. A match is skipped before anything is
   read and named in the log at INFO. `exclude` can add to this list; nothing
-  can take away from it.
+  can take away from it. The guard sits on every read, not only on the change
+  set: pre-context never reads a credential file as an imported module's
+  "definition" (`require("../.env")`) nor lists one among a symbol's users,
+  and an import resolves only to a JavaScript/TypeScript source file.
 - **Binary patches** — git's binary marker, or any patch carrying a NUL byte.
 
 `.env.example` is withheld too: a template with a live value pasted into it

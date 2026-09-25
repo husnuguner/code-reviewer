@@ -374,8 +374,9 @@ Inputs, the `reviewer comment` flags, and pinning advice:
   file, the pre-context and the skills cannot change the reviewer's scope or
   output shape; an attempt to do so is itself a `security` finding.
 - **Credential files are never read or prompted.** `.env`, keys, certificates,
-  `.ssh/`, `.aws/`, `.npmrc` and the like are skipped before anything is read.
-  `exclude` can add to that list; nothing can take away from it.
+  `.ssh/`, `.aws/`, `.npmrc` and the like are skipped before anything is read,
+  in the change set and in the pre-context read around it alike. `exclude` can
+  add to that list; nothing can take away from it.
 - **The review policy is not configurable.** A project adds standing
   instructions and skills on top of it; it cannot drop a hard rule.
 - **A pull request cannot loosen the rules it is reviewed under.** In CI the

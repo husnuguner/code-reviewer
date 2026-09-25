@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 
+import { type CodeContext, type CodeSearchHit } from "../ports/code-context";
 import { isGlobMatch } from "../skills/glob";
 
 /**
@@ -45,6 +46,23 @@ export const SECRET_PATHS: readonly string[] = [
 export function isSecretPath(path: string): boolean {
   const lowered = path.toLowerCase();
   return SECRET_PATHS.some((glob) => isGlobMatch(lowered, glob));
+}
+
+/**
+ * A `CodeContext` that never reads a credential file and never reports a search hit in one.
+ *
+ * @remarks The guard sits on the reading port, not on one caller: selection keeps credential files out of the
+ * change set, but pre-context reads the repository beyond it -- an import of `../.env` would otherwise put
+ * the file's first lines in the prompt as a "definition". Every read that goes through this cannot forget.
+ */
+export function guardedContext(context: CodeContext): CodeContext {
+  return {
+    readFile: async (path) => (isSecretPath(path) ? null : context.readFile(path)),
+    search: async (needle, limit): Promise<CodeSearchHit[]> => {
+      const hits = await context.search(needle, limit);
+      return hits.filter((hit) => !isSecretPath(hit.path));
+    },
+  };
 }
 
 /** Git's two binary markers. */

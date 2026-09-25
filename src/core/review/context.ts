@@ -13,6 +13,7 @@ import { errorMessage } from "../util/errors";
 import { cutToLength, sortedByCodePoint } from "../util/text";
 
 import { braceDepthChange } from "./braces";
+import { guardedContext } from "./guards";
 
 /** How much context one file review may gather. */
 export interface ContextLimits {
@@ -247,9 +248,11 @@ async function resolveModule(
 ): Promise<{ path: string; text: string } | null> {
   const stem = resolveSpecifier(fromPath, specifier);
   const bases = stem === withoutExtension(stem) ? [stem] : [stem, withoutExtension(stem)];
+  // Only a source file is a module whose signatures mean anything; a specifier naming anything else
+  // (`../.env`, `./data.json`, `./cert.pem`) is not read.
   const candidates = bases
     .flatMap((base) => MODULE_SUFFIXES.map((suffix) => `${base}${suffix}`))
-    .filter((path) => path !== fromPath);
+    .filter((path) => path !== fromPath && isCodePath(path));
   for (const path of candidates) {
     const text = await context.readFile(path);
     if (text !== null) return { path, text };
@@ -483,6 +486,8 @@ export interface GatherContextOptions {
 /**
  * Gathers a file's surroundings within the limits.
  *
+ * @remarks The port is read through {@link guardedContext}: no credential file is read or listed, whatever
+ * the patch imports or a search matches.
  * @returns The context. A port call that fails costs that one item, never the review. Results are read
  * back in request order, so the prompt does not depend on which call answered first.
  */
@@ -490,7 +495,8 @@ export async function gatherContext(options: GatherContextOptions): Promise<Revi
   const limits = options.limits ?? DEFAULT_CONTEXT_LIMITS;
   if (limits.maxChars <= 0) return EMPTY_CONTEXT;
   const log = (options.logger ?? NULL_LOGGER).child("review.context");
-  const { file, context } = options;
+  const { file } = options;
+  const context = guardedContext(options.context);
   const perItem = Math.max(400, Math.floor(limits.maxChars / 4));
   const lookup = pLimit(MAX_CONCURRENT_LOOKUPS);
 
