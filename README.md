@@ -268,13 +268,10 @@ A skill is one Markdown file of review guidelines. Which files it applies to
 is stated once, in `config.yaml`: `skills.defaults` for the baseline a whole
 language or area shares, `skills.mappings` for the paths one skill alone
 reviews. Skills live in the reviewed repository; the reviewer ships none of
-its own.
+its own. `.review/skills/api-conventions.md`:
 
 ```markdown
-<!-- .review/skills/api-conventions.md -->
-
 ---
-
 name: api-conventions
 description: Rules for HTTP handlers.
 ---
