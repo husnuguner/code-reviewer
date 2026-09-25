@@ -20,7 +20,7 @@ export interface GitReader {
   /**
    * The three-dot diff `base...branch`, one entry per file.
    *
-   * @remarks Removed files and files without textual hunks are not reported.
+   * @remarks Every file git names is reported with its status, removed and binary ones included.
    */
   changedFiles(base: string, branch: string): Promise<ChangedFileEntry[]>;
 
@@ -37,4 +37,11 @@ export interface GitReader {
    * @returns The text, or `null` when it cannot be read as text.
    */
   readFile(path: string): Promise<string | null>;
+
+  /**
+   * A file's text at a commit, whole: what a review of that commit reads, whatever the working tree holds.
+   *
+   * @returns The text, or `null` when the commit has no such file or it is not text.
+   */
+  readFileAt(reference: string, path: string): Promise<string | null>;
 }

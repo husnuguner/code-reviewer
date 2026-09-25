@@ -116,7 +116,10 @@ export async function* iterBranchReview(
         settings: options.settings,
         skills: options.skills,
         limit,
-        readContent: (path) => git.readFile(path),
+        // The file as the diff has it: the working tree for uncommitted work, else the commit under
+        // review -- a local tree with edits not yet committed must not stand in for `HEAD`.
+        readContent: (path) =>
+          options.uncommitted === true ? git.readFile(path) : git.readFileAt(HEAD, path),
         codeContext: options.codeContext ?? null,
         changeSet,
         maxFindingsPerFile: options.maxFindingsPerFile ?? 0,

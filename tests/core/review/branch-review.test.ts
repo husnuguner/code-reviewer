@@ -151,13 +151,23 @@ describe("what git reports", () => {
     expect(o.reviewer.seen).not.toContain("gone.py");
   });
 
-  it("gives a modified file its worktree content as context, an added file none", async () => {
+  it("gives a modified file its content at HEAD as context, an added file none", async () => {
     const o = options(repo());
     await reviewBranch(o);
     expect(o.reviewer.contents.get("a.py")).toBe("one = 1\ntwo = 2\nthree = 3\n");
     // Its diff already is the whole file, so attaching it again would only
     // duplicate it in the prompt.
     expect(o.reviewer.contents.get("new.py")).toBeNull();
+  });
+
+  it("reads that content from the commit under review, not from a working tree with edits of its own", async () => {
+    // The diff is HEAD's; the full text beside it, and the bypass regions read from it, must be too,
+    // or the model is shown line numbers that disagree with the file it is given.
+    const root = repo();
+    writeFileSync(join(root, "a.py"), "# not committed\none = 1\ntwo = 2\nthree = 99\n");
+    const o = options(root);
+    await reviewBranch(o);
+    expect(o.reviewer.contents.get("a.py")).toBe("one = 1\ntwo = 2\nthree = 3\n");
   });
 
   it("attaches a modified file's content whole, or past the ceiling not at all", async () => {

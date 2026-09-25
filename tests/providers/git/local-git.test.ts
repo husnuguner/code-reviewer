@@ -107,6 +107,15 @@ describe("what git reports", () => {
     expect(files[0]?.patch).toContain("+three = 3");
   });
 
+  it("reads a file's text at a commit, whatever the working tree holds", async () => {
+    const root = repo();
+    writeFileSync(join(root, "a.py"), "edited, not committed\n");
+    const reader = new LocalGitReader(root);
+    expect(await reader.readFileAt("HEAD", "a.py")).toBe("one = 1\ntwo = 2\nthree = 3\n");
+    expect(await reader.readFileAt("HEAD", "gone.py")).toBeNull();
+    expect(await reader.readFileAt("main", "gone.py")).toBe("doomed = True\n");
+  });
+
   it("reads a changed file's current text, whole", async () => {
     const reader = new LocalGitReader(repo());
     expect(await reader.readFile("a.py")).toBe("one = 1\ntwo = 2\nthree = 3\n");

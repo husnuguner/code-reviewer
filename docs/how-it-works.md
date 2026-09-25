@@ -14,7 +14,9 @@ local git ──▶ select ──▶ per file: context ▸ model ▸ anchor ▸ 
 1. **Read the change set** from local git: the three-dot diff `base...HEAD`
    (or the working tree against `HEAD` with `--uncommitted`). The reviewed
    side is always the checkout: the diff, the file contents and the
-   pre-context are read from one tree.
+   pre-context are read from one tree -- the commit `HEAD` for a branch or
+   `--since` review (edits not yet committed are not mixed in), the working
+   tree for `--uncommitted`.
 2. **Select** which files are reviewed and why the others are not. One pure
    function; `--preview` prints its output and stops.
 3. **Review each selected file** (in parallel, bounded by

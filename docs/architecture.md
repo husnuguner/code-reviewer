@@ -129,8 +129,10 @@ The choices with a real trade-off behind them, and what was given up:
 - **The reviewed side is always the checkout.** `HEAD` against a base, or the
   working tree against `HEAD`; there is no `--branch`. The diff, the file
   contents and the pre-context then come from one tree, and cannot disagree
-  about which commit is under review. Given up: reviewing a ref without
-  checking it out.
+  about which commit is under review: a branch review reads the file text at
+  `HEAD` (`git show`), not from the working tree, so local edits not yet
+  committed never stand beside a diff that does not have them. Given up:
+  reviewing a ref without checking it out.
 - **A file is reviewed whole or not at all.** Nothing shown to the model is
   cut to size: an oversized diff is skipped as `too_large` and said so, never
   trimmed to fit. The one thing left out is a block the author bypassed, which

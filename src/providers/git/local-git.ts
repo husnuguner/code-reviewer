@@ -162,6 +162,17 @@ export class LocalGitReader implements GitReader {
     }
   }
 
+  /** The file at `reference` via `git show`, or `null` when absent or not text (a NUL byte). */
+  async readFileAt(reference: string, path: string): Promise<string | null> {
+    try {
+      const text = await this.run(this.root, ["show", `${reference}:${path}`]);
+      return text.includes("\u{0}") ? null : text;
+    } catch (error) {
+      this.log.debug(`No ${path} at ${reference}: ${errorMessage(error)}`);
+      return null;
+    }
+  }
+
   /** `HEAD`, or the empty tree in a repository with no commit yet. */
   private async committedSide(): Promise<string> {
     const head = await this.run(this.root, ["rev-parse", "--verify", "--quiet", "HEAD"], {
