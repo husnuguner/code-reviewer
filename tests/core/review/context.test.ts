@@ -449,6 +449,42 @@ describe("gathering", () => {
     expect(asked).not.toContain("src/data.json");
   });
 
+  it("gives a credential import, or one that resolves to nothing, no Definitions slot", async () => {
+    // Found on dfs-backend: `require('../.env')` took one of four slots, and a real module imported
+    // further down the file was left out of the block.
+    const importing = new ChangedFile(
+      "src/api/route.ts",
+      "modified",
+      [
+        "@@ -1 +1,6 @@",
+        "+const env = require('../.env');",
+        "+import { gone } from './deleted-module';",
+        "+import { a } from './a';",
+        "+import { b } from './b';",
+        "+import { c } from './c';",
+        " import { d } from './d';",
+      ].join("\n"),
+    );
+    const context = await gatherContext({
+      file: importing,
+      changeSet: [importing],
+      context: fakeContext({
+        ".env": "SECRET=x\n",
+        "src/api/a.ts": "export const a = 1;\n",
+        "src/api/b.ts": "export const b = 1;\n",
+        "src/api/c.ts": "export const c = 1;\n",
+        "src/api/d.ts": "export const d = 1;\n",
+      }),
+      limits: { ...DEFAULT_CONTEXT_LIMITS, maxDefinitions: 4 },
+    });
+    expect(context.definitions.map((definition) => definition.path)).toEqual([
+      "src/api/a.ts",
+      "src/api/b.ts",
+      "src/api/c.ts",
+      "src/api/d.ts",
+    ]);
+  });
+
   it("never lists a credential file among a changed export's users", async () => {
     const exporting = new ChangedFile("src/rate.ts", "modified", "+export const RATE = 3;");
     const context = await gatherContext({

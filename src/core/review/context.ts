@@ -13,7 +13,7 @@ import { errorMessage } from "../util/errors";
 import { cutToLength, sortedByCodePoint } from "../util/text";
 
 import { braceDepthChange } from "./braces";
-import { guardedContext } from "./guards";
+import { guardedContext, isSecretPath } from "./guards";
 
 /** How much context one file review may gather. */
 export interface ContextLimits {
@@ -43,6 +43,12 @@ export const DEFAULT_CONTEXT_LIMITS: ContextLimits = {
   maxUsagesPerSymbol: 8,
   maxRelated: 3,
 };
+
+/**
+ * Import specifiers tried per Definitions slot. A miss is cheap (the ref's path list is read once), and
+ * without a margin one unresolvable import at the top of a file pushes a real module out of the block.
+ */
+const DEFINITION_CANDIDATES_PER_SLOT = 2;
 
 /** Port calls in flight per file; multiplies with `maxConcurrentFiles`. */
 const MAX_CONCURRENT_LOOKUPS = 4;
@@ -500,8 +506,12 @@ export async function gatherContext(options: GatherContextOptions): Promise<Revi
   const perItem = Math.max(400, Math.floor(limits.maxChars / 4));
   const lookup = pLimit(MAX_CONCURRENT_LOOKUPS);
 
+  // A credential specifier is never read, so it takes no slot; and more candidates than the cap are tried,
+  // because one that resolves to nothing (a package path, a deleted file) should not cost a real module
+  // its place. The first `maxDefinitions` that resolve are kept, in import order.
   const defined = (isCodePath(file.path) ? importsOf(file) : [])
-    .slice(0, limits.maxDefinitions)
+    .filter((specifier) => !isSecretPath(resolveSpecifier(file.path, specifier)))
+    .slice(0, limits.maxDefinitions * DEFINITION_CANDIDATES_PER_SLOT)
     .map((specifier) =>
       lookup(async (): Promise<DefinitionContext | null> => {
         try {
@@ -559,7 +569,7 @@ export async function gatherContext(options: GatherContextOptions): Promise<Revi
     }));
 
   return {
-    definitions: definitions.filter((item) => item !== null),
+    definitions: definitions.filter((item) => item !== null).slice(0, limits.maxDefinitions),
     usages: usages.filter((item) => item !== null),
     related,
   };
