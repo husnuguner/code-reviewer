@@ -35,7 +35,7 @@ export type SelectionReason =
   | "secret"
   /** A patch git could not express as text. */
   | "binary"
-  /** `removed` or `renamed`. */
+  /** `removed`. */
   | "status"
   /** Matched an `exclude` glob. */
   | "excluded"

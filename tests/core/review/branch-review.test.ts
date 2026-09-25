@@ -119,6 +119,20 @@ function options<R extends PerFileReviewer = FakeReviewer>(
 // -- what git reports ------------------------------------------------------
 
 describe("what git reports", () => {
+  it("reviews a file that was moved and edited in one change, at its new path", async () => {
+    // `status=renamed` used to be a skip: moving a file and adding a line to it hid the line.
+    const root = repo();
+    mkdirSync(join(root, "lib"));
+    git(root, "mv", "a.py", "lib/a.py");
+    writeFileSync(join(root, "lib", "a.py"), "one = 1\ntwo = 2\nthree = 3\nbackdoor = True\n");
+    git(root, "commit", "-qam", "move and edit");
+    const o = options(root);
+    const result = await reviewBranch(o);
+    expect(o.reviewer.seen).toContain("lib/a.py");
+    expect(result.skipped["status"]).toBeUndefined();
+    expect(result.findings.map((f) => f.path)).toContain("lib/a.py");
+  });
+
   it("reviews changed files and leaves the rest alone", async () => {
     const o = options(repo());
     const result = await reviewBranch(o);

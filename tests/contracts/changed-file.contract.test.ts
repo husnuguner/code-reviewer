@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import pLimit from "p-limit";
 
-import { ChangedFile } from "../../src/core/domain/changed-file";
+import { ChangedFile, SKIP_STATUSES } from "../../src/core/domain/changed-file";
 import { type Finding, finding } from "../../src/core/domain/finding";
 import { type ReviewFileInput } from "../../src/core/review/file-reviewer";
 import {
@@ -94,11 +94,12 @@ describe("anchor tallies", () => {
     );
   });
 
-  it("never reviews removed or renamed files", () => {
-    expect(helpers.find((c) => c.name === "skip_statuses")?.expected).toEqual([
-      "removed",
-      "renamed",
-    ]);
+  it("never reviews removed files, and reviews a renamed one like any other", () => {
+    // A rename git reports with hunks was edited as it moved; skipping it let a file be moved and
+    // changed in one commit without review.
+    const expected = helpers.find((c) => c.name === "skip_statuses")?.expected;
+    expect(expected).toEqual(["removed"]);
+    expect([...SKIP_STATUSES]).toEqual(expected as string[]);
   });
 });
 

@@ -45,7 +45,7 @@ reason:
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `secret`         | The path names a credential file. Never read, never prompted.                                                                                  |
 | `binary`         | Git could not express the patch as text.                                                                                                       |
-| `status`         | `removed` or `renamed`: nothing to comment on.                                                                                                 |
+| `status`         | `removed`: nothing to comment on. A renamed file is reviewed like any other: if git reports hunks, it was edited as it moved.                  |
 | `excluded`       | Matched one of the project's `exclude` globs.                                                                                                  |
 | `no_added_lines` | The patch adds no lines, so no comment could be anchored.                                                                                      |
 | `no_patch`       | The record carried no path or no patch.                                                                                                        |

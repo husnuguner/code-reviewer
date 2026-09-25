@@ -48,5 +48,11 @@ export class ChangedFile implements ChangedFileEntry {
   }
 }
 
-/** Statuses with no commentable added lines; never reviewed. */
-export const SKIP_STATUSES: ReadonlySet<string> = new Set(["removed", "renamed"]);
+/**
+ * Statuses with no commentable added lines; never reviewed.
+ *
+ * @remarks `renamed` is not among them. A rename git reports with hunks was edited as it moved -- git pairs
+ * files down to 50% similarity -- and the edit is the change. A rename with no hunks has no added lines and
+ * is skipped as such.
+ */
+export const SKIP_STATUSES: ReadonlySet<string> = new Set(["removed"]);

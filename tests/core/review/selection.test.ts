@@ -72,7 +72,8 @@ describe("deciding which files are reviewed", () => {
     expect(reasonFor("", "modified")).toBe("no_patch");
     expect(reasonFor("x.png", "modified", BINARY)).toBe("binary");
     expect(reasonFor("a.ts", "removed")).toBe("status");
-    expect(reasonFor("a.ts", "renamed")).toBe("status");
+    // A rename with hunks was edited as it moved: reviewed, not skipped.
+    expect(reasonFor("a.ts", "renamed")).toBe("none");
     expect(reasonFor("a.spec.ts", "modified", PATCH, ["**/*.spec.ts"])).toBe("excluded");
     expect(reasonFor("a.ts", "modified", "@@ -1,2 +1 @@\n a\n-b\n")).toBe("no_added_lines");
   });

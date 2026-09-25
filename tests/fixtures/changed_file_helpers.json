@@ -23,8 +23,7 @@
       "name": "skip_statuses",
       "input": {},
       "expected": [
-        "removed",
-        "renamed"
+        "removed"
       ]
     }
   ]
