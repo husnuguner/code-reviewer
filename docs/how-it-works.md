@@ -279,7 +279,10 @@ it off for one run, `verify: false` for a project.
 
 `max-findings-per-file` (default 3; `0` = no cap) caps how many findings one
 file reports. When it bites, the most severe survive and the rest are counted
-into `capped`.
+into `capped`. "Most severe" is the vocabulary's order -- `bug`, `security`,
+`performance`, `readability` -- so with a cap of three, four `bug` findings
+leave a `security` one out (and `capped` says so). A file that needs every
+finding reported gets a larger cap, or `0`.
 
 The model is told the cap too, in the same severity order, and asked not to
 shorten or merge findings to fit. A completion's wall time is its output, so
