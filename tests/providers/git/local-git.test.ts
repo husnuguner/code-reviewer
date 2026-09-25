@@ -107,6 +107,26 @@ describe("what git reports", () => {
     expect(files[0]?.patch).toContain("+three = 3");
   });
 
+  it("knows which refs name a commit, and refuses an option-shaped one", async () => {
+    const reader = new LocalGitReader(repo());
+    expect(await reader.hasCommit("main")).toBe(true);
+    expect(await reader.hasCommit("develop")).toBe(false);
+    expect(await reader.hasCommit("--output=/tmp/x")).toBe(false);
+    expect(await reader.hasCommit("")).toBe(false);
+  });
+
+  it("takes the remote's default branch as the base, else main, else master, else none", async () => {
+    const root = repo();
+    expect(await new LocalGitReader(root).defaultBase()).toBe("main");
+    const clone = mkdtempSync(join(tmpdir(), "reviewer-clone-"));
+    git(clone, "clone", "-q", root, ".");
+    expect(await new LocalGitReader(clone).defaultBase()).toBe("origin/feature");
+    git(root, "branch", "-q", "-m", "main", "master");
+    expect(await new LocalGitReader(root).defaultBase()).toBe("master");
+    git(root, "branch", "-q", "-m", "master", "trunk");
+    expect(await new LocalGitReader(root).defaultBase()).toBeNull();
+  });
+
   it("reads a file's text at a commit, whatever the working tree holds", async () => {
     const root = repo();
     writeFileSync(join(root, "a.py"), "edited, not committed\n");

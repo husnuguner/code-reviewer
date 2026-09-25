@@ -18,7 +18,8 @@ import { runReview } from "./run";
 
 /** The parsed `review` command line. */
 export interface ReviewArguments extends ConfigArguments {
-  readonly base: string;
+  /** `--base`, or `null` when not given: the run then discovers the repository's default branch. */
+  readonly base: string | null;
   /** Review the working tree; `--base` is then not used. */
   readonly uncommitted: boolean;
   /** Review only the commits after this one; `--base` is then not used. `null` when not given. */
@@ -41,9 +42,12 @@ export interface ReviewArguments extends ConfigArguments {
 function reviewOptions(command: Command): Command {
   return (
     configOptions(command)
-      .option("--base <name>", "Base branch the checkout is compared against.", "main")
+      .option(
+        "--base <name>",
+        "What the checkout is compared against, and what the change merges into (default: the remote's default branch, origin/HEAD, else a local main, else master).",
+      )
       // One question or the other: the working tree against HEAD, or the checkout against a base. Naming
-      // a base alongside --uncommitted is refused rather than ignored; the default does not count.
+      // a base alongside --uncommitted is refused rather than ignored.
       .addOption(
         new Option(
           "--uncommitted",
@@ -128,6 +132,7 @@ export const REVIEW = defineCommand<ReviewArguments>({
   arguments: (options) => ({
     ...options,
     ...configArguments(options),
+    base: options.base ?? null,
     out: options.out ?? null,
     since: options.since ?? null,
     lang: options.lang ?? null,

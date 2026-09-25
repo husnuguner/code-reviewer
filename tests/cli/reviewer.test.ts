@@ -97,7 +97,8 @@ describe("the review flags", () => {
       logFormat: "auto",
       // Commander's shape for `--no-color`: on until the flag is given.
       color: true,
-      base: "main",
+      // Not `main`: unnamed, the run discovers the repository's default branch.
+      base: null,
       since: null,
       // The checkout against the base until a run asks for the working tree instead.
       uncommitted: false,
@@ -127,8 +128,7 @@ describe("the review flags", () => {
     expect(() => review(["--uncommitted", "--base", "develop"])).toThrow(
       /'--uncommitted' cannot be used with option '--base/u,
     );
-    // The default of --base does not count as naming it.
-    expect(review(["--uncommitted"]).base).toBe("main");
+    expect(review(["--uncommitted"]).base).toBeNull();
   });
 
   it("know no --branch: the reviewed side is always the checkout", () => {
@@ -137,7 +137,7 @@ describe("the review flags", () => {
 
   it("take --since as a third scope beside --base, which names what the change merges into", () => {
     expect(review(["--since", "abc123"]).since).toBe("abc123");
-    expect(review(["--since", "abc123"]).base).toBe("main");
+    expect(review(["--since", "abc123"]).base).toBeNull();
     expect(review(["--since", "abc123", "--base", "develop"]).base).toBe("develop");
     expect(() => review(["--since", "abc123", "--uncommitted"])).toThrow(UsageError);
     expect(() => review(["--since"])).toThrow(UsageError);

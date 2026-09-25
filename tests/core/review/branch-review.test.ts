@@ -31,6 +31,7 @@ import {
   type PerFileReviewer,
 } from "../../../src/core/review/review-file";
 import { type Verdict, type VerifyInput } from "../../../src/core/review/verify";
+import { GitError } from "../../../src/core/util/errors";
 import { sortedByCodePoint } from "../../../src/core/util/text";
 import { LocalGitReader } from "../../../src/providers/git/local-git";
 import { loadFixture } from "../../contracts/fixtures";
@@ -242,15 +243,30 @@ describe("what git reports", () => {
     expect(result.findings).toEqual([]);
   });
 
-  it("surfaces an unrelated branch as a git error the operator can read", async () => {
-    // With no merge-base the three-dot diff has nothing to fork from; git
-    // refuses, and that refusal is reported rather than swallowed.
+  it("surfaces an unrelated branch as a git error the operator can read, with the fix", async () => {
+    // With no merge-base there is nothing to fork from. The log used to promise a direct comparison
+    // and git then refused anyway; now one line says why and what to do.
     const root = repo();
     git(root, "checkout", "-q", "--orphan", "island");
     writeFileSync(join(root, "island.py"), "alone = True\n");
     git(root, "add", "-A");
     git(root, "commit", "-qm", "unrelated history");
-    await expect(reviewBranch(options(root))).rejects.toThrow(/no merge base/u);
+    const refusal = reviewBranch(options(root));
+    await expect(refusal).rejects.toThrow(GitError);
+    await expect(refusal).rejects.toThrow(/No merge-base for HEAD and 'main'.*fetch-depth: 0/u);
+  });
+
+  it("refuses a base that names no commit, with the fix, before git answers with a usage screen", async () => {
+    const refusal = reviewBranch(options(repo(), { base: "develop" }));
+    await expect(refusal).rejects.toThrow(GitError);
+    await expect(refusal).rejects.toThrow(
+      /--base 'develop' is not a commit in .*Fetch it \(git fetch origin\), or name another or origin\/develop\./u,
+    );
+  });
+
+  it("refuses a --since that names no commit the same way", async () => {
+    const refusal = reviewBranch(options(repo(), { since: "nope" }));
+    await expect(refusal).rejects.toThrow(/--since 'nope' is not a commit/u);
   });
 });
 

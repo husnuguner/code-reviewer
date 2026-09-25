@@ -25,7 +25,7 @@ import {
 } from "../ports/review-reporter";
 import { type SkillMatcher } from "../ports/skill-matcher";
 import { asCompleted } from "../util/as-completed";
-import { errorMessage } from "../util/errors";
+import { GitError, errorMessage } from "../util/errors";
 import { compareCodePoints } from "../util/text";
 
 import {
@@ -330,19 +330,36 @@ async function changedFilesOf(
     return dirty;
   }
   if (options.since !== undefined) {
+    await requireCommit(git, options.since, "--since");
     const files = await git.changedFiles(options.since, HEAD);
     log.info(
       `${HEAD} since '${options.since}' in ${git.root}: ${files.length} changed file(s); earlier commits are not reviewed.`,
     );
     return files;
   }
+  await requireCommit(git, base, "--base");
   const forkPoint = await git.mergeBase(base, HEAD);
   if (forkPoint === null) {
-    log.warn(`No merge-base for '${HEAD}' and '${base}'; comparing against '${base}' directly.`);
+    throw new GitError(
+      `No merge-base for ${HEAD} and '${base}' in ${git.root}: the histories are unrelated, or the clone is shallow (in CI, check out with fetch-depth: 0). Fetch more history, or name another --base.`,
+    );
   }
-  const files = await git.changedFiles(forkPoint ?? base, HEAD);
+  const files = await git.changedFiles(forkPoint, HEAD);
   log.info(`${HEAD} vs '${base}' in ${git.root}: ${files.length} changed file(s).`);
   return files;
+}
+
+/**
+ * Refuses a ref that names no commit here, with the fix, before git answers it with a usage screen.
+ *
+ * @throws {@link GitError} naming the flag the ref came from.
+ */
+async function requireCommit(git: GitReader, reference: string, flag: string): Promise<void> {
+  if (await git.hasCommit(reference)) return;
+  const remote = reference.startsWith("origin/") ? "" : ` or origin/${reference}`;
+  throw new GitError(
+    `${flag} '${reference}' is not a commit in ${git.root}. Fetch it (git fetch origin), or name another${remote}.`,
+  );
 }
 
 /** Options for {@link previewBranch}: local git and the settings, no model. */

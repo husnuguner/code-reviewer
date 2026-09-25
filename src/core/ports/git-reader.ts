@@ -13,9 +13,20 @@ export interface GitReader {
   /**
    * Where `branch` forked from `base`.
    *
-   * @returns The merge-base, or `null` when the refs are unrelated (callers fall back to a two-dot diff).
+   * @returns The merge-base, or `null` when there is none: unrelated histories, or a shallow clone.
    */
   mergeBase(base: string, branch: string): Promise<string | null>;
+
+  /** Whether `reference` names a commit here: a branch, a tag, a sha, `origin/main`. */
+  hasCommit(reference: string): Promise<boolean>;
+
+  /**
+   * The branch a change here would merge into, when nobody named one: the remote's default branch
+   * (`origin/HEAD`), else a local `main`, else `master`.
+   *
+   * @returns The ref, or `null` when none of them exists.
+   */
+  defaultBase(): Promise<string | null>;
 
   /**
    * The three-dot diff `base...branch`, one entry per file.

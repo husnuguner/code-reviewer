@@ -5,13 +5,17 @@
  */
 
 import { type ConfigField } from "../../../core/config/config";
+import { type GitReader } from "../../../core/ports/git-reader";
+import { type Logger } from "../../../core/ports/logger";
 import {
   type BranchReviewResult,
+  HEAD,
   previewBranch,
   streamBranchReview,
 } from "../../../core/review/branch-review";
 import { severityGate } from "../../../core/review/severity";
 import { closeReporter } from "../../../providers/reporting/closable";
+import { OperatorError } from "../../command-line";
 import { type RunCradle, type RunRequest, buildContainer } from "../../container";
 import { logSettingsFrom } from "../../options/logging";
 
@@ -65,6 +69,34 @@ export function hasFailingFinding(
   return result.findings.some((finding) => isGated(finding.severity));
 }
 
+/**
+ * The base the run compares against: `--base`, else the repository's default branch, said at INFO.
+ *
+ * @returns The ref; for `--uncommitted`, which compares against `HEAD`, the base is unused. A `--since` run
+ * with no base to be found falls back to its own starting point, so the reviewed diff decides which bypass
+ * markers are the change's.
+ * @throws {@link OperatorError} for a branch or `--since` review with no base named and none to be found.
+ */
+export async function resolveBase(
+  arguments_: Pick<ReviewArguments, "base" | "uncommitted" | "since">,
+  git: Pick<GitReader, "defaultBase">,
+  logger: Logger,
+): Promise<string> {
+  if (arguments_.base !== null) return arguments_.base;
+  if (arguments_.uncommitted) return HEAD;
+  const found = await git.defaultBase();
+  if (found !== null) {
+    logger
+      .child("run")
+      .info(`Base: '${found}', the repository's default branch; --base names another.`);
+    return found;
+  }
+  if (arguments_.since !== null) return arguments_.since;
+  throw new OperatorError(
+    "No base to compare against: there is no origin/HEAD, main or master here. Name one with --base.",
+  );
+}
+
 /** The container request from the parsed arguments; a preview needs no model. */
 function requestFrom(arguments_: ReviewArguments): RunRequest {
   return {
@@ -87,7 +119,7 @@ async function runBranchReview(arguments_: ReviewArguments, cradle: RunCradle): 
   const { config, logger, gitReader } = cradle;
   const reporter = cradle.branchReporter;
   const options = {
-    base: arguments_.base,
+    base: await resolveBase(arguments_, gitReader, logger),
     uncommitted: arguments_.uncommitted,
     ...(arguments_.since !== null && { since: arguments_.since }),
     reviewer: cradle.fileReviewer,
@@ -115,7 +147,7 @@ async function runBranchReview(arguments_: ReviewArguments, cradle: RunCradle): 
 async function runPreview(arguments_: ReviewArguments, cradle: RunCradle): Promise<void> {
   const { config, logger, gitReader } = cradle;
   const { report } = await previewBranch({
-    base: arguments_.base,
+    base: await resolveBase(arguments_, gitReader, logger),
     uncommitted: arguments_.uncommitted,
     ...(arguments_.since !== null && { since: arguments_.since }),
     git: gitReader,

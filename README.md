@@ -181,7 +181,7 @@ reviewer review --uncommitted                      # the work that is not in a c
 
 | Flag                                                    | Effect                                                                                                                                  |
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `--base NAME`                                           | Base the checkout (`HEAD`) is compared against (default `main`).                                                                        |
+| `--base NAME`                                           | What the checkout (`HEAD`) is compared against (default: the remote's default branch, `origin/HEAD`, else `main`, else `master`).       |
 | `--uncommitted`                                         | Review the working tree against `HEAD`: staged, unstaged and untracked work. Not with `--base`.                                         |
 | `--since REF`                                           | Review only the commits after `REF` (the diff `REF..HEAD`); `--base` still names what the change merges into. Not with `--uncommitted`. |
 | `--format text\|ndjson\|github`                         | How findings are reported (default `text`).                                                                                             |

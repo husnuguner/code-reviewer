@@ -95,6 +95,12 @@ const ABSENT_REF: readonly number[] = [1];
 /** The empty side of an untracked file's diff. */
 const DEV_NULL = "/dev/null";
 
+/** Git's suffix that resolves a ref to the commit it names, a tag's included. */
+const PEEL_TO_COMMIT = "^{commit}";
+
+/** Local branch names taken as the base when the remote names no default, in order. */
+const LOCAL_DEFAULT_BRANCHES = ["main", "master"] as const;
+
 /** Untracked files diffed at once; each is one `--no-index` subprocess. */
 const UNTRACKED_AT_ONCE = 8;
 
@@ -111,17 +117,43 @@ export class LocalGitReader implements GitReader {
     this.log = logger.child("review.local_git");
   }
 
+  /** The merge-base, or `null`; the caller says what that means, so this only logs at DEBUG. */
   async mergeBase(base: string, branch: string): Promise<string | null> {
     let out: string;
     try {
       out = await this.run(this.root, ["merge-base", base, branch]);
     } catch (error) {
       const detail = errorMessage(error);
-      this.log.warn(`No merge-base for ${show(base)} and ${show(branch)}: ${detail}`);
+      this.log.debug(`No merge-base for ${show(base)} and ${show(branch)}: ${detail}`);
       return null;
     }
     const sha = out.trim();
     return sha === "" ? null : sha;
+  }
+
+  async hasCommit(reference: string): Promise<boolean> {
+    if (reference.trim() === "" || reference.startsWith("-")) return false;
+    const out = await this.run(
+      this.root,
+      ["rev-parse", "--verify", "--quiet", `${reference}${PEEL_TO_COMMIT}`],
+      {
+        allowedExitCodes: ABSENT_REF,
+      },
+    );
+    return out.trim() !== "";
+  }
+
+  async defaultBase(): Promise<string | null> {
+    const remote = await this.run(
+      this.root,
+      ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+      { allowedExitCodes: ABSENT_REF },
+    );
+    if (remote.trim() !== "") return remote.trim();
+    for (const name of LOCAL_DEFAULT_BRANCHES) {
+      if (await this.hasCommit(`refs/heads/${name}`)) return name;
+    }
+    return null;
   }
 
   /** The three-dot diff with rename detection, so a rename is one entry rather than a delete and an add. */

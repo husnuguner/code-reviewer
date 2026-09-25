@@ -179,9 +179,9 @@ By default a line is the sentence and its level; `-v` adds the record around
 it:
 
 ```console
-$ reviewer review --base main
+$ reviewer review
+info: Base: 'origin/main', the repository's default branch; --base names another.
 info: Loaded 3 skill(s): api-conventions, error-handling, tests
-warn: No merge-base for 'HEAD' and 'main'; comparing against 'main' directly.
 
 $ reviewer review --base main -v
 11:12:59.341  debug  reviewer.config: Read repo config file .review/config.yaml: 3 key(s).
@@ -206,7 +206,7 @@ parenthesis after `tokens in` is what a cached prefix saved (`cached`) or cost
 
 | Format   | A line looks like                                                      | For                                   |
 | -------- | ---------------------------------------------------------------------- | ------------------------------------- |
-| `text`   | `warn: No merge-base for 'HEAD' and 'main'`                            | A person.                             |
+| `text`   | `info: Base: 'origin/main', the repository's default branch`           | A person.                             |
 | `json`   | `{"level":"warn","name":"reviewer.review","msg":"…","time":"2026-…Z"}` | A log collector; one record per line. |
 | `github` | `::debug::Read repo config file .review/config.yaml: 3 key(s).`        | A GitHub runner.                      |
 

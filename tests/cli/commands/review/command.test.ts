@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from "bun:test";
 
+import { OperatorError } from "../../../../src/cli/command-line";
 import { REVIEW } from "../../../../src/cli/commands/review/command";
 import {
   FINDINGS_EXIT_CODE,
@@ -12,7 +13,9 @@ import {
   cliOverrides,
   exitCodeFor,
   hasFailingFinding,
+  resolveBase,
 } from "../../../../src/cli/commands/review/run";
+import { NULL_LOGGER } from "../../../../src/core/ports/logger";
 import { type BranchReviewResult } from "../../../../src/core/review/branch-review";
 import { parsedBy } from "../../../helpers/command-line";
 
@@ -70,6 +73,28 @@ describe("the exit code", () => {
     expect(exitCodeFor({ ...reported("bug"), failed: 0 }, ["bug"])).toBe(FINDINGS_EXIT_CODE);
     expect(exitCodeFor({ ...reported("bug"), failed: 0 }, [])).toBe(0);
     expect(exitCodeFor({ findings: [], failed: 0 }, ["bug"])).toBe(0);
+  });
+});
+
+describe("the base a run compares against", () => {
+  const found = { defaultBase: (): Promise<string | null> => Promise.resolve("origin/main") };
+  const none = { defaultBase: (): Promise<string | null> => Promise.resolve(null) };
+  const scope = { base: null, uncommitted: false, since: null };
+
+  it("is --base when named, and the repository's default branch when not", async () => {
+    expect(await resolveBase({ ...scope, base: "develop" }, found, NULL_LOGGER)).toBe("develop");
+    expect(await resolveBase(scope, found, NULL_LOGGER)).toBe("origin/main");
+  });
+
+  it("is refused with the fix when nothing names one and none is to be found", async () => {
+    // `main` was assumed: a repository on `master` or `trunk` met a raw git usage screen.
+    await expect(resolveBase(scope, none, NULL_LOGGER)).rejects.toThrow(OperatorError);
+    await expect(resolveBase(scope, none, NULL_LOGGER)).rejects.toThrow(/--base/u);
+  });
+
+  it("is not needed for uncommitted work, and falls back to --since's own point", async () => {
+    expect(await resolveBase({ ...scope, uncommitted: true }, none, NULL_LOGGER)).toBe("HEAD");
+    expect(await resolveBase({ ...scope, since: "abc123" }, none, NULL_LOGGER)).toBe("abc123");
   });
 });
 
