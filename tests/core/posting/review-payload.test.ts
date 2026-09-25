@@ -460,6 +460,19 @@ describe("building the review", () => {
     expect(review.body).not.toContain("![a]");
   });
 
+  it("turns a mention in a model's text into code, so the comment notifies nobody", () => {
+    // A decorator the model names without backticks would otherwise ping a user of that name, and an
+    // injected diff could have it ping a whole team.
+    const body = commentBody(
+      finding({
+        body: "Ping @octocat and @acme/security; `@Injectable` stays; mail a@b.com; @Component() too.",
+      }),
+    );
+    expect(body).toContain(
+      "Ping `@octocat` and `@acme/security`; `@Injectable` stays; mail a@b.com; `@Component`() too.",
+    );
+  });
+
   it("signs every inline comment with an invisible marker, last", () => {
     expect(COMMENT_MARKER).toMatch(/^<!--.*-->$/u);
     expect(commentBody(finding())).toEndWith(`\n\n${COMMENT_MARKER}`);

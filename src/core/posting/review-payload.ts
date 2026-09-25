@@ -224,15 +224,40 @@ const MARKDOWN_IMAGE = /!\[([^\]]*)\]\(/gu;
 const HTML_IMAGE = /<img\b/giu;
 
 /**
+ * A `@user` or `@org/team` GitHub would notify: not after a word character (an address is not a mention),
+ * a backtick or another `@`.
+ */
+const MENTION = /(^|[^\w`@])(@[A-Za-z\d][\w-]*(?:\/[A-Za-z\d][\w.-]*)?)/gu;
+
+/** An inline code span, whose text GitHub neither renders nor mentions from. */
+const CODE_SPAN = /(`+)[^]*?\1/gu;
+
+/** `text` with `transform` applied outside its inline code spans only. */
+function outsideCode(text: string, transform: (prose: string) => string): string {
+  let out = "";
+  let last = 0;
+  for (const span of text.matchAll(CODE_SPAN)) {
+    out += transform(text.slice(last, span.index)) + span[0];
+    last = span.index + span[0].length;
+  }
+  return out + transform(text.slice(last));
+}
+
+/**
  * A model's text as it may appear in a posted comment: an image becomes a link, so nothing is fetched when
- * the comment is read.
+ * the comment is read; a mention becomes code, so nobody is notified by it.
  *
  * @remarks The text was written by a model that read untrusted diff content. An image renders by fetching
  * its URL -- through GitHub's proxy, but the URL still reaches whoever it names -- so an injected image
  * could carry what the model was shown out in a query string. A link does nothing until someone clicks it.
  */
 function inertMarkdown(text: string): string {
-  return text.replaceAll(MARKDOWN_IMAGE, "[$1](").replaceAll(HTML_IMAGE, "&lt;img");
+  return outsideCode(text, (prose) =>
+    prose
+      .replaceAll(MARKDOWN_IMAGE, "[$1](")
+      .replaceAll(HTML_IMAGE, "&lt;img")
+      .replaceAll(MENTION, "$1`$2`"),
+  );
 }
 
 /** A code fence longer than any run of backticks in `text`, so the text cannot close it early. */
