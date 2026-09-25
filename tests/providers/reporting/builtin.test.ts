@@ -120,6 +120,20 @@ describe("what each format writes", () => {
     expect(lines.join("\n")).toContain("Null check missing.");
   });
 
+  it("text renders every caveat the summary carries, the markers a change added among them", () => {
+    // The reporter once listed the summary fields it passed on, and a new one never reached the page.
+    const { context, lines } = sink();
+    const reporter = registry.create("text", context);
+    reporter.report({
+      ...SUMMARY,
+      failed: 1,
+      bypass_added: [{ path: "a.ts", line: 3, reason: "trust me" }],
+    });
+    const text = lines.join("\n");
+    expect(text).toContain("1 file(s) could not be reviewed");
+    expect(text).toContain("This change adds 1 bypass marker(s): a.ts:3 (trust me).");
+  });
+
   it("ndjson writes one parseable record per line, as it goes", () => {
     const { context, lines } = sink();
     const reporter = registry.create("ndjson", context);

@@ -15,14 +15,10 @@ export class TextReporter extends CollectingReporter {
 
   /** `base` and `branch` come from the summary, so the heading names the refs actually compared. */
   protected onSummary(summary: SummaryRecord): void {
+    // The whole summary: a caveat the text report can render must not depend on this list remembering it.
     const lines = branchReviewText(summary.base, summary.branch, {
+      ...summary,
       findings: this.findings,
-      incremental: summary.incremental,
-      anchors: summary.anchors,
-      failed: summary.failed,
-      policy_changed: summary.policy_changed,
-      bypassed: summary.bypassed,
-      bypass_regions: summary.bypass_regions,
     });
     for (const line of lines) this.write(line);
   }
