@@ -657,12 +657,12 @@
         ]
       },
       "expected": {
-        "calls": 1,
-        "last_message_content_has_json_word": null,
+        "calls": 2,
         "message_counts": [
-          2
+          2,
+          3
         ],
-        "findings": []
+        "error": "ReviewCallError"
       }
     },
     {
@@ -674,12 +674,12 @@
         ]
       },
       "expected": {
-        "calls": 1,
-        "last_message_content_has_json_word": null,
+        "calls": 2,
         "message_counts": [
-          2
+          2,
+          3
         ],
-        "findings": []
+        "error": "ReviewCallError"
       }
     },
     {
@@ -691,12 +691,12 @@
         ]
       },
       "expected": {
-        "calls": 1,
-        "last_message_content_has_json_word": null,
+        "calls": 2,
         "message_counts": [
-          2
+          2,
+          3
         ],
-        "findings": []
+        "error": "ReviewCallError"
       }
     },
     {
@@ -813,12 +813,11 @@
       },
       "expected": {
         "calls": 2,
-        "last_message_content_has_json_word": true,
         "message_counts": [
           2,
           3
         ],
-        "findings": []
+        "error": "ReviewCallError"
       }
     },
     {
@@ -901,13 +900,13 @@
       }
     },
     {
-      "name": "review_file/model_error_returns_empty",
+      "name": "review_file/model_error_throws",
       "input": {
         "patch": "@@ -1,2 +1,4 @@\n const a = 1;\n+const rows = await repo.find();\n+return rows;\n export {};\n"
       },
       "expected": {
-        "calls": 0,
-        "findings": []
+        "calls": 1,
+        "error": "ReviewCallError"
       }
     },
     {

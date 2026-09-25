@@ -128,6 +128,14 @@ describe("the job summary", () => {
     expect(markdown.indexOf("Bug/correctness")).toBeLessThan(markdown.indexOf("Readability"));
   });
 
+  it("says a run with failed files is incomplete, and does not call it clean", () => {
+    const markdown = summaryFor([], { ...SUMMARY, failed: 2 });
+    expect(markdown).toContain("Review incomplete: 2 file(s) could not be reviewed");
+    expect(markdown).toContain("No issues found in the files that were reviewed.");
+    expect(markdown).not.toContain("No issues found in the reviewed files.");
+    expect(summaryFor([], SUMMARY)).not.toContain("incomplete");
+  });
+
   it("says so plainly when nothing was found", () => {
     expect(summaryFor([], SUMMARY)).toContain("No issues found");
   });

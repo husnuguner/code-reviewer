@@ -10,7 +10,14 @@ import { type ChatMessage, type ChatModel, type ChatResponse } from "../ports/ch
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { errorMessage } from "../util/errors";
 import { type JsonValue, decodeJson, hasContent, isJsonArray, isJsonObject } from "../util/json";
-import { asText, collapseWhitespace, cutToLength, show } from "../util/text";
+import {
+  asText,
+  collapseWhitespace,
+  countCodePoints,
+  cutToLength,
+  formatCount,
+  show,
+} from "../util/text";
 import { type Clock, SYSTEM_CLOCK, describeUsage, seconds, stopwatch } from "../util/timing";
 
 import { type Anchor, CONFLICT, EXACT, FAILED, REPAIRED, resolveAnchor } from "./anchor";
@@ -25,6 +32,15 @@ export class JsonDecodeError extends Error {
   override readonly name = "JSONDecodeError";
 }
 
+/**
+ * A file the model was asked about and did not answer: the call failed, or its reply held no findings
+ * list even after one retry. Thrown, not returned as `[]`, so the run counts the file as `failed`
+ * rather than as reviewed and clean.
+ */
+export class ReviewCallError extends Error {
+  override readonly name = "ReviewCallError";
+}
+
 const FENCE = /^```(?:json)?\s*([^]*?)\s*```$/u;
 
 /** The span from the first `{` to the last `}`, or `null`. */
@@ -36,6 +52,23 @@ function outermostObject(text: string): string | null {
 
 function parseJson(text: string): JsonValue {
   return decodeJson(text, (detail) => new JsonDecodeError(detail));
+}
+
+/**
+ * The `findings` list of a parsed reply.
+ *
+ * @throws {@link JsonDecodeError} when the reply is not an object carrying a list under `findings`: an
+ * answer outside the contract says nothing about whether the file is clean.
+ */
+function findingsList(payload: JsonValue): readonly JsonValue[] {
+  const items = isJsonObject(payload) ? payload["findings"] : undefined;
+  if (!isJsonArray(items)) throw new JsonDecodeError("the reply holds no 'findings' list");
+  return items;
+}
+
+/** How much text a conversation sends, in code points. */
+function promptChars(messages: readonly ChatMessage[]): number {
+  return messages.reduce((sum, message) => sum + countCodePoints(message.content), 0);
 }
 
 /**
@@ -102,7 +135,9 @@ export class FileReviewer {
   /**
    * Reviews one file.
    *
-   * @returns Anchored findings; `[]` on any failure or when there is nothing commentable.
+   * @returns Anchored findings; `[]` when the model found nothing or there is nothing commentable.
+   * @throws {@link ReviewCallError} when the model could not be had: a failed call (retries are the
+   * model's decorator's), or a reply that twice held no findings list. An unanswered file is not a clean one.
    */
   async reviewFile(input: ReviewFileInput): Promise<Finding[]> {
     if (input.allowedLines.size === 0) return [];
@@ -119,42 +154,46 @@ export class FileReviewer {
     });
     const messages = reviewMessages(this.systemPrompt, input.skillsText ?? "", userPrompt);
 
-    const payload = await this.askForFindings(input.path, messages);
-    if (!isJsonObject(payload)) return [];
-
-    const items = payload["findings"];
-    return isJsonArray(items) ? items.flatMap((item) => this.toFinding(input, item)) : [];
+    const items = await this.askForFindings(input.path, messages);
+    return items.flatMap((item) => this.toFinding(input, item));
   }
 
-  /** The model's parsed payload, retried once on malformed JSON; `undefined` when it could not be had. */
+  /**
+   * The model's findings list, retried once when the reply holds none.
+   *
+   * @throws {@link ReviewCallError} when the call fails or the retry holds none either. The message names
+   * the prompt's size, the first thing to check when a vendor refuses a prompt over its context window.
+   */
   private async askForFindings(
     path: string,
     initial: readonly ChatMessage[],
-  ): Promise<JsonValue | undefined> {
+  ): Promise<readonly JsonValue[]> {
     let messages = initial;
+    const size = `prompt ${formatCount(promptChars(initial))} chars`;
     for (const attempt of [1, 2] as const) {
       let response: ChatResponse;
       const elapsed = stopwatch(this.now);
       try {
         response = await this.model.generate(messages, { responseFormat: "json" });
       } catch (error) {
-        this.log.warn(
-          `LLM call failed for ${path} after ${seconds(elapsed())}: ${errorMessage(error)}`,
+        throw new ReviewCallError(
+          `the model call failed after ${seconds(elapsed())} (${size}): ${errorMessage(error)}`,
+          { cause: error },
         );
-        return undefined;
       }
       const took = elapsed();
       const cost = describeUsage(response.usage, took);
       this.log.debug(
         `${path}: the model answered in ${seconds(took)} (attempt ${attempt} of 2${cost === "" ? "" : `; ${cost}`}).`,
       );
-      const raw = response.text;
       try {
-        return extractJson(raw);
+        return findingsList(extractJson(response.text));
       } catch (error) {
         if (attempt === 2) {
-          this.log.warn(`Could not parse findings JSON for ${path}: ${errorMessage(error)}`);
-          return undefined;
+          throw new ReviewCallError(
+            `the model's reply held no findings JSON, twice: ${errorMessage(error)}`,
+            { cause: error },
+          );
         }
         this.log.info(
           `Malformed findings JSON for ${path} (${errorMessage(error)}); retrying once.`,
@@ -162,7 +201,8 @@ export class FileReviewer {
         messages = [...messages, { role: "user", content: RETRY_PROMPT }];
       }
     }
-    return undefined;
+    // Unreachable: the second attempt returns or throws.
+    throw new ReviewCallError("the model was not asked");
   }
 
   /** One raw item as a validated, anchored finding, or nothing when it has no body. */

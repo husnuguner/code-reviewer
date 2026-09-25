@@ -24,7 +24,7 @@ import {
   reviewBranch,
   streamBranchReview,
 } from "../../../src/core/review/branch-review";
-import { type ReviewFileInput } from "../../../src/core/review/file-reviewer";
+import { FileReviewer, type ReviewFileInput } from "../../../src/core/review/file-reviewer";
 import {
   DEFAULT_FILE_REVIEW_SETTINGS,
   MAX_CONTENT_CHARS,
@@ -632,9 +632,23 @@ describe("streaming", () => {
     expect(accounted).toBe(result.files_changed);
   });
 
+  it("counts a file whose model call failed as failed, not as reviewed and clean", async () => {
+    // The production reviewer, not a stand-in: an unreachable endpoint, a 401 or a context window
+    // the prompt does not fit used to leave the file as `files_reviewed` with no findings.
+    const down = {
+      generate: (): Promise<never> => Promise.reject(new Error("Cannot connect to API")),
+    };
+    const reviewer = new FileReviewer(down, { systemPrompt: "system" });
+    const result = await reviewBranch(options(repo(), { reviewer }));
+    expect(result.failed).toBe(2);
+    expect(result.files_reviewed).toBe(0);
+    expect(result.findings).toEqual([]);
+  });
+
   it("says nothing was found without claiming the run was clean", () => {
     const lines = branchReviewText("main", "feature", { findings: [], failed: 2 });
-    expect(lines).toContain("No issues found.");
+    expect(lines).not.toContain("No issues found.");
+    expect(lines).toContain("Review incomplete: no issues found in the files that were reviewed.");
     expect(lines).toContain("2 file(s) could not be reviewed; the log says why.");
   });
 });

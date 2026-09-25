@@ -110,7 +110,7 @@ Then exactly one `summary` record:
 | `incremental`         | `true` for a `--since` run, which reviewed only the commits after `base`; a clean result then says nothing about findings earlier runs reported. `reviewer comment` does not supersede on such a run. |
 | `files_changed`       | Files in the change set.                                                                                                                                                                              |
 | `files_reviewed`      | Files whose review came back.                                                                                                                                                                         |
-| `failed`              | Files selected for review whose review threw.                                                                                                                                                         |
+| `failed`              | Files selected for review that could not be reviewed: the model call failed (after its retries), its reply twice held no findings list, or reading the file threw. Never counted as clean.            |
 | `findings`            | Findings reported.                                                                                                                                                                                    |
 | `files_with_findings` | Distinct paths among them.                                                                                                                                                                            |
 | `anchors`             | Reported findings by anchor outcome.                                                                                                                                                                  |
@@ -146,9 +146,18 @@ While the major version is 0, any release may change this contract; see
 | `1`  | Usage error, or a refused `init`.                                                 |
 | `2`  | A configuration or working-tree problem the operator can fix (one `error:` line). |
 | `3`  | A reported finding matched `--fail-on`.                                           |
+| `4`  | A selected file could not be reviewed (`failed` > 0). Outranks `3`.               |
 
 `--fail-on` is asked of the _reported_ findings: one that verification refuted
 or the cap withheld cannot fail a build the reviewer never showed it to.
+
+`4` is the answer to a model that did not answer: an unreachable endpoint, a
+rejected key, a rate limit that outlasted the retries, a prompt over the
+model's context window, a reply with no findings list in it twice. Every
+record is still written and the report says `Review incomplete`; the run is
+not a verdict, so it does not exit `0`, and `reviewer comment` does not let
+it lift an earlier block. The log names each file and why, with the size of
+the prompt the vendor refused.
 
 ## Logging
 

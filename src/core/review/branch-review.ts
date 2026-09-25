@@ -98,19 +98,24 @@ export async function* iterBranchReview(
 
   const limit = pLimit(options.maxConcurrentFiles);
   const changeSet = selected.map((decision) => decision.file);
-  const reviewOne = async (decision: SelectedFile): Promise<FileOutcome> =>
-    reviewChangedFile(decision, {
-      reviewer: options.reviewer,
-      verifier: options.verifier ?? null,
-      settings: options.settings,
-      skills: options.skills,
-      limit,
-      readContent: (path) => git.readFile(path),
-      codeContext: options.codeContext ?? null,
-      changeSet,
-      maxFindingsPerFile: options.maxFindingsPerFile ?? 0,
-      ...(options.logger && { logger: options.logger }),
-    });
+  const reviewOne = async (decision: SelectedFile): Promise<FileOutcome> => {
+    try {
+      return await reviewChangedFile(decision, {
+        reviewer: options.reviewer,
+        verifier: options.verifier ?? null,
+        settings: options.settings,
+        skills: options.skills,
+        limit,
+        readContent: (path) => git.readFile(path),
+        codeContext: options.codeContext ?? null,
+        changeSet,
+        maxFindingsPerFile: options.maxFindingsPerFile ?? 0,
+        ...(options.logger && { logger: options.logger }),
+      });
+    } catch (error) {
+      throw new FileReviewFailure(decision.path, error);
+    }
+  };
 
   let filesReviewed = 0;
   let totalFindings = 0;
@@ -131,9 +136,13 @@ export async function* iterBranchReview(
   const outcomes = asCompleted(selected.map((decision) => reviewOne(decision)));
   for await (const outcome of outcomes) {
     if (!outcome.ok) {
-      const detail = errorMessage(outcome.error);
       failed++;
-      log.warn(`Reviewing a file on '${branch}' failed: ${detail}`);
+      const { error } = outcome;
+      log.warn(
+        error instanceof FileReviewFailure
+          ? `Could not review ${error.path}: ${error.message}; it is counted as failed, not as clean.`
+          : `Reviewing a file on '${branch}' failed: ${errorMessage(error)}`,
+      );
       continue;
     }
     if (outcome.value.kind === "guarded") {
@@ -205,6 +214,18 @@ export async function* iterBranchReview(
     policy_changed: policy,
     bypass_regions: sortedRegions(regions),
   };
+}
+
+/** A selected file whose review threw, with the file it was about, so the log can name it. */
+class FileReviewFailure extends Error {
+  override readonly name = "FileReviewFailure";
+
+  constructor(
+    readonly path: string,
+    cause: unknown,
+  ) {
+    super(errorMessage(cause), { cause });
+  }
 }
 
 /**
@@ -443,7 +464,12 @@ export function branchReviewText(base: string, branch: string, result: TextRepor
   const lines = [`\n=== Branch review: ${branch} vs ${base} ===`];
   const { findings } = result;
   if (findings.length === 0) {
-    lines.push("No issues found.", ...caveats(result, base));
+    // A run that could not review a file has not found it clean, and must not read as if it had.
+    const verdict =
+      (result.failed ?? 0) > 0
+        ? "Review incomplete: no issues found in the files that were reviewed."
+        : "No issues found.";
+    lines.push(verdict, ...caveats(result, base));
     return lines;
   }
   const files = new Set(findings.map((f) => f.path)).size;

@@ -138,6 +138,13 @@ The choices with a real trade-off behind them, and what was given up:
   review of a very large file; the ceiling is a constant, not a setting,
   because a cap the project can raise is a cap the project will raise until
   the review is half a review.
+- **An unanswered file is a failed file, not a clean one.** A model call that
+  fails after its retries, or a reply that twice holds no findings list,
+  counts the file as `failed`; the report says `Review incomplete` and the run
+  exits `4`, which outranks `--fail-on`'s `3`. Verification stays fail-open,
+  because there a failure keeps findings; here it would have invented a clean
+  verdict. Given up: a run with one flaky file fails the job instead of
+  passing with a warning in the log.
 - **A change is held to the policy it starts from, not the one it proposes.**
   `.review/` is instructions, so a change that edits it could weaken its own
   review. The flow names such a change (`policy_changed`) in every report, and

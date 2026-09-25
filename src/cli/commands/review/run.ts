@@ -21,6 +21,25 @@ import { type ReviewArguments } from "./command";
 export const FINDINGS_EXIT_CODE = 3;
 
 /**
+ * Exit code for a run that could not review every file it selected. It outranks {@link FINDINGS_EXIT_CODE}:
+ * an incomplete review is not a verdict, whatever it did find.
+ */
+export const INCOMPLETE_EXIT_CODE = 4;
+
+/**
+ * The exit code a finished run earns.
+ *
+ * @returns `4` when a selected file could not be reviewed, `3` when a reported finding is gated, else `0`.
+ */
+export function exitCodeFor(
+  result: Pick<BranchReviewResult, "findings" | "failed">,
+  failOn: readonly string[],
+): number {
+  if (result.failed > 0) return INCOMPLETE_EXIT_CODE;
+  return hasFailingFinding(result, failOn) ? FINDINGS_EXIT_CODE : 0;
+}
+
+/**
  * The settings the command line states; only what was actually passed, so a default cannot shadow a
  * project or environment value.
  */
@@ -89,7 +108,7 @@ async function runBranchReview(arguments_: ReviewArguments, cradle: RunCradle): 
   } finally {
     await closeReporter(reporter);
   }
-  return hasFailingFinding(result, arguments_.failOn) ? FINDINGS_EXIT_CODE : 0;
+  return exitCodeFor(result, arguments_.failOn);
 }
 
 /** `--preview`: prints the selection. Never touches the model or the verifier, so no credential is needed. */

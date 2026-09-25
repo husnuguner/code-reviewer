@@ -195,7 +195,8 @@ reviewer review --uncommitted                      # the work that is not in a c
 | `-v`, `-q`, `--log-level`, `--log-format`, `--no-color` | Logging; see [docs/output.md](docs/output.md#logging).                                            |
 
 Exit codes: `0` success · `1` usage error · `2` a configuration or working-tree
-problem the operator can fix · `3` a finding matched `--fail-on`.
+problem the operator can fix · `3` a finding matched `--fail-on` · `4` a file
+could not be reviewed (the model call failed), so the run is not a verdict.
 
 ### Output formats
 

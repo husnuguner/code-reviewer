@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { addedLines, newSideIndex } from "../../src/core/diff/patch-view";
 import { type Finding } from "../../src/core/domain/finding";
 import { type ChatMessage, type ChatModel } from "../../src/core/ports/chat-model";
-import { FileReviewer, extractJson } from "../../src/core/review/file-reviewer";
+import { FileReviewer, ReviewCallError, extractJson } from "../../src/core/review/file-reviewer";
 import { findingsCapSentence } from "../../src/core/review/prompts";
 import { recordingLogger } from "../helpers/logging";
 
@@ -38,6 +38,12 @@ interface ReviewInput {
   responses: string[];
 }
 
+/** A case whose reply the reviewer must refuse to read as a clean file. */
+interface UnansweredExpectation {
+  message_counts: number[];
+  error: string;
+}
+
 interface ReviewExpectation {
   calls: number;
   last_message_content_has_json_word: boolean | null;
@@ -62,6 +68,16 @@ async function review(
   });
 }
 
+/** What a promise rejected with; a promise that resolved fails the test. */
+async function rejectionOf(promise: Promise<unknown>): Promise<unknown> {
+  try {
+    await promise;
+  } catch (error) {
+    return error;
+  }
+  throw new Error("expected a rejection, got a value");
+}
+
 /** One `review_file/` case; `E` names the expectation's shape where it is not the usual one. */
 function reviewCase<E = ReviewExpectation>(name: string): FixtureCase<ReviewInput, E> {
   return caseNamed<ReviewInput, E>(cases, `review_file/${name}`);
@@ -76,11 +92,18 @@ describe("extracting the findings object from model text", () => {
 describe("reviewing one file through the model", () => {
   const special = new Set([
     "no_allowed_lines_skips_model",
-    "model_error_returns_empty",
+    "model_error_throws",
     "no_anchor_index_uses_line_only",
   ]);
-  const ordinary = casesUnder<ReviewInput, ReviewExpectation>(cases, "review_file").filter(
-    (c) => !special.has(c.name),
+  const all = casesUnder<ReviewInput, ReviewExpectation | UnansweredExpectation>(
+    cases,
+    "review_file",
+  ).filter((c) => !special.has(c.name));
+  const ordinary = all.filter(
+    (c): c is FixtureCase<ReviewInput, ReviewExpectation> => !("error" in c.expected),
+  );
+  const unanswered = all.filter(
+    (c): c is FixtureCase<ReviewInput, UnansweredExpectation> => "error" in c.expected,
   );
 
   it.each(ordinary)("$name", async ({ input, expected }) => {
@@ -94,6 +117,15 @@ describe("reviewing one file through the model", () => {
     expect(hasJsonWord === null ? null : last.includes("json")).toBe(hasJsonWord);
   });
 
+  // A reply that holds no findings list, twice, is not a clean file: the run must count it as failed.
+  it.each(unanswered)("$name", async ({ input, expected }) => {
+    const model = new FakeModel(input.responses);
+    const error = await rejectionOf(review(model, input.patch));
+    expect(error).toBeInstanceOf(ReviewCallError);
+    expect((error as Error).name).toBe(expected.error);
+    expect(model.calls.map((m) => m.length)).toEqual(expected.message_counts);
+  });
+
   it("does not call the model when the file has no commentable lines", async () => {
     const { input, expected } = reviewCase("no_allowed_lines_skips_model");
     const model = new FakeModel(input.responses);
@@ -102,12 +134,16 @@ describe("reviewing one file through the model", () => {
     expect(model.calls).toHaveLength(0);
   });
 
-  it("returns no findings, after one call, when the model itself fails", async () => {
-    const { expected } = reviewCase("model_error_returns_empty");
+  it("throws, after one call, when the model itself fails: an unanswered file is not a clean one", async () => {
+    const { expected } = reviewCase<UnansweredExpectation & { calls: number }>(
+      "model_error_throws",
+    );
     const model = new RaisingModel();
-    const findings = await review(model, PATCH);
-    expect(findings).toEqual(expected.findings);
-    expect(model.calls).toBe(1);
+    const error = await rejectionOf(review(model, PATCH));
+    expect(error).toBeInstanceOf(ReviewCallError);
+    expect((error as Error).name).toBe(expected.error);
+    expect((error as Error).cause).toBeInstanceOf(Error);
+    expect(model.calls).toBe(expected.calls);
   });
 
   it("falls back to the model's line alone when no anchor index is given", async () => {
@@ -224,7 +260,8 @@ describe("reviewing one file through the model", () => {
     ]);
   });
 
-  it("says how long a failed call waited before it failed", async () => {
+  it("says how long a failed call waited, and how large the prompt was, when it failed", async () => {
+    // The size is the first thing to check when a vendor refuses a prompt over its context window.
     const lines: string[] = [];
     let now = 0;
     const reviewer = new FileReviewer(new RaisingModel(), {
@@ -232,12 +269,18 @@ describe("reviewing one file through the model", () => {
       logger: recordingLogger(lines),
       now: () => (now += 180_000),
     });
-    await reviewer.reviewFile({
-      path: "a.ts",
-      annotatedPatch: "(annotated diff)",
-      allowedLines: addedLines(PATCH),
-      content: null,
-    });
-    expect(lines).toEqual(["WARNING LLM call failed for a.ts after 180.0s: boom"]);
+    const error = await rejectionOf(
+      reviewer.reviewFile({
+        path: "a.ts",
+        annotatedPatch: "(annotated diff)",
+        allowedLines: addedLines(PATCH),
+        content: null,
+      }),
+    );
+    expect((error as Error).message).toMatch(
+      /^the model call failed after 180\.0s \(prompt [\d,]+ chars\): boom$/u,
+    );
+    // The run names the file when it counts the failure; the reviewer itself says nothing twice.
+    expect(lines).toEqual([]);
   });
 });

@@ -55,8 +55,20 @@ export function summaryFor(
   if (policy !== "") lines.push(`> **${policy}**`, "");
   const bypass = bypassWarning(summary?.bypass_regions ?? []);
   if (bypass !== "") lines.push(`> **${bypass}**`, "");
+  const failed = summary?.failed ?? 0;
+  if (failed > 0) {
+    lines.push(
+      `> **Review incomplete: ${failed} file(s) could not be reviewed; the log says why.**`,
+      "",
+    );
+  }
   if (findings.length === 0) {
-    lines.push("No issues found in the reviewed files.", "");
+    lines.push(
+      failed > 0
+        ? "No issues found in the files that were reviewed."
+        : "No issues found in the reviewed files.",
+      "",
+    );
   } else {
     const files = new Set(findings.map((f) => f.path)).size;
     lines.push(

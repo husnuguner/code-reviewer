@@ -127,27 +127,27 @@ input that names a file wins over both.
 
 ## `actions/review` inputs
 
-| Input                   | Default                             | Meaning                                                                                     |
-| ----------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------- |
-| `api-key`               | _required_                          | The LLM key. Pass a secret.                                                                 |
-| `base-ref`              | the PR's base branch                | What the checkout is compared against. The action fetches it before reviewing.              |
-| `incremental`           | `false`                             | On a `synchronize` event, review only the commits the push added; see below.                |
-| `policy-ref`            | `base`                              | Whose `.review/` is read: the base branch's (`base`), or the checkout's own (`head`).       |
-| `provider`              | the checkout's config, else `local` | `claude`, or `local` for an OpenAI-compatible server. Set it: a runner has no machine file. |
-| `model` / `base-url`    | provider default                    | Model name; endpoint for `local` (or a Claude proxy).                                       |
-| `language`              | `en`                                | Language of the findings' text.                                                             |
-| `skills-path`           | —                                   | Where this repository's review skills live, relative to the checkout.                       |
-| `config`                | what `policy-ref` reads             | Another repository config file, in place of the one `policy-ref` would read.                |
-| `exclude`               | —                                   | Newline- or comma-separated globs to skip.                                                  |
-| `max-findings-per-file` | `3`                                 | Per-file cap; the most severe survive.                                                      |
-| `fail-on`               | `none`                              | Severities that fail the job. `none` means the review informs, humans decide.               |
-| `verify`                | `true`                              | Drop findings the diff refutes.                                                             |
-| `preview`               | `false`                             | Print the scope and stop. Calls no model, so it costs nothing to test the wiring.           |
-| `out`                   | `code-review.ndjson`                | Where the record stream is written.                                                         |
-| `upload-artifact`       | `true`                              | Upload `out` as the `code-review-findings` artifact.                                        |
-| `annotations`           | `true`                              | Findings as annotations plus a job summary. **Set `false` when a comment job posts them.**  |
-| `log-level`             | —                                   | As `--log-level`.                                                                           |
-| `bun-version`           | the pinned version                  | The Bun toolchain to install.                                                               |
+| Input                   | Default                             | Meaning                                                                                                                                                                                                 |
+| ----------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api-key`               | _required_                          | The LLM key. Pass a secret.                                                                                                                                                                             |
+| `base-ref`              | the PR's base branch                | What the checkout is compared against. The action fetches it before reviewing.                                                                                                                          |
+| `incremental`           | `false`                             | On a `synchronize` event, review only the commits the push added; see below.                                                                                                                            |
+| `policy-ref`            | `base`                              | Whose `.review/` is read: the base branch's (`base`), or the checkout's own (`head`).                                                                                                                   |
+| `provider`              | the checkout's config, else `local` | `claude`, or `local` for an OpenAI-compatible server. Set it: a runner has no machine file.                                                                                                             |
+| `model` / `base-url`    | provider default                    | Model name; endpoint for `local` (or a Claude proxy).                                                                                                                                                   |
+| `language`              | `en`                                | Language of the findings' text.                                                                                                                                                                         |
+| `skills-path`           | —                                   | Where this repository's review skills live, relative to the checkout.                                                                                                                                   |
+| `config`                | what `policy-ref` reads             | Another repository config file, in place of the one `policy-ref` would read.                                                                                                                            |
+| `exclude`               | —                                   | Newline- or comma-separated globs to skip.                                                                                                                                                              |
+| `max-findings-per-file` | `3`                                 | Per-file cap; the most severe survive.                                                                                                                                                                  |
+| `fail-on`               | `none`                              | Severities that fail the job. `none` means the review informs, humans decide. A file the model could not answer for fails the job whatever this says (exit `4`): an incomplete review is not a verdict. |
+| `verify`                | `true`                              | Drop findings the diff refutes.                                                                                                                                                                         |
+| `preview`               | `false`                             | Print the scope and stop. Calls no model, so it costs nothing to test the wiring.                                                                                                                       |
+| `out`                   | `code-review.ndjson`                | Where the record stream is written.                                                                                                                                                                     |
+| `upload-artifact`       | `true`                              | Upload `out` as the `code-review-findings` artifact.                                                                                                                                                    |
+| `annotations`           | `true`                              | Findings as annotations plus a job summary. **Set `false` when a comment job posts them.**                                                                                                              |
+| `log-level`             | —                                   | As `--log-level`.                                                                                                                                                                                       |
+| `bun-version`           | the pinned version                  | The Bun toolchain to install.                                                                                                                                                                           |
 
 Outputs: `findings-file` (the path), `findings` (a count), `range` (`full` or
 `since`) and `range-reason` (why).

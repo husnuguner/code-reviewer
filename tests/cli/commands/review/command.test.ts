@@ -6,7 +6,13 @@
 import { describe, expect, it } from "bun:test";
 
 import { REVIEW } from "../../../../src/cli/commands/review/command";
-import { cliOverrides, hasFailingFinding } from "../../../../src/cli/commands/review/run";
+import {
+  FINDINGS_EXIT_CODE,
+  INCOMPLETE_EXIT_CODE,
+  cliOverrides,
+  exitCodeFor,
+  hasFailingFinding,
+} from "../../../../src/cli/commands/review/run";
 import { type BranchReviewResult } from "../../../../src/core/review/branch-review";
 import { parsedBy } from "../../../helpers/command-line";
 
@@ -49,6 +55,21 @@ describe("the --fail-on gate", () => {
       expect(hasFailingFinding(reported(spelling), ["bug"])).toBe(true);
     }
     expect(hasFailingFinding(reported("typo"), ["bug"])).toBe(false);
+  });
+});
+
+describe("the exit code", () => {
+  it("is 4 when a selected file could not be reviewed, whatever else the run found", () => {
+    // An unanswered file is not a clean one: a gate that passed on a run whose model was down
+    // would be a gate that fails open.
+    expect(exitCodeFor({ findings: [], failed: 1 }, [])).toBe(INCOMPLETE_EXIT_CODE);
+    expect(exitCodeFor({ ...reported("bug"), failed: 1 }, ["bug"])).toBe(INCOMPLETE_EXIT_CODE);
+  });
+
+  it("is 3 for a gated finding on a complete run, and 0 otherwise", () => {
+    expect(exitCodeFor({ ...reported("bug"), failed: 0 }, ["bug"])).toBe(FINDINGS_EXIT_CODE);
+    expect(exitCodeFor({ ...reported("bug"), failed: 0 }, [])).toBe(0);
+    expect(exitCodeFor({ findings: [], failed: 0 }, ["bug"])).toBe(0);
   });
 });
 

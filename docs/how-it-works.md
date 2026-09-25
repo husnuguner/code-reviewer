@@ -364,7 +364,7 @@ behind:
 | Counter       | What it counts                                                    |
 | ------------- | ----------------------------------------------------------------- |
 | `skipped`     | Files not reviewed, by reason.                                    |
-| `failed`      | Files selected for review whose review threw.                     |
+| `failed`      | Files selected for review the model did not answer for.           |
 | `refuted`     | Findings the verification pass removed.                           |
 | `capped`      | Findings the volume policy withheld.                              |
 | `bypassed`    | Added lines inside a region a `reviewer: by-pass` marker named.   |
