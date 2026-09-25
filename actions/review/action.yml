@@ -47,10 +47,11 @@ inputs:
     default: ""
   skills-path:
     description: >-
-      Where this repository's review skills live, relative to the checkout.
-      Unnecessary when the checkout has a .review/config.yaml: that file
-      already says. Each changed file is reviewed under the skills whose
-      globs match its path, on top of the standing lenses.
+      Where this repository's review skills live, relative to the repository
+      root. Unnecessary when .review/config.yaml says (skills.path): leave it
+      empty. With policy-ref base the directory is read from the base branch,
+      like the rest of the policy, so a pull request cannot rewrite the skills
+      it is reviewed under; with head it is the checkout's.
     required: false
     default: ""
   incremental:
@@ -260,16 +261,19 @@ runs:
       env:
         POLICY_REF: ${{ inputs.policy-ref }}
         CONFIG_INPUT: ${{ inputs.config }}
+        SKILLS_INPUT: ${{ inputs.skills-path }}
         BASE_REF: ${{ steps.base.outputs.ref }}
         POLICY_DIR: ${{ runner.temp }}/review-policy
       run: |
         # The checkout is the pull request's, .review/ included. Its rules are
         # read from the base branch instead, into a directory outside the
         # checkout, so a change that loosens them is reviewed under the rules
-        # it is trying to loosen. The working tree is not touched.
+        # it is trying to loosen. The working tree is not touched. A
+        # skills-path input is policy too: read from the base the same way.
         set -euo pipefail
         if [ -n "${CONFIG_INPUT}" ] || [ "${POLICY_REF}" = "head" ]; then
           echo "config=${CONFIG_INPUT}" >> "${GITHUB_OUTPUT}"
+          echo "skills-path=${SKILLS_INPUT:-}" >> "${GITHUB_OUTPUT}"
           exit 0
         fi
         if [ "${POLICY_REF}" != "base" ]; then
@@ -281,7 +285,8 @@ runs:
         mkdir -p "${POLICY_DIR}/.review"
         base="refs/remotes/origin/${BASE_REF}"
         repo=(git -C "${GITHUB_WORKSPACE}")
-        if "${repo[@]}" cat-file -e "${base}:.review/config.yaml" 2>/dev/null; then
+        if "${repo[@]}" cat-file -e "${base}:.review/config.yaml" \
+          2>/dev/null; then
           "${repo[@]}" archive "${base}" .review | tar -x -C "${POLICY_DIR}"
           echo "Review policy: .review/ as origin/${BASE_REF} has it."
         else
@@ -292,6 +297,37 @@ runs:
             "the checkout's is not read."
         fi
         echo "config=${POLICY_DIR}/.review/config.yaml" >> "${GITHUB_OUTPUT}"
+        skills="${SKILLS_INPUT:-}"
+        if [ -n "${skills}" ] && [[ "${skills}" != /* ]] \
+          && [[ "${skills}" != "~"* ]]; then
+          # A path in the repository: the base branch's copy, not the
+          # checkout's.
+          skills="${skills#./}"
+          skills="${skills%/}"
+          if [[ "/${skills}/" == */../* ]]; then
+            echo "::error::skills-path must stay inside the repository;" \
+              "got '${SKILLS_INPUT}'."
+            exit 1
+          fi
+          found=no
+          if [[ "${skills}" == .review || "${skills}" == .review/* ]]; then
+            # Already extracted with the rest of .review/.
+            [ -d "${POLICY_DIR}/${skills}" ] && found=yes
+          elif "${repo[@]}" cat-file -e "${base}:${skills}" 2>/dev/null; then
+            "${repo[@]}" archive "${base}" "${skills}" \
+              | tar -x -C "${POLICY_DIR}"
+            found=yes
+          fi
+          mkdir -p "${POLICY_DIR}/${skills}"
+          if [ "${found}" = yes ]; then
+            echo "Review skills: ${skills} as origin/${BASE_REF} has it."
+          else
+            echo "Review skills: origin/${BASE_REF} carries no ${skills};" \
+              "no skills are read."
+          fi
+          skills="${POLICY_DIR}/${skills}"
+        fi
+        echo "skills-path=${skills}" >> "${GITHUB_OUTPUT}"
 
     - name: Set up Bun
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -317,7 +353,7 @@ runs:
         IN_MODEL: ${{ inputs.model }}
         IN_BASE_URL: ${{ inputs.base-url }}
         IN_LANGUAGE: ${{ inputs.language }}
-        IN_SKILLS_PATH: ${{ inputs.skills-path }}
+        IN_SKILLS_PATH: ${{ steps.policy.outputs.skills-path }}
         IN_EXCLUDE: ${{ inputs.exclude }}
         IN_MAX_FINDINGS: ${{ inputs.max-findings-per-file }}
         IN_VERIFY: ${{ inputs.verify }}

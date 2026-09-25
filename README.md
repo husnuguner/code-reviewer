@@ -331,7 +331,6 @@ jobs:
         with:
           provider: claude # the workflow names the model: a runner has no ~/.config/reviewer
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          skills-path: .review/skills
           incremental: true # on a push, review only the commits it added
           out: code-review.ndjson
           annotations: false # the comment job posts them
@@ -384,7 +383,10 @@ Inputs, the `reviewer comment` flags, and pinning advice:
   change that edits `.review/` is named in the summary and in the posted
   comment either way, so the reader knows to look at those files. A `.env` a
   change adds configures nothing: the working directory's `.env` is never
-  read, and the repository's is the one beside the config file in force.
+  read, and the repository's is the one beside the config file in force. What
+  the reviewer cannot guard is the workflow file a pull request may also edit;
+  protect `.github/workflows/**` and `.review/**` with `CODEOWNERS` (see
+  [GitHub Action](docs/github-action.md#what-this-does-not-defend-against)).
 - **Secrets never reach a log line.** Values of `*_API_KEY`, `*_TOKEN`,
   `*_SECRET`, `*_PASSWORD` variables are masked at the sink in every format.
 - **The bot may request changes; it may not approve.**

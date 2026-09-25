@@ -37,7 +37,6 @@ jobs:
         with:
           provider: claude # the workflow names the model: a runner has no ~/.config/reviewer
           api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          skills-path: .review/skills # this repo's own conventions
           incremental: true # on a push, review only the commits it added (see below)
           fail-on: none
           out: code-review.ndjson
@@ -119,11 +118,30 @@ base branch that carries no `.review/` yields an empty policy, so the pull
 request's is not found by the walk-up either. A policy change therefore takes
 effect once merged, the way a workflow file's does.
 
+A `skills-path` input is policy too, and is read the same way: from the base
+branch into the same directory, whether it lies under `.review/` or elsewhere
+in the repository. So is every `.env` the run could read: the checkout's own
+`.env` files configure nothing (see
+[Configuration](configuration.md#reading-the-environment-from-a-file-variable)).
+
 `policy-ref: head` reads the checkout's own, for a repository that trusts its
 authors. Either way, a pull request that edits `.review/` is named in the job
 summary and opens the posted comment with a warning
 ([how it works](how-it-works.md#when-the-change-edits-the-policy)); a `config`
 input that names a file wins over both.
+
+### What this does not defend against
+
+The workflow file itself. On a `pull_request` event GitHub runs the workflow
+as the pull request's merge commit has it, so a pull request from a branch of
+the same repository can edit `.github/workflows/pr-review.yml` -- set
+`policy-ref: head`, pass `exclude: "**"`, or drop the job -- and be reviewed
+under what it wrote. (A pull request from a fork gets no secrets under
+`pull_request`, so it cannot run the review at all.) The reviewer cannot see
+that from inside the job. The defence is the repository's: require the review
+check in branch protection, and give `.github/workflows/**` and `.review/**`
+an owner in `CODEOWNERS` whose approval the protection requires, so a change
+to either is read by a person before it counts.
 
 ## `actions/review` inputs
 
@@ -136,7 +154,7 @@ input that names a file wins over both.
 | `provider`              | the checkout's config, else `local` | `claude`, or `local` for an OpenAI-compatible server. Set it: a runner has no machine file.                                                                                                             |
 | `model` / `base-url`    | provider default                    | Model name; endpoint for `local` (or a Claude proxy).                                                                                                                                                   |
 | `language`              | `en`                                | Language of the findings' text.                                                                                                                                                                         |
-| `skills-path`           | —                                   | Where this repository's review skills live, relative to the checkout.                                                                                                                                   |
+| `skills-path`           | —                                   | Where this repository's skills live, when `.review/config.yaml` does not say (`skills.path`). Under `policy-ref: base` the directory is read from the base branch, like the rest of the policy.         |
 | `config`                | what `policy-ref` reads             | Another repository config file, in place of the one `policy-ref` would read.                                                                                                                            |
 | `exclude`               | —                                   | Newline- or comma-separated globs to skip.                                                                                                                                                              |
 | `max-findings-per-file` | `3`                                 | Per-file cap; the most severe survive.                                                                                                                                                                  |

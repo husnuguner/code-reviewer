@@ -154,9 +154,10 @@ The choices with a real trade-off behind them, and what was given up:
 - **A change is held to the policy it starts from, not the one it proposes.**
   `.review/` is instructions, so a change that edits it could weaken its own
   review. The flow names such a change (`policy_changed`) in every report, and
-  the review action reads `.review/` from the base branch into a directory
-  outside the checkout (`policy-ref: base`). The core stays a reader of one
-  tree: which tree's policy is the caller's choice, made with `--config`.
+  the review action reads `.review/` -- and a `skills-path` input, wherever it
+  points in the repository -- from the base branch into a directory outside
+  the checkout (`policy-ref: base`). The core stays a reader of one tree:
+  which tree's policy is the caller's choice, made with `--config`.
   Given up: a pull request that adds a skill sees it applied only once merged.
 - **Skills belong to the reviewed repository, not to the reviewer.** They are
   that repository's conventions, versioned with its code. The reviewer ships

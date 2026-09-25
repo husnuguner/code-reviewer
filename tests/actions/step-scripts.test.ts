@@ -369,6 +369,7 @@ function policyEnvironment(
     GITHUB_WORKSPACE: checkout.workspace,
     POLICY_REF: "base",
     CONFIG_INPUT: "",
+    SKILLS_INPUT: "",
     BASE_REF: "main",
     POLICY_DIR: join(checkout.temporary, "review-policy"),
     ...overrides,
@@ -432,6 +433,84 @@ describe("actions/review/action.yml, the policy step", () => {
     expect(step.exitCode).toBe(0);
     expect(step.outputs["config"]).toBe("ci/review.yaml");
     expect(existsSync(join(checkout.temporary, "review-policy"))).toBe(false);
+  });
+
+  it("reads a skills-path input from the base branch too, not from the pull request", () => {
+    // `skills-path: .review/skills` was taken from the checkout, so a pull request's rewritten skill
+    // was applied under a policy otherwise read from the base.
+    const checkout = pullRequestCheckout();
+    const step = runStep(run, {
+      env: policyEnvironment(checkout, { SKILLS_INPUT: ".review/skills" }),
+      stub: "bun",
+    });
+
+    expect(step.exitCode).toBe(0);
+    const skills = step.outputs["skills-path"] ?? "";
+    expect(skills).toBe(join(checkout.temporary, "review-policy", ".review", "skills"));
+    expect(existsSync(join(skills, "strict.md"))).toBe(true);
+    expect(existsSync(join(skills, "loose.md"))).toBe(false);
+  });
+
+  it("reads a skills directory outside .review/ from the base branch as well", () => {
+    const checkout = pullRequestCheckout();
+    git(checkout.workspace, "checkout", "-q", "main");
+    mkdirSync(join(checkout.workspace, "docs", "review-skills"), { recursive: true });
+    writeFileSync(
+      join(checkout.workspace, "docs", "review-skills", "base.md"),
+      "---\nname: base\n---\n",
+    );
+    git(checkout.workspace, "add", "-A");
+    git(checkout.workspace, "commit", "-qm", "skills elsewhere");
+    git(checkout.workspace, "update-ref", "refs/remotes/origin/main", "main");
+    git(checkout.workspace, "checkout", "-q", "feature");
+    const step = runStep(run, {
+      env: policyEnvironment(checkout, { SKILLS_INPUT: "./docs/review-skills/" }),
+      stub: "bun",
+    });
+
+    expect(step.exitCode).toBe(0);
+    const skills = step.outputs["skills-path"] ?? "";
+    expect(skills).toBe(join(checkout.temporary, "review-policy", "docs", "review-skills"));
+    expect(existsSync(join(skills, "base.md"))).toBe(true);
+  });
+
+  it("names an empty skills directory when the base branch has none", () => {
+    const checkout = pullRequestCheckout();
+    const step = runStep(run, {
+      env: policyEnvironment(checkout, { SKILLS_INPUT: "nowhere/skills" }),
+      stub: "bun",
+    });
+
+    expect(step.exitCode).toBe(0);
+    expect(step.outputs["skills-path"]).toBe(
+      join(checkout.temporary, "review-policy", "nowhere", "skills"),
+    );
+    expect(step.stdout).toContain("carries no nowhere/skills");
+  });
+
+  it("passes an absolute skills-path through, and the checkout's own under head", () => {
+    const checkout = pullRequestCheckout();
+    const absolute = runStep(run, {
+      env: policyEnvironment(checkout, { SKILLS_INPUT: "/opt/skills" }),
+      stub: "bun",
+    });
+    expect(absolute.outputs["skills-path"]).toBe("/opt/skills");
+    const head = runStep(run, {
+      env: policyEnvironment(checkout, { POLICY_REF: "head", SKILLS_INPUT: ".review/skills" }),
+      stub: "bun",
+    });
+    expect(head.outputs["skills-path"]).toBe(".review/skills");
+  });
+
+  it("refuses a skills-path that climbs out of the repository", () => {
+    const checkout = pullRequestCheckout();
+    const step = runStep(run, {
+      env: policyEnvironment(checkout, { SKILLS_INPUT: "../elsewhere" }),
+      stub: "bun",
+    });
+
+    expect(step.exitCode).toBe(1);
+    expect(step.stdout).toContain("::error::skills-path must stay inside the repository");
   });
 
   it("refuses a policy-ref it does not know", () => {
