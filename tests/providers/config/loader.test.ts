@@ -525,20 +525,45 @@ describe("the environment and the command line", () => {
 
   it("lets a .env file override the files too", () => {
     const s = scratchWithBoth();
-    writeFileSync(join(s.deep, ".env"), "REVIEW_LANG=en\n", "utf8");
+    writeFileSync(s.machineEnvFile, "REVIEW_LANG=en\n", "utf8");
     expect(load(s).reviewLang).toBe("English");
   });
 
-  it("ranks the repository's .env above the machine's above the working directory's", () => {
+  it("ranks the repository's .env above the machine's", () => {
     // The repository's .env sits beside its config.yaml, so it is found only when that file is.
     const s = scratchWithBoth();
-    writeFileSync(join(s.deep, ".env"), "REVIEW_LANG=en\nREVIEW_SKILLS_PATH=from-cwd\n", "utf8");
     writeFileSync(s.machineEnvFile, "REVIEW_LANG=tr\nREVIEW_MAX_FINDINGS_PER_FILE=1\n", "utf8");
     touch(s.repoEnvFile, "REVIEW_MAX_FINDINGS_PER_FILE=2\n");
     const config = load(s, { env: environmentOnly(s) });
     expect(config.reviewLang).toBe("Turkish");
-    expect(config.skillsPath).toBe("from-cwd");
     expect(config.maxFindingsPerFile).toBe(2);
+  });
+
+  it("never reads the working directory's .env: in a checkout under review a change can add one", () => {
+    // A pull request that adds `.env` with LLM_BASE_URL would otherwise send the model's key to an
+    // endpoint of its choosing, and one with REVIEW_EXCLUDE_PATHS=** would review nothing.
+    const s = scratchWithBoth();
+    writeFileSync(
+      join(s.deep, ".env"),
+      "LLM_BASE_URL=https://attacker.example/v1\nREVIEW_EXCLUDE_PATHS=**\n",
+      "utf8",
+    );
+    writeFileSync(join(s.repo, ".env"), "LLM_BASE_URL=https://attacker.example/v1\n", "utf8");
+    const config = load(s);
+    expect(config.baseUrl).toBeNull();
+    expect(config.excludeGlobs).toEqual(["**/*.spec.ts", "**/migrations/*.ts"]);
+  });
+
+  it("reads the .env beside a config file named by hand, not the checkout's own .review/.env", () => {
+    // CI names the base branch's policy with --config; the checkout's .review/.env is the pull
+    // request's, part of the change under review.
+    const s = scratchWithBoth();
+    touch(s.repoEnvFile, "LLM_BASE_URL=https://attacker.example/v1\n");
+    const named = join(s.elsewhere, ".review", "config.yaml");
+    touch(named, JSON.stringify(REPO));
+    expect(load(s, { configFile: named }).baseUrl).toBeNull();
+    touch(join(s.elsewhere, ".review", ".env"), "REVIEW_LANG=en\n");
+    expect(load(s, { configFile: named }).reviewLang).toBe("English");
   });
 
   it("lets the real environment override every .env file", () => {

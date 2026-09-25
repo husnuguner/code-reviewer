@@ -41,15 +41,12 @@ export function loadRunConfig(options: LoadRunConfigOptions): Config {
   const processEnvironment = options.environment ?? process.env;
   const cwd = options.cwd ?? process.cwd();
   const logger = options.logger ?? NULL_LOGGER;
+  const paths = configPaths(options.configFile, processEnvironment, cwd);
   const environment = mergedEnvironment(
     processEnvironment,
-    environmentFilePaths(processEnvironment, cwd).map(readEnvironmentFile),
+    environmentFilePaths(paths.repo, processEnvironment).map(readEnvironmentFile),
   );
-  const files = loadConfigFiles(
-    configPaths(options.configFile, processEnvironment, cwd),
-    environment,
-    logger,
-  );
+  const files = loadConfigFiles(paths, environment, logger);
   if (files.length > 0) {
     logger
       .child("config")

@@ -155,6 +155,15 @@ The choices with a real trade-off behind them, and what was given up:
   is a checkout that carries `.review/`. Given up: reviewing a repository with
   personal skills without putting a `.review/` in it, and reviewing a checkout
   from outside it.
+- **Nothing inside the checkout configures the run except the policy file in
+  force.** The working directory's `.env` is never read, and the repository's
+  `.env` is the one beside the config file actually used, not the one a walk
+  up the checkout finds. The checkout is the change under review: a `.env` a
+  pull request adds could otherwise set `LLM_BASE_URL` and receive the
+  model's key, or `REVIEW_EXCLUDE_PATHS=**` and review nothing, under a policy
+  read from the base branch. Given up: the application's own `.env` as a
+  place to keep the reviewer's key; it lives in `~/.config/reviewer/.env` or
+  `.review/.env`.
 - **A skill's scope is stated once, in the repository's config file.** A skill
   document carries no scope of its own. Two places for one decision means one
   of them eventually lies.
@@ -264,9 +273,9 @@ see Releasing. This repository does not review itself with its own action.
 
 Bun reads a working directory's `.env` by default. This repository turns that
 off (`bunfig.toml`, `env = false`) and the executable carries `--no-env-file`
-in its shebang: the reviewer reads `.env` files itself in a stated order in
-which the working directory's is the weakest, and the working directory is
-the checkout under review.
+in its shebang: the reviewer reads `.env` files itself -- the machine's and
+the one beside the repository config file in force -- and never the working
+directory's, because the working directory is the checkout under review.
 
 ## Releasing
 

@@ -380,7 +380,9 @@ Inputs, the `reviewer comment` flags, and pinning advice:
 - **A pull request cannot loosen the rules it is reviewed under.** In CI the
   `.review/` that is read is the base branch's, not the pull request's; and a
   change that edits `.review/` is named in the summary and in the posted
-  comment either way, so the reader knows to look at those files.
+  comment either way, so the reader knows to look at those files. A `.env` a
+  change adds configures nothing: the working directory's `.env` is never
+  read, and the repository's is the one beside the config file in force.
 - **Secrets never reach a log line.** Values of `*_API_KEY`, `*_TOKEN`,
   `*_SECRET`, `*_PASSWORD` variables are masked at the sink in every format.
 - **The bot may request changes; it may not approve.**

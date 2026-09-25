@@ -187,12 +187,19 @@ not set`), rather than a 401 later. The one exception is the key under
   as not a number.
 
 The variable is read from the environment and from the `.env` files, in this
-order (strongest first): the process environment, the repository's
-`.review/.env` (a key meant for one project), the machine's
-`~/.config/reviewer/.env` (where a key normally lives), and last the working
-directory's `.env`. The reviewer reads these files itself; Bun's own `.env`
-loading is turned off because the working directory is the checkout under
-review.
+order (strongest first): the process environment, the `.env` beside the
+repository config file in force (`.review/.env`, a key meant for one
+project), and the machine's `~/.config/reviewer/.env` (where a key normally
+lives). The reviewer reads these files itself; Bun's own `.env` loading is
+turned off.
+
+The working directory's `.env` is **never** read. The working directory is
+the checkout under review, and a `.env` there is that application's -- or a
+change's: a pull request can add one, and a variable read from it could name
+the endpoint the model's key is sent to, or exclude every file. For the same
+reason the repository's `.env` is the one beside the config file actually in
+force: when `--config` names another file (the review action names the base
+branch's copy of `.review/`), the checkout's own `.review/.env` is not read.
 
 ### There is no key that replaces the review policy
 

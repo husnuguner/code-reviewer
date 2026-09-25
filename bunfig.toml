@@ -1,10 +1,11 @@
 # Bun reads .env / .env.local from the working directory into process.env
-# before any code runs. The reviewer reads its .env files itself, in a stated
-# order of precedence (src/providers/config/loader.ts) in which the working
-# directory's .env is the *weakest* source; letting Bun promote it to the
-# real environment would invert that order. Off here for everything run from
-# this repository (tests, scripts); the executable carries the same
-# decision in its shebang, because a checkout they review has no say in it.
+# before any code runs. The reviewer reads its .env files itself
+# (src/providers/config/environment-files.ts) and never the working
+# directory's: that directory is the checkout under review, and a change can
+# add a .env to it. Letting Bun promote it to the real environment would hand
+# it the strongest layer. Off here for everything run from this repository
+# (tests, scripts); the executable carries the same decision in its shebang,
+# because a checkout they review has no say in it.
 env = false
 
 [run]
