@@ -21,6 +21,8 @@ import { expandUser } from "../config/paths";
 export interface GitRunOptions {
   /** Exit codes to accept as success: git answers through the exit code too (`diff` exits 1 for "differ"). */
   readonly allowedExitCodes?: readonly number[];
+  /** How long the command may run before it is stopped; default {@link GIT_TIMEOUT_MS}. */
+  readonly timeoutMs?: number;
 }
 
 /**
@@ -61,6 +63,7 @@ export function worktree(root: string): string {
  */
 export const runGit: GitRunner = async (root, arguments_, options) => {
   const command = `git ${arguments_.join(" ")}`;
+  const timeoutMs = options?.timeoutMs ?? GIT_TIMEOUT_MS;
   let child: Bun.Subprocess<"ignore", "pipe", "pipe">;
   try {
     child = Bun.spawn(["git", ...arguments_], {
@@ -68,20 +71,44 @@ export const runGit: GitRunner = async (root, arguments_, options) => {
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
+      timeout: timeoutMs,
+      killSignal: "SIGKILL",
     });
   } catch (error) {
     throw new GitError(`${command} could not start: ${errorMessage(error)}`);
   }
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
+  // Both pipes are drained from the start, so a large diff cannot fill one and deadlock the child.
+  const output = drained(child.stdout);
+  const errors = drained(child.stderr);
+  const exitCode = await child.exited;
+  if (child.signalCode !== null) {
+    // Stopped: a process git started may still hold the pipes open, so their end is not waited for.
+    throw new GitError(
+      `${command} did not finish within ${String(timeoutMs / 1000)}s and was stopped (${child.signalCode}).`,
+    );
+  }
+  const [stdout, stderr] = await Promise.all([output, errors]);
   if (exitCode !== 0 && !(options?.allowedExitCodes ?? []).includes(exitCode)) {
     throw new GitError(`${command} failed: ${stderr.trim()}`);
   }
   return stdout;
 };
+
+/**
+ * How long one git command may run. Every command the reviewer runs reads local history and answers in
+ * seconds even on a large repository; a git that waits on a lock, a credential prompt or a hook without end
+ * would otherwise hold the run -- and a CI job -- until its own timeout, saying nothing. Generous on purpose.
+ */
+export const GIT_TIMEOUT_MS = 120_000;
+
+/** A pipe read to its end as text; `""` when it breaks, so a promise nobody awaits cannot reject unheard. */
+async function drained(stream: ReadableStream<Uint8Array>): Promise<string> {
+  try {
+    return await new Response(stream).text();
+  } catch {
+    return "";
+  }
+}
 
 /** Paths as bytes, not C escapes, whatever the machine's git config says. */
 const RAW_PATHS = ["-c", "core.quotePath=false"] as const;

@@ -10,7 +10,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { GitError } from "../../../src/core/util/errors";
-import { LocalGitReader, runGit, worktree } from "../../../src/providers/git/local-git";
+import {
+  GIT_TIMEOUT_MS,
+  LocalGitReader,
+  runGit,
+  worktree,
+} from "../../../src/providers/git/local-git";
 import { git } from "../../helpers/git";
 
 /**
@@ -162,6 +167,18 @@ describe("what git reports", () => {
 
   it("reports nothing uncommitted in a clean checkout", async () => {
     expect(await new LocalGitReader(repo()).worktreeFiles()).toEqual([]);
+  });
+
+  it("stops a git command that does not finish, as a GitError that says so", async () => {
+    // A git waiting on a lock or a prompt used to hold the run, and a CI job, until its own timeout.
+    const root = repo();
+    const started = performance.now();
+    const slow = runGit(root, ["-c", "alias.slow=!sleep 3", "slow"], { timeoutMs: 200 });
+    await expect(slow).rejects.toThrow(GitError);
+    await expect(slow).rejects.toThrow(/did not finish within 0\.2s and was stopped/u);
+    // Not held for the three seconds by the `sleep` git started, which keeps the pipes open.
+    expect(performance.now() - started).toBeLessThan(2500);
+    expect(GIT_TIMEOUT_MS).toBeGreaterThanOrEqual(60_000);
   });
 
   it("surfaces a failing git command as a GitError", async () => {
