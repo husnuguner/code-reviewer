@@ -12,6 +12,7 @@ import { type NewSideEntry, patchView } from "../diff/patch-view";
 import { type ChangedFile } from "../domain/changed-file";
 import { type Finding } from "../domain/finding";
 import { type CodeContext } from "../ports/code-context";
+import { type LanguageLookup } from "../ports/language";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import { type RenderedSkills, type SkillMatcher } from "../ports/skill-matcher";
 import { countCodePoints, formatCount, show } from "../util/text";
@@ -28,7 +29,7 @@ import {
   isWhollyBypassed,
   scanBypass,
 } from "./bypass";
-import { type ContextLimits, gatherContext, renderContext } from "./context";
+import { type ContextLimits, gatherContext, renderContext } from "./context/index";
 import { type ReviewFileInput } from "./file-reviewer";
 import { isSecretPath } from "./guards";
 import { type SelectedFile } from "./selection";
@@ -104,6 +105,8 @@ export interface ReviewChangedFileOptions {
   readonly readContent?: ContentReader | null;
   /** Where pre-context is read from; `null` gathers none. */
   readonly codeContext?: CodeContext | null;
+  /** Which language reads each file for pre-context; omitted, every file is plain text. */
+  readonly languages?: LanguageLookup;
   /** Every changed file of the change set, this one included. */
   readonly changeSet?: readonly ChangedFile[];
   /** The per-file cap, passed to the prompt; `0` means all. */
@@ -426,6 +429,7 @@ async function surroundingsOf(
     changeSet: options.changeSet ?? [file],
     context: codeContext,
     limits: contextLimitsOf(options.settings),
+    ...(options.languages && { languages: options.languages }),
     ...(options.logger && { logger: options.logger }),
   });
   const text = renderContext(gathered, maxChars);

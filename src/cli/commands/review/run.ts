@@ -134,6 +134,7 @@ async function runBranchReview(arguments_: ReviewArguments, cradle: RunCradle): 
     maxConcurrentFiles: config.concurrency().files,
     maxFindingsPerFile: config.reportPolicy().maxFindingsPerFile,
     codeContext: cradle.codeContext,
+    languages: cradle.languages,
     policyPaths: cradle.policyPaths,
     reviewerVersion: packageVersion(),
     logger,

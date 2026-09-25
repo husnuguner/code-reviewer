@@ -90,3 +90,14 @@ describe("the checkout the composition root reviews", () => {
     expect(cradle.policyPaths).toEqual([".review/config.yaml", ".review/prompts", "ci/skills"]);
   });
 });
+
+describe("the languages the composition root wires", () => {
+  it("are the built-in ones: TypeScript read as TypeScript, anything else as plain text", () => {
+    const s = scratch();
+    const { languages } = buildContainer(
+      request({ cwd: s.repo, environment: { XDG_CONFIG_HOME: s.xdg } }),
+    ).cradle;
+    expect(languages.forPath("src/deep/route.ts").id).toBe("typescript");
+    expect(languages.forPath("app/service.py").id).toBe("plain-text");
+  });
+});

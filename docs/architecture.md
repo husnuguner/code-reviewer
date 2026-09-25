@@ -16,6 +16,7 @@ src/
 │   ├── ports/       what it asks for from outside (interfaces)
 │   ├── domain/      Finding, Skill, changed-file records
 │   ├── review/      selection · review-file · branch-review · anchor · verify · volume · render
+│   │   └── context/     pre-context: gather (facade) · definitions · usages · related · render · plain-text (null object)
 │   ├── diff/        unified-diff parsing, patch views
 │   ├── skills/      glob engine, frontmatter parser, registry
 │   ├── posting/     records → one review payload (pure)
@@ -26,6 +27,7 @@ src/
 │   ├── repository/  repository-provider (kind) · github/
 │   ├── reporting/   format-provider (kind) · text/ · ndjson/ · github/ · tee, collecting, closable
 │   ├── git/         Bun.spawn: diff source and pre-context
+│   ├── languages/   language (kind) · registry · typescript/ — what pre-context reads of each language
 │   ├── skills/      directory and worktree sources
 │   ├── config/      where the two config.yaml files live, how they are read; .env layers; one run's Config via convict
 │   ├── logging/     pino → stderr
@@ -45,9 +47,9 @@ src/
 ### `src/core/` — the work
 
 `ports/` is the whole of what the core asks for: `ChatModel`, `ReviewPoster`,
-`BranchReviewReporter`, `GitReader`, `CodeContext`, `SkillSource`,
-`ConfigDirectory`, `Logger`, `ConsoleOutput`. Nothing in this tree knows which
-vendor, host or rendering answers.
+`BranchReviewReporter`, `GitReader`, `CodeContext`, `LanguageLookup`,
+`SkillSource`, `ConfigDirectory`, `Logger`, `ConsoleOutput`. Nothing in this
+tree knows which vendor, host, rendering or programming language answers.
 
 Key modules under `review/`:
 
@@ -60,7 +62,8 @@ Key modules under `review/`:
 | `anchor.ts`          | Two signals (line, quote) settled into one anchor.                            |
 | `bypass.ts`          | `reviewer: by-pass` markers and the block each one names. Pure.               |
 | `../diff/elision.ts` | A stretch left out of what is shown, and the one line that stands for it.     |
-| `braces.ts`          | Braces counted as structure, not characters; shared by context and bypass.    |
+| `braces.ts`          | Braces counted as structure, not characters; shared by bypass and languages.  |
+| `context/`           | Pre-context: the algorithm, language-agnostic; each language is a port.       |
 | `branch-review.ts`   | The flow: git → select → review in parallel → cap → stream records.           |
 | `volume.ts`          | `max-findings-per-file`.                                                      |
 | `render.ts`          | Text report and preview.                                                      |
@@ -72,16 +75,53 @@ Key modules under `review/`:
 Where a port has several implementations selectable by name, the folder has
 one shape: a _kind_ (an abstract `Provider` subclass that owns what that kind
 needs — a default model, a token variable), one folder per implementation,
-and `builtin.ts` listing the instances. Three things vary this way:
+and `builtin.ts` listing the instances. Four things vary this way:
 
-| Varies by      | Kind                             | Implementations            |
-| -------------- | -------------------------------- | -------------------------- |
-| `LLM_PROVIDER` | `llm/model-provider`             | `claude`, `local`          |
-| `--format`     | `reporting/format-provider`      | `text`, `ndjson`, `github` |
-| `--provider`   | `repository/repository-provider` | `github`                   |
+| Varies by          | Kind                             | Implementations            |
+| ------------------ | -------------------------------- | -------------------------- |
+| `LLM_PROVIDER`     | `llm/model-provider`             | `claude`, `local`          |
+| `--format`         | `reporting/format-provider`      | `text`, `ndjson`, `github` |
+| `--provider`       | `repository/repository-provider` | `github`                   |
+| a file's extension | `languages/language`             | `typescript`               |
 
 Adding one is a file and a line: configuration, `--help`, the refusal a typo
-meets and the composition root all learn the name from the registry.
+meets and the composition root all learn the name from the registry. (A
+language is chosen by extension, not by name, so its registry is a
+`LanguageRegistry` rather than a `ProviderRegistry`; the shape is the same.)
+
+### Adding a language
+
+Pre-context -- the Definitions, Usages and Related blocks -- is an algorithm in
+`core/review/context/` that knows no language. What it asks of one is the
+`LanguageSupport` port (`core/ports/language.ts`), split into six role
+interfaces so each core module depends only on what it asks:
+
+| Role               | Question                                                           | Asked by             |
+| ------------------ | ------------------------------------------------------------------ | -------------------- |
+| `ImportSyntax`     | Which local modules does this patch show the file importing?       | Definitions, Related |
+| `ModuleResolution` | Which files does a specifier point to; which module is a file?     | Definitions, Related |
+| `ExportSyntax`     | Which names do these lines export; which are never worth a search? | Usages               |
+| `ModuleSurface`    | What does a module offer a caller?                                 | Definitions          |
+| `FileNaming`       | Which name do two files that belong together share?                | Related              |
+| `UsageScope`       | Could a search hit at this path be a caller?                       | Usages               |
+
+A language is one class of the `Language` kind (`providers/languages/language.ts`),
+which answers `moduleKey`, `stemOf` and `isPossibleUser` the way most
+languages would, so the class writes `id`, `extensions`, `imports`, `resolve`,
+`exportedNames` and `signatures`, and overrides the rest only where its syntax
+differs. Then one line in `providers/languages/builtin.ts`. The core, the
+registry and the composition root need no edit; the core is handed the lines of
+a patch by side (`PatchSides`), so no language parses diff text, and path
+arithmetic (`joinRelative`, `extensionOf`) is the core's to share.
+
+A file no registered language claims is read by `PLAIN_TEXT`, a null object
+that answers every question with nothing: Related falls back to the directory
+(and the stem, within plain text), Definitions and Usages stay empty, and no
+code path tests for a missing language. Two languages never bind each other's
+files: an import edge and a stem match are drawn only within one language.
+`tests/core/review/context.test.ts` carries a thirty-line Python written this
+way, which gets all three blocks without touching the core -- the proof that the
+extension point is where it should be.
 
 ### `src/cli/` — the composition
 
@@ -94,8 +134,9 @@ Each has its own composition root, so no run ever holds both credentials.
 
 `core/` is published as `code-reviewer/core` and `providers/` as
 `code-reviewer/providers`. The core takes its adapters as constructor
-arguments, so an embedder adds a vendor, a host or a rendering by extending a
-kind and handing an instance to the registry, never by editing the core.
+arguments, so an embedder adds a vendor, a host, a rendering or a language by
+extending a kind and handing an instance to the registry, never by editing the
+core.
 
 ## Design principles
 
@@ -196,8 +237,16 @@ The choices with a real trade-off behind them, and what was given up:
   diff is chosen by the relation a change actually breaks — the import, either
   direction — and only then by the same stem or directory; the prompt says
   which way it points. Given up: the pure-name heuristic's independence from
-  the language. Import edges are read by a JS/TS-shaped regex, so in another
-  language the ranking falls back to the names until a language adapter lands.
+  the language. Import edges are drawn by the file's language; a language
+  with no implementation falls back to the directory.
+- **Pre-context is one algorithm and one strategy per language.** The core
+  decides what to gather, in what order, within what budget and through which
+  guard; a language (`LanguageSupport`) only answers what its syntax decides,
+  chosen by the file's extension, and a file no language claims gets the
+  plain-text null object. A new language is one class and one line, and the
+  guard, the budget and the rendering hold for it unasked. Given up: a
+  language whose pre-context needs more than the patch and the repository at
+  one ref -- a type checker, a build graph -- does not fit the port as it is.
 - **The prompt budgets are set in a config file and nowhere else.** How much
   of the repository one review reads — `skills.max-chars` and the whole
   `settings.context` section — is a judgement about that code, so it

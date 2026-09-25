@@ -96,7 +96,7 @@ Two exclusions are not the project's to make (`src/core/review/guards.ts`):
   can take away from it. The guard sits on every read, not only on the change
   set: pre-context never reads a credential file as an imported module's
   "definition" (`require("../.env")`) nor lists one among a symbol's users,
-  and an import resolves only to a JavaScript/TypeScript source file.
+  and an import resolves only to a source file its language reads.
 - **Binary patches** — git's binary marker, or any patch carrying a NUL byte.
 
 `.env.example` is withheld too: a template with a live value pasted into it
@@ -110,11 +110,11 @@ snapshots are the project's judgement and belong in its `exclude`.
 A diff rarely explains itself. Before each call the reviewer fetches, from the
 checkout at the reviewed ref:
 
-| Block           | What                                                                                                                                         | Answers                                             |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| **Definitions** | Exported signatures (with doc comments, and an `enum`/`interface`/`type`'s members) of the local modules the patch imports; JS/TS only today | "What does the thing I am calling take and return?" |
-| **Usages**      | Paths of other source files that mention an exported symbol the change adds, removes or edits                                                | "Does this signature change break anyone?"          |
-| **Related**     | Diffs of the other changed files bound to this one: an import either way first, then the same stem or directory                              | "Was the counterpart updated too?"                  |
+| Block           | What                                                                                                                                     | Answers                                             |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| **Definitions** | Exported signatures (with doc comments, and an `enum`/`interface`/`type`'s members) of the local modules the patch imports; per language | "What does the thing I am calling take and return?" |
+| **Usages**      | Paths of other source files that mention an exported symbol the change adds, removes or edits                                            | "Does this signature change break anyone?"          |
+| **Related**     | Diffs of the other changed files bound to this one: an import either way first, then the same stem or directory                          | "Was the counterpart updated too?"                  |
 
 Pre-context is deterministic: the reviewer decides what to fetch and the model
 asks for nothing, so the review stays one call and the output contract is
@@ -133,10 +133,15 @@ Related diffs are built from the _selected_ files, so an excluded or
 credential file can never reach a prompt as somebody else's "related change".
 
 The three blocks are read off the patch itself, so they need no language
-server. The import reading is JavaScript/TypeScript-shaped: in another language
-Definitions is empty, the import edge is never drawn, and Related falls back to
-the name heuristics (whose stem rule, `foo.test.ts` → `foo`, is itself a
-JavaScript convention).
+server. What a patch says in a given language -- how it imports, what it
+exports, what a module's surface is, how its files are named -- is that
+language's to answer, chosen by the file's extension. **TypeScript and
+JavaScript** (`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`) ship
+today. A file of any other language is read as plain text: Definitions and
+Usages stay empty, and Related falls back to the directory. An import edge or
+a stem match is drawn only between two files of one language, so
+`service.py` is never `service.ts`'s counterpart. Adding a language is one
+class and one line; see [Architecture](architecture.md#adding-a-language).
 
 - **Imports** are read from the added lines first and the surrounding context
   lines second, as written (`./x`, `../x`) or from the repository root

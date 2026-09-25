@@ -22,6 +22,7 @@ import { type ChatModel } from "../core/ports/chat-model";
 import { type CodeContext } from "../core/ports/code-context";
 import { type ConsoleOutput } from "../core/ports/console";
 import { type GitReader } from "../core/ports/git-reader";
+import { type LanguageLookup } from "../core/ports/language";
 import { type Logger } from "../core/ports/logger";
 import {
   type BranchReviewReporter,
@@ -52,6 +53,7 @@ import {
 import { StreamConsole } from "../providers/console/stream-console";
 import { GitCodeContext } from "../providers/git/git-code-context";
 import { LocalGitReader, worktree } from "../providers/git/local-git";
+import { builtinLanguages } from "../providers/languages/builtin";
 import { builtinModelProviders } from "../providers/llm/builtin";
 import { type ModelProviderRegistry } from "../providers/llm/model-provider";
 import { RetryingChatModel } from "../providers/llm/retrying-chat-model";
@@ -124,6 +126,8 @@ export interface RunCradle {
   readonly gitReader: GitReader;
   /** The checkout beyond the diff, read at `HEAD`, for pre-context. */
   readonly codeContext: CodeContext;
+  /** Which language reads each file for pre-context: the built-in ones, plain text for the rest. */
+  readonly languages: LanguageLookup;
   /** The project's skills, loaded and scoped by its mappings; resolved once per run. */
   readonly skills: Promise<SkillMatcher>;
 }
@@ -251,6 +255,7 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
     gitReader: asFunction(
       ({ checkoutRoot, logger }: RunCradle) => new LocalGitReader(checkoutRoot, undefined, logger),
     ).singleton(),
+    languages: asFunction(() => builtinLanguages()).singleton(),
     codeContext: asFunction(
       ({ checkoutRoot, logger }: RunCradle) =>
         new GitCodeContext(checkoutRoot, HEAD, undefined, logger),

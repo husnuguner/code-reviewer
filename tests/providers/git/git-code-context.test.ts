@@ -15,6 +15,7 @@ import { type PerFileReviewer } from "../../../src/core/review/review-file";
 import { DEFAULT_FILE_REVIEW_SETTINGS } from "../../../src/core/review/review-file";
 import { GitCodeContext, parseGrep } from "../../../src/providers/git/git-code-context";
 import { type GitRunner, LocalGitReader } from "../../../src/providers/git/local-git";
+import { builtinLanguages } from "../../../src/providers/languages/builtin";
 import { git } from "../../helpers/git";
 
 /** A runner that records its invocations and answers from one fake ref. */
@@ -220,6 +221,7 @@ describe("pre-context in a branch review", () => {
       skills: null,
       maxConcurrentFiles: 2,
       codeContext: new GitCodeContext(root, HEAD),
+      languages: builtinLanguages(),
     });
     // route.ts imports ../service: its exported signature (at the checkout) is context.
     const route = prompts.get("src/api/route.ts") ?? "";
@@ -229,6 +231,30 @@ describe("pre-context in a branch review", () => {
     const service = prompts.get("src/service.ts") ?? "";
     expect(service).toContain("- total: src/api/route.ts, src/jobs/nightly.ts");
     expect(service).not.toContain("src/service.ts, ");
+  });
+
+  it("reads every file as plain text when no language is wired: Related only, no Definitions or Usages", async () => {
+    const root = repo();
+    git(root, "checkout", "-q", "feature");
+    const prompts = new Map<string, string>();
+    const reviewer: PerFileReviewer = {
+      reviewFile: (input: ReviewFileInput): Promise<Finding[]> => {
+        prompts.set(input.path, input.contextText ?? "");
+        return Promise.resolve([]);
+      },
+    };
+    await reviewBranch({
+      base: "main",
+      reviewer,
+      git: new LocalGitReader(root),
+      settings: DEFAULT_FILE_REVIEW_SETTINGS,
+      skills: null,
+      maxConcurrentFiles: 2,
+      codeContext: new GitCodeContext(root, HEAD),
+    });
+    const route = prompts.get("src/api/route.ts") ?? "";
+    expect(route).not.toContain("Definitions of modules");
+    expect(prompts.get("src/service.ts") ?? "").not.toContain("Other files that mention");
   });
 
   it("gathers nothing when the cap is zero or no context is wired", async () => {

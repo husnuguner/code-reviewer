@@ -1,5 +1,5 @@
 /**
- * The public surface of the providers layer: the mechanism, the three kinds, and the built-in instances.
+ * The public surface of the providers layer: the mechanism, the kinds, and the built-in instances.
  * @packageDocumentation
  */
 
@@ -18,3 +18,9 @@ export { BUILTIN_REPOSITORY_PROVIDERS, builtinRepositoryProviders } from "./repo
 export { FormatProvider, FormatProviderRegistry } from "./reporting/format-provider";
 export type { ReportContext } from "./reporting/format-provider";
 export { BUILTIN_FORMAT_PROVIDERS, builtinFormatProviders } from "./reporting/builtin";
+
+export { Language } from "./languages/language";
+export { LanguageRegistry } from "./languages/registry";
+export { TypeScriptLanguage } from "./languages/typescript/language";
+export type { TypeScriptLanguageOptions } from "./languages/typescript/language";
+export { BUILTIN_LANGUAGES, builtinLanguages } from "./languages/builtin";

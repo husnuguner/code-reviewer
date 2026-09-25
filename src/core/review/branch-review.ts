@@ -14,6 +14,7 @@ import { addedLines } from "../diff/patch-view";
 import { type ChangedFileEntry } from "../domain/changed-file";
 import { type CodeContext } from "../ports/code-context";
 import { type GitReader } from "../ports/git-reader";
+import { type LanguageLookup } from "../ports/language";
 import { type Logger, NULL_LOGGER } from "../ports/logger";
 import {
   type BranchReviewRecord,
@@ -79,6 +80,8 @@ export interface BranchReviewOptions {
   readonly maxFindingsPerFile?: number;
   /** Reads the repository beyond the diff at `HEAD`; `null` gathers no pre-context. */
   readonly codeContext?: CodeContext | null;
+  /** Which language reads each file for pre-context; omitted, every file is plain text. */
+  readonly languages?: LanguageLookup;
   /** Where this run's policy lives inside the checkout, beside `.review`; a change to any of it is reported. */
   readonly policyPaths?: readonly PolicyPath[];
   /** The reviewer's version, carried on the summary; the core does not read a package manifest. */
@@ -123,6 +126,7 @@ export async function* iterBranchReview(
         readContent: (path) =>
           options.uncommitted === true ? git.readFile(path) : git.readFileAt(HEAD, path),
         codeContext: options.codeContext ?? null,
+        ...(options.languages && { languages: options.languages }),
         changeSet,
         maxFindingsPerFile: options.maxFindingsPerFile ?? 0,
         ...(provenance !== null && {

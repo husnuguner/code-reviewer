@@ -8,24 +8,28 @@ import { describe, expect, it } from "bun:test";
 
 import { ChangedFile } from "../../../src/core/domain/changed-file";
 import { type CodeContext, type CodeSearchHit } from "../../../src/core/ports/code-context";
+import { type ModuleTarget, type PatchSides } from "../../../src/core/ports/language";
 import {
   DEFAULT_CONTEXT_LIMITS,
   EMPTY_CONTEXT,
   type ReviewContext,
-  changedExports,
-  exportSignatures,
   gatherContext,
-  localImports,
+  joinRelative,
   relatedChanges,
   relationTo,
   renderContext,
-  resolveSpecifier,
-} from "../../../src/core/review/context";
+} from "../../../src/core/review/context/index";
 import { buildUserPrompt } from "../../../src/core/review/prompts";
 import {
   DEFAULT_FILE_REVIEW_SETTINGS,
   contextLimitsOf,
 } from "../../../src/core/review/review-file";
+import { BUILTIN_LANGUAGES, builtinLanguages } from "../../../src/providers/languages/builtin";
+import { Language } from "../../../src/providers/languages/language";
+import { LanguageRegistry } from "../../../src/providers/languages/registry";
+
+/** The languages a run knows; pre-context reads TypeScript through them. */
+const LANGUAGES = builtinLanguages();
 
 const PATCH = [
   "@@ -1,4 +1,6 @@",
@@ -87,203 +91,6 @@ function recordingContext(): {
   };
 }
 
-describe("what the patch says", () => {
-  it("lists the local modules the patch imports, the ones it touched first", () => {
-    // `./util/helper` is on a context line: a dependency all the same, but it
-    // ranks behind the three the change wrote, so a cap keeps what was touched.
-    expect(localImports(PATCH)).toEqual([
-      "../services/service",
-      "./types.js",
-      "./lazy",
-      "./util/helper",
-    ]);
-  });
-
-  it("ignores package imports and imports the change removed", () => {
-    expect(localImports('+import x from "zod";\n import y from "./ctx";')).toEqual(["./ctx"]);
-    expect(localImports('-import gone from "./gone";')).toEqual([]);
-  });
-
-  /**
-   * A formatter breaks a long dynamic import across lines, and Medusa-style
-   * projects import from the repository root. Both were invisible while the
-   * scan was line-by-line and relative-only.
-   */
-  it("reads a specifier on its own line and a root-relative one", () => {
-    const patch = [
-      "+    const { run } = await import(",
-      "+      '../../workflows/cancel.workflow.js'",
-      "+    );",
-      "+import { helper } from 'src/common/helper';",
-    ].join("\n");
-    expect(localImports(patch)).toEqual([
-      "../../workflows/cancel.workflow.js",
-      "src/common/helper",
-    ]);
-  });
-
-  it("names the exports the patch adds, removes or edits", () => {
-    // `total` is on both sides (an edited signature, the case that breaks
-    // callers), so it outranks the added-only `RATE` despite the alphabet.
-    expect(changedExports(PATCH)).toEqual(["total", "RATE"]);
-    expect(changedExports("+export default class Foo {}\n+export abstract class Bar {}")).toEqual([
-      "Bar",
-      "Foo",
-    ]);
-  });
-
-  it("ranks edited signatures before new or deleted exports, alphabetically within a rank", () => {
-    const patch = [
-      "+export function apply(a: number): void {",
-      "-export function apply(): void {",
-      "+export const zeta = 1;",
-      "-export class Gone {}",
-      "+export interface Added {}",
-      "-export type Edited = 2;",
-      "+export type Edited = 3;",
-    ].join("\n");
-    expect(changedExports(patch)).toEqual(["Edited", "apply", "Added", "Gone", "zeta"]);
-  });
-
-  it("resolves a specifier against the importing file, never above the root", () => {
-    expect(resolveSpecifier("src/a/b.ts", "./x")).toBe("src/a/x");
-    expect(resolveSpecifier("src/a/b.ts", "../services/service")).toBe("src/services/service");
-    expect(resolveSpecifier("a.ts", "../../x")).toBe("x");
-  });
-
-  /** Every extension an edge may be drawn to is one a definition can be read from. */
-  it("resolves the CommonJS spellings the import graph accepts", async () => {
-    const file = new ChangedFile(
-      "src/a.ts",
-      "modified",
-      '+import { x } from "./legacy.cjs";\n+import { y } from "./typed.cts";',
-    );
-    const context = await gatherContext({
-      file,
-      changeSet: [file],
-      context: fakeContext({
-        "src/legacy.cjs": "module.exports = { x: 1 };\nexport const x = 1;\n",
-        "src/typed.cts": "export const y = 2;\n",
-      }),
-    });
-    expect(context.definitions.map((d) => d.path)).toEqual(["src/legacy.cjs", "src/typed.cts"]);
-  });
-
-  it("leaves a root-relative specifier alone", () => {
-    expect(resolveSpecifier("src/api/deep/route.ts", "src/common/helper")).toBe(
-      "src/common/helper",
-    );
-  });
-});
-
-describe("what the repository says", () => {
-  const MODULE = [
-    "import { z } from 'zod';",
-    "",
-    "/**",
-    " * Charges the customer.",
-    " * @param amount in cents",
-    " */",
-    "export async function charge(",
-    "  customer: string,",
-    "  amount: number,",
-    "): Promise<Receipt> {",
-    "  return run(customer, amount);",
-    "}",
-    "",
-    "function run() {}",
-    "export const LIMIT = 10;",
-    "export { helper } from './helper';",
-  ].join("\n");
-
-  it("keeps export lines, their doc block and an open signature's continuation", () => {
-    const signatures = exportSignatures(MODULE, 10_000);
-    expect(signatures).toContain("* Charges the customer.");
-    expect(signatures).toContain("export async function charge(");
-    expect(signatures).toContain("): Promise<Receipt> {");
-    expect(signatures).toContain("export const LIMIT = 10;");
-    expect(signatures).toContain("export { helper } from './helper';");
-    expect(signatures).not.toContain("return run(customer, amount);");
-    expect(signatures).not.toContain("function run() {}");
-  });
-
-  /**
-   * The name of an enum answers nothing: the caller writes `Modules.CORE` and
-   * the question is whether `CORE` is there.
-   */
-  it("keeps the members of an enum, an interface and a type, with the closing brace", () => {
-    const module = [
-      "export enum Modules {",
-      "  PLAN = 'planModule',",
-      "  CORE = 'coreModule',",
-      "}",
-      "export interface Options {",
-      "  id: string;",
-      "}",
-      "export class Service {",
-      "  private secret = 1;",
-      "}",
-    ].join("\n");
-    const signatures = exportSignatures(module, 10_000);
-    expect(signatures).toContain("  CORE = 'coreModule',");
-    expect(signatures).toContain("  id: string;");
-    // A class body is implementation, not surface.
-    expect(signatures).not.toContain("private secret");
-  });
-
-  /**
-   * A brace inside a value is not structure. Counted as one, `OPEN = '{'` kept
-   * the block open until the line cap elided it -- the members were there, but
-   * followed by a false `// ...` and a brace that closed nothing.
-   */
-  it("does not mistake a brace in a string for the block's", () => {
-    const module = [
-      "export enum Marker {",
-      "  OPEN = '{',",
-      '  CLOSE = "}",',
-      "  TICK = `${x}`,",
-      "}",
-      "export const after = 1;",
-    ].join("\n");
-    const signatures = exportSignatures(module, 10_000);
-    expect(signatures).toContain("  OPEN = '{',");
-    expect(signatures).toContain('  CLOSE = "}",');
-    expect(signatures).not.toContain("// ...");
-    // The block closed where it should, so the next export follows it once.
-    expect(signatures.split("export const after = 1;")).toHaveLength(2);
-  });
-
-  /** The `{` may sit on the last line of a wrapped signature, not the `export` line. */
-  it("reads the members of a declaration whose head wraps onto more lines", () => {
-    const module = ["export interface Long<", "  T,", "> {", "  a: T;", "}"].join("\n");
-    const signatures = exportSignatures(module, 10_000);
-    expect(signatures).toContain("> {");
-    expect(signatures).toContain("  a: T;");
-    expect(signatures.trimEnd().endsWith("}")).toBe(true);
-  });
-
-  it("elides a member block longer than the cap instead of running on", () => {
-    const long = [
-      "export enum Big {",
-      ...Array.from({ length: 40 }, (_, index) => `  K${index} = '${index}',`),
-      "}",
-    ].join("\n");
-    const signatures = exportSignatures(long, 10_000);
-    expect(signatures).toContain("  K15 = '15',");
-    expect(signatures).not.toContain("  K16 = '16',");
-    expect(signatures).toContain("  // ...");
-    expect(signatures.trimEnd().endsWith("}")).toBe(true);
-  });
-
-  it("falls back to the head of a module that exports nothing recognisable, and caps", () => {
-    const text = Array.from({ length: 50 }, (_, index) => `line ${index}`).join("\n");
-    const head = exportSignatures(text, 10_000);
-    expect(head.startsWith("line 0\n")).toBe(true);
-    expect(head.split("\n")).toHaveLength(30);
-    expect(exportSignatures(text, 12)).toHaveLength(12);
-  });
-});
-
 /** Filler of a given length, for the budget tests. */
 function long(size: number): string {
   return "x".repeat(size);
@@ -306,7 +113,7 @@ describe("related changes", () => {
   ];
 
   it("picks the same stem first, then the same directory, and skips the file itself", () => {
-    expect(relatedChanges(route, all).map((f) => f.path)).toEqual([
+    expect(relatedChanges(route, all, LANGUAGES).map((f) => f.path)).toEqual([
       "src/api/admin/route.test.ts",
       "src/other/route.spec.ts",
       "src/api/admin/validation-schemas.ts",
@@ -329,15 +136,15 @@ describe("related changes", () => {
       service,
       caller,
     ];
-    expect(relatedChanges(handler, set).map((f) => f.path)).toEqual([
+    expect(relatedChanges(handler, set, LANGUAGES).map((f) => f.path)).toEqual([
       "src/jobs/nightly.ts",
       "src/services/users.ts",
       "src/api/handler.test.ts",
       "src/api/other.ts",
     ]);
-    expect(relationTo(handler, service)).toBe("imports");
-    expect(relationTo(handler, caller)).toBe("imported-by");
-    expect(relationTo(handler, modified("src/api/other.ts"))).toBe("sibling");
+    expect(relationTo(handler, service, LANGUAGES)).toBe("imports");
+    expect(relationTo(handler, caller, LANGUAGES)).toBe("imported-by");
+    expect(relationTo(handler, modified("src/api/other.ts"), LANGUAGES)).toBe("sibling");
   });
 
   it("draws an edge through a root-relative specifier and an index module", () => {
@@ -347,7 +154,7 @@ describe("related changes", () => {
     );
     const barrel = modified("src/modules/subscription/index.ts");
     const helper = modified("src/common/helper.ts");
-    expect(relatedChanges(deep, [deep, barrel, helper]).map((f) => f.path)).toEqual([
+    expect(relatedChanges(deep, [deep, barrel, helper], LANGUAGES).map((f) => f.path)).toEqual([
       "src/common/helper.ts",
       "src/modules/subscription/index.ts",
     ]);
@@ -357,8 +164,8 @@ describe("related changes", () => {
   it("draws no edge to or from a file the resolver does not understand", () => {
     const document = modified("docs/design.md", '+see `import { a } from "../src/a"`');
     const code = modified("src/a.ts");
-    expect(relationTo(document, code)).toBe("sibling");
-    expect(relatedChanges(document, [document, code])).toEqual([]);
+    expect(relationTo(document, code, LANGUAGES)).toBe("sibling");
+    expect(relatedChanges(document, [document, code], LANGUAGES)).toEqual([]);
   });
 });
 
@@ -404,6 +211,7 @@ describe("gathering", () => {
   it("resolves imports to files, lists users of changed exports, adds related diffs", async () => {
     const sibling = new ChangedFile("src/api/route.test.ts", "modified", "+it()");
     const context = await gatherContext({
+      languages: LANGUAGES,
       file,
       changeSet: [file, sibling],
       context: fakeContext(repo),
@@ -442,7 +250,12 @@ describe("gathering", () => {
       "modified",
       '@@ -1 +1,4 @@\n+const cfg = require("../.env");\n+import key from "./cert.pem";\n+import data from "./data.json";\n export {};',
     );
-    const context = await gatherContext({ file: leaky, changeSet: [leaky], context: recording });
+    const context = await gatherContext({
+      languages: LANGUAGES,
+      file: leaky,
+      changeSet: [leaky],
+      context: recording,
+    });
     expect(context.definitions).toEqual([]);
     expect(asked).not.toContain(".env");
     expect(asked).not.toContain("src/cert.pem");
@@ -466,6 +279,7 @@ describe("gathering", () => {
       ].join("\n"),
     );
     const context = await gatherContext({
+      languages: LANGUAGES,
       file: importing,
       changeSet: [importing],
       context: fakeContext({
@@ -488,6 +302,7 @@ describe("gathering", () => {
   it("never lists a credential file among a changed export's users", async () => {
     const exporting = new ChangedFile("src/rate.ts", "modified", "+export const RATE = 3;");
     const context = await gatherContext({
+      languages: LANGUAGES,
       file: exporting,
       changeSet: [exporting],
       context: fakeContext({
@@ -509,7 +324,12 @@ describe("gathering", () => {
       "+export const GET = async () => {};\n+export const POST = async () => {};\n+export const parseFilters = () => {};",
     );
     const { context, searched } = recordingContext();
-    const gathered = await gatherContext({ file: route, changeSet: [route], context });
+    const gathered = await gatherContext({
+      languages: LANGUAGES,
+      file: route,
+      changeSet: [route],
+      context,
+    });
     expect(searched).toEqual(["parseFilters"]);
     expect(gathered.usages.map((usage) => usage.symbol)).toEqual(["parseFilters"]);
   });
@@ -533,12 +353,18 @@ describe("gathering", () => {
           ].map((path, index) => ({ path, line: index + 1, text: needle })),
         ),
     };
-    const gathered = await gatherContext({ file, changeSet: [file], context: noisy });
+    const gathered = await gatherContext({
+      languages: LANGUAGES,
+      file,
+      changeSet: [file],
+      context: noisy,
+    });
     expect(gathered.usages).toEqual([{ symbol: "isTerminal", paths: ["src/api/route.ts"] }]);
   });
 
   it("gathers nothing when switched off, and survives a failing port", async () => {
     const off = await gatherContext({
+      languages: LANGUAGES,
       file,
       changeSet: [file],
       context: fakeContext(repo),
@@ -549,12 +375,18 @@ describe("gathering", () => {
       readFile: () => Promise.reject(new Error("offline")),
       search: () => Promise.reject(new Error("offline")),
     };
-    const degraded = await gatherContext({ file, changeSet: [file], context: broken });
+    const degraded = await gatherContext({
+      languages: LANGUAGES,
+      file,
+      changeSet: [file],
+      context: broken,
+    });
     expect(degraded).toEqual(EMPTY_CONTEXT);
   });
 
   it("respects the per-kind limits", async () => {
     const context = await gatherContext({
+      languages: LANGUAGES,
       file,
       changeSet: [file],
       context: fakeContext(repo),
@@ -586,6 +418,7 @@ describe("gathering", () => {
     );
     const { context, searched } = recordingContext();
     const gathered = await gatherContext({
+      languages: LANGUAGES,
       file: many,
       changeSet: [many],
       context,
@@ -604,6 +437,7 @@ describe("gathering", () => {
     const wide = new ChangedFile("src/api/route.ts", "modified", patch);
     const { context, peakInFlight } = recordingContext();
     const gathered = await gatherContext({
+      languages: LANGUAGES,
       file: wide,
       changeSet: [wide],
       context,
@@ -628,6 +462,127 @@ describe("gathering", () => {
       "sym4",
       "sym5",
     ]);
+  });
+});
+
+/**
+ * A minimal Python, written the way a real one would be: one class of the `Language` kind, nothing in the
+ * core touched. If this is all it takes for Definitions, Usages and import-bound Related to work in a new
+ * language, the extension point is where it should be.
+ */
+class TinyPython extends Language {
+  readonly id = "tiny-python";
+  readonly extensions = ["py"];
+
+  imports(sides: PatchSides): readonly string[] {
+    const specifiers = [...sides.added, ...sides.kept].flatMap((line) => {
+      const match = /^\s*from\s+(\.[\w.]*)\s+import\b/u.exec(line);
+      return match?.[1] === undefined ? [] : [match[1]];
+    });
+    return [...new Set(specifiers)];
+  }
+
+  resolve(fromPath: string, specifier: string): ModuleTarget {
+    const dots = /^\.+/u.exec(specifier)?.[0].length ?? 0;
+    const rest = specifier.slice(dots).replaceAll(".", "/");
+    const up = "../".repeat(Math.max(0, dots - 1));
+    const path = joinRelative(fromPath, `./${up}${rest}`);
+    return { path, candidates: [`${path}.py`, `${path}/__init__.py`], key: path };
+  }
+
+  override moduleKey(path: string): string {
+    return path.replace(/(?:\/__init__)?\.py$/u, "");
+  }
+
+  exportedNames(lines: readonly string[]): ReadonlySet<string> {
+    return new Set(
+      lines.flatMap((line) => {
+        const match = /^(?:def|class)\s+([A-Za-z_]\w*)/u.exec(line);
+        return match?.[1] === undefined || match[1].startsWith("_") ? [] : [match[1]];
+      }),
+    );
+  }
+
+  signatures(text: string, maxChars: number): string {
+    return text
+      .split("\n")
+      .filter((line) => /^(?:def|class)\s/u.test(line))
+      .join("\n")
+      .slice(0, maxChars);
+  }
+
+  override stemOf(path: string): string {
+    return super.stemOf(path).replace(/^test_|_test$/u, "");
+  }
+}
+
+describe("a language the core has never heard of", () => {
+  const python = new LanguageRegistry([...BUILTIN_LANGUAGES, new TinyPython()]);
+  const service = new ChangedFile(
+    "app/users/service.py",
+    "modified",
+    "-def find_user(user_id):\n+def find_user(user_id, tenant):",
+  );
+  const handler = new ChangedFile(
+    "app/users/handler.py",
+    "modified",
+    " from .service import find_user\n-    return find_user(user_id)\n+    return find_user(user_id, tenant)",
+  );
+  const repository = fakeContext({
+    "app/users/service.py": "def find_user(user_id, tenant):\n    return db.get(tenant, user_id)\n",
+    "app/jobs/sync.py":
+      "from ..users.service import find_user\n\ndef sync(ids):\n    return [find_user(i) for i in ids]\n",
+  });
+
+  it("gets Definitions, Usages and import-bound Related from one implementation", async () => {
+    const forHandler = await gatherContext({
+      languages: python,
+      file: handler,
+      changeSet: [handler, service],
+      context: repository,
+    });
+    expect(forHandler.definitions.map((d) => [d.specifier, d.path])).toEqual([
+      [".service", "app/users/service.py"],
+    ]);
+    expect(forHandler.definitions[0]?.signatures).toBe("def find_user(user_id, tenant):");
+    expect(forHandler.related).toEqual([
+      { path: "app/users/service.py", relation: "imports", patch: service.patch },
+    ]);
+
+    const forService = await gatherContext({
+      languages: python,
+      file: service,
+      changeSet: [handler, service],
+      context: repository,
+    });
+    // The caller the change breaks, which the change never touched.
+    expect(forService.usages).toEqual([{ symbol: "find_user", paths: ["app/jobs/sync.py"] }]);
+    expect(forService.related[0]?.relation).toBe("imported-by");
+  });
+
+  it("is read as plain text without its implementation: related by directory only, nothing else", async () => {
+    const gathered = await gatherContext({
+      languages: LANGUAGES,
+      file: handler,
+      changeSet: [handler, service],
+      context: repository,
+    });
+    expect(gathered.definitions).toEqual([]);
+    expect(gathered.usages).toEqual([]);
+    expect(gathered.related).toEqual([
+      { path: "app/users/service.py", relation: "sibling", patch: service.patch },
+    ]);
+  });
+
+  it("never binds a file of one language to a file of another, by name or by import", () => {
+    const tsService = modified("src/users/service.ts", "+export function findUser() {}");
+    const pyService = modified("app/users/service.py");
+    const pyTest = modified("app/users/test_service.py");
+    // Same stem, two languages: not counterparts. A test file named the Python way is.
+    expect(
+      relatedChanges(pyService, [pyService, tsService, pyTest], python).map((f) => f.path),
+    ).toEqual(["app/users/test_service.py"]);
+    expect(relationTo(tsService, pyService, python)).toBe("sibling");
   });
 });
 

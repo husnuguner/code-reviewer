@@ -16,6 +16,33 @@ export type {
   ReviewSubmission,
 } from "./ports/review-poster";
 export type { GitReader } from "./ports/git-reader";
+export type {
+  ExportSyntax,
+  FileNaming,
+  ImportSyntax,
+  LanguageLookup,
+  LanguageSupport,
+  ModuleResolution,
+  ModuleSurface,
+  ModuleTarget,
+  PatchSides,
+  UsageScope,
+} from "./ports/language";
+export {
+  NO_LANGUAGES,
+  PLAIN_TEXT,
+  changedSymbols,
+  defaultStem,
+  directoryOf,
+  extensionOf,
+  fileNameOf,
+  gatherContext,
+  isSourceLikePath,
+  joinRelative,
+  patchSides,
+  renderContext,
+} from "./review/context/index";
+export type { ContextLimits, GatherContextOptions, ReviewContext } from "./review/context/index";
 export type { Logger } from "./ports/logger";
 export { NULL_LOGGER } from "./ports/logger";
 export type { SkillMatcher } from "./ports/skill-matcher";
