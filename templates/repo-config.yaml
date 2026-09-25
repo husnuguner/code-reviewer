@@ -18,7 +18,10 @@ settings:
   # llm:
   #   model: claude-opus-4
 
-  exclude: ["**/*.spec.ts", "**/*.test.ts", "**/migrations/*.ts"]
+  # What is never sent to the model: generated and lock files, not tests or
+  # migrations -- the review policy reads both (a test that cannot fail, a
+  # migration that cannot be rolled back are findings).
+  exclude: ["**/*.lock", "**/package-lock.json", "**/*.min.js", "**/*.snap"]
   max-findings-per-file: 3 # the most severe survive; the rest are counted
 
 # The review policy -- who the reviewer is, what it looks for, what it leaves

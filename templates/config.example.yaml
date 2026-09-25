@@ -41,13 +41,14 @@ settings:
   # Files never sent to the model. Globs, as a list or one comma-separated
   # string; `--exclude` adds more for a run. Default []. Set in the machine's
   # file, this makes a local run differ from CI, where that file does not exist.
+  # Generated and lock files are the usual candidates; tests and migrations are
+  # not -- the policy reviews both.
   exclude:
-    - "**/*.md"
-    - "**/*.tsx"
-    - "**/__tests__/**"
-    - "**/*.spec.ts"
-    - "**/*.test.ts"
-    - "**/migration/*.ts"
+    - "**/*.lock"
+    - "**/package-lock.json"
+    - "**/*.min.js"
+    - "**/*.snap"
+    - "**/generated/**"
     - "**/migrations/*.ts"
     - "**/.snapshot*.json"
     - "src/scripts/**"

@@ -39,7 +39,7 @@ settings:
 # <repo>/.review/config.yaml -- this repository
 version: 1
 settings: # on top of the machine's
-  exclude: ["**/*.spec.ts", "**/migrations/*.ts"]
+  exclude: ["**/*.lock", "**/generated/**"]
   max-findings-per-file: 2
 skills: # this file only
   path: skills # beside this file
