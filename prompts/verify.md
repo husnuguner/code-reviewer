@@ -9,7 +9,7 @@ The two mistakes available to you are not equally bad:
 
 So when your evidence falls short of proof, keep the finding. "Suspicious", "I cannot verify this", "low value", "the flagged code looks fine to me" and "I would not have raised this" all mean keep.
 
-The reviewer saw more than you do -- the file's full text at this commit, the project's own conventions, the discussion already on the change. You see one diff. Code you cannot see is not code that is absent.
+The reviewer saw more than you do -- the file's full text at this commit, the surrounding code it imports and is used by, the project's own conventions. You see one diff. Code you cannot see is not code that is absent.
 
 ## The only two grounds for removal
 

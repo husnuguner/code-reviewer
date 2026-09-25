@@ -271,8 +271,53 @@ lifting one is not.
 ## Reviewing again
 
 A push to the PR is the normal trigger. For a review without a push (the
-prompt changed, the skills changed), give the workflow a `workflow_dispatch`
-with a `pr` input and run it from the _Actions_ tab.
+prompt changed, the skills changed), re-run the last run from the pull
+request's _Checks_ tab: it replays the same `pull_request` event.
+
+A `workflow_dispatch` trigger is also possible, but none of the
+`github.event.pull_request.*` values the workflow above reads exists on it, so
+the workflow must look the pull request up and pass every one of them
+explicitly:
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      pr: { description: "Pull request number", required: true }
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, pull-requests: read }
+    outputs:
+      pr: ${{ inputs.pr }}
+    steps:
+      - id: pr
+        env: { GH_TOKEN: "${{ github.token }}", PR: "${{ inputs.pr }}" }
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" \
+            --jq '"head=\(.head.sha)\nbase=\(.base.ref)"' >> "${GITHUB_OUTPUT}"
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0, ref: "${{ steps.pr.outputs.head }}" }
+      - uses: husnuguner/code-reviewer/actions/review@v0
+        with:
+          provider: claude
+          api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          base-ref: ${{ steps.pr.outputs.base }}
+          annotations: false
+
+  comment:
+    needs: review
+    runs-on: ubuntu-latest
+    permissions: { pull-requests: write }
+    steps:
+      - uses: actions/download-artifact@v7
+        with: { name: code-review-findings }
+      - uses: husnuguner/code-reviewer/actions/comment@v0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pr: ${{ needs.review.outputs.pr }}
+```
 
 ## Pinning
 

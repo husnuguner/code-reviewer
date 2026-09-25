@@ -104,7 +104,7 @@ kind and handing an instance to the registry, never by editing the core.
   the paid run would skip. The model's change set is built from it too, so an
   excluded or credential file cannot reach a prompt as a "related change".
 - **`Config` is the single source of truth.** Every field is derived from the
-  `CONFIG_ALIASES` table (field → env alias) and the zod schema. The flow never
+  `CONFIG_ALIASES` table (field → env alias) and the convict schema. The flow never
   reads the flat config; `fileReviewSettings()`, `reportPolicy()` and
   `concurrency()` hand it typed setting groups.
 - **Nothing is dropped in silence.** Refuted, capped, mislabelled, unanchored,
