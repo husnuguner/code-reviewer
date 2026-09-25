@@ -71,6 +71,14 @@ inputs:
       endpoint).
     required: false
     default: ""
+  identity:
+    description: >-
+      The account the token posts as, so `supersede` dismisses and the
+      duplicate check counts only its own reviews. Empty takes the provider's
+      default for its CI token (GitHub: github-actions[bot], what
+      GITHUB_TOKEN posts as); set it when the token is a PAT or an App's.
+    required: false
+    default: ""
   dry-run:
     description: "Print the review instead of posting it. Needs no token."
     required: false
@@ -112,6 +120,7 @@ runs:
         SUPERSEDE: ${{ inputs.supersede }}
         ALLOW_DUPLICATES: ${{ inputs.allow-duplicates }}
         BASE_URL: ${{ inputs.base-url }}
+        IDENTITY: ${{ inputs.identity }}
         DRY_RUN: ${{ inputs.dry-run }}
         POSTER: ${{ github.action_path }}/../../src/cli/main.ts
       run: |
@@ -133,5 +142,6 @@ runs:
         [ "${SUPERSEDE}" = "true" ] && args+=(--supersede)
         [ "${ALLOW_DUPLICATES}" = "true" ] && args+=(--allow-duplicates)
         [ -n "${BASE_URL}" ] && args+=(--base-url "${BASE_URL}")
+        [ -n "${IDENTITY}" ] && args+=(--identity "${IDENTITY}")
         [ "${DRY_RUN}" = "true" ] && args+=(--dry-run)
         bun --no-env-file "${POSTER}" comment "${args[@]}"

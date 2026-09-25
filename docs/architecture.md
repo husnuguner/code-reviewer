@@ -145,6 +145,12 @@ The choices with a real trade-off behind them, and what was given up:
   because there a failure keeps findings; here it would have invented a clean
   verdict. Given up: a run with one flaky file fails the job instead of
   passing with a warning in the log.
+- **A verdict is lifted only by a complete run, and only after its
+  replacement stands.** `reviewer comment` supersedes on a stream with a
+  summary that counts no failed file, never on a partial or empty one, and it
+  posts the new review before it dismisses the old ones (never the new one).
+  Given up: a pull request whose review job keeps crashing keeps its earlier
+  block until a run finishes.
 - **A change is held to the policy it starts from, not the one it proposes.**
   `.review/` is instructions, so a change that edits it could weaken its own
   review. The flow names such a change (`policy_changed`) in every report, and

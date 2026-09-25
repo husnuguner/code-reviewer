@@ -57,8 +57,8 @@ const root = mkdtempSync(join(tmpdir(), "reviewer-comment-"));
 const findings = join(root, "findings.ndjson");
 const SILENT = resolveLogSettings({ level: "silent" }, { environment: {} });
 
-/** The closing record, incremental or not. */
-function summary(isIncremental: boolean): string {
+/** The closing record, incremental or not, with `failed` files. */
+function summary(isIncremental: boolean, failed = 0): string {
   return JSON.stringify({
     type: "summary",
     base: "abc123",
@@ -66,7 +66,7 @@ function summary(isIncremental: boolean): string {
     incremental: isIncremental,
     files_changed: 1,
     files_reviewed: 1,
-    failed: 0,
+    failed,
     findings: 2,
     files_with_findings: 1,
     anchors: { exact: 2 },
@@ -116,6 +116,7 @@ const arguments_ = {
   supersede: false,
   allowDuplicates: false,
   baseUrl: null,
+  identity: null,
   dryRun: false,
 };
 
@@ -141,6 +142,30 @@ describe("runComment", () => {
     await runComment(arguments_, SILENT);
     expect(host.poster.submitted[0]?.comments).toHaveLength(2);
     expect(host.poster.submitted[0]?.body).not.toContain("already posted");
+  });
+
+  it("never supersedes a run that did not finish, and says so first in the body", async () => {
+    // A review job that died before its summary leaves a partial (or empty) file behind, and the
+    // comment job still runs. Posting it as clean and lifting an earlier block would turn a crash into
+    // an approval of sorts.
+    const partial = join(root, "partial.ndjson");
+    writeFileSync(partial, "");
+    host.poster = new RecordingPoster([]);
+    expect(await runComment({ ...arguments_, findings: partial, supersede: true }, SILENT)).toBe(0);
+    const [submission] = host.poster.submitted;
+    expect(submission?.supersede).toBe(false);
+    expect(submission?.body).toContain("Review incomplete");
+    expect(submission?.body).not.toContain("No issues found in the reviewed files.");
+  });
+
+  it("never supersedes a run that could not review a file", async () => {
+    const failed = join(root, "failed.ndjson");
+    writeFileSync(failed, `${summary(false, 1)}\n`);
+    host.poster = new RecordingPoster([]);
+    await runComment({ ...arguments_, findings: failed, supersede: true }, SILENT);
+    const [submission] = host.poster.submitted;
+    expect(submission?.supersede).toBe(false);
+    expect(submission?.body).toContain("1 file(s) could not be reviewed");
   });
 
   it("supersedes when asked on a full run, but never on an incremental one", async () => {

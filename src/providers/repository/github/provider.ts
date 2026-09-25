@@ -28,6 +28,8 @@ export class GithubProvider extends RepoProvider {
     return new GithubReviewClient({
       token: settings.token,
       ...(settings.baseUrl !== null && { baseUrl: settings.baseUrl }),
+      ...(settings.identity !== undefined &&
+        settings.identity !== null && { identity: settings.identity }),
       ...(settings.logger !== undefined && { logger: settings.logger }),
       fetch: withRetry(platformFetch, {
         ...(settings.logger !== undefined && { logger: settings.logger }),

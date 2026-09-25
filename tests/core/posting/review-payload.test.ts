@@ -15,6 +15,7 @@ import {
   OVERLAP_THRESHOLD,
   type PostedComment,
   buildReview,
+  isCompleteRun,
   commentBody,
   isAlreadyPosted,
   parseRecords,
@@ -160,6 +161,34 @@ describe("building the review", () => {
     const review = buildReview({ findings: [], summary: SUMMARY, unreadable: 0 });
     expect(review.body).toContain("No issues found");
     expect(review.comments).toHaveLength(0);
+  });
+
+  it("says first that a run which did not finish is incomplete, and does not call it clean", () => {
+    // No summary: the review job died, and the comment job reads what it left.
+    const review = buildReview({ findings: [], summary: null, unreadable: 0 });
+    const [heading, , note, , headline] = review.body.split("\n", 5);
+    expect(heading).toBe("### Automated review");
+    expect(note).toContain("**Review incomplete:** the findings file ends without a summary");
+    expect(headline).toBe("No issues found in the files that were reviewed.");
+    expect(review.body).not.toContain("No issues found in the reviewed files.");
+  });
+
+  it("says first how many files could not be reviewed, and repeats it in the tallies", () => {
+    const review = buildReview({
+      findings: [],
+      summary: { ...SUMMARY, failed: 2 },
+      unreadable: 0,
+    });
+    expect(review.body.split("\n", 3)[2]).toContain(
+      "**Review incomplete:** 2 file(s) could not be reviewed",
+    );
+    expect(review.body).toContain("2 could not be reviewed");
+  });
+
+  it("calls a run complete only with a summary that counts no failed file", () => {
+    expect(isCompleteRun({ summary: SUMMARY })).toBe(true);
+    expect(isCompleteRun({ summary: { ...SUMMARY, failed: 1 } })).toBe(false);
+    expect(isCompleteRun({ summary: null })).toBe(false);
   });
 
   it("warns first when the change edits the review policy, and names the files", () => {

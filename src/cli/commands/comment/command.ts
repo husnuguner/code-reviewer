@@ -38,6 +38,8 @@ export interface CommentArguments {
   /** Post every finding inline, even where an earlier automated review already commented on its lines. */
   readonly allowDuplicates: boolean;
   readonly baseUrl: string | null;
+  /** The account the token posts as; `null` takes the provider's default for its CI token. */
+  readonly identity: string | null;
   /** Print the review instead of posting it; needs no token. */
   readonly dryRun: boolean;
 }
@@ -88,6 +90,10 @@ function commentOptions(command: Command): Command {
       "--base-url <url>",
       "API root, for a self-hosted instance (default: the provider's public endpoint).",
     )
+    .option(
+      "--identity <login>",
+      "The account the token posts as, so --supersede dismisses and the duplicate check counts only its own reviews (GitHub default: github-actions[bot], what GITHUB_TOKEN posts as; set it for a PAT or an App token).",
+    )
     .option("--dry-run", "Print the review that would be posted and stop. Needs no token.", false);
 }
 
@@ -105,6 +111,7 @@ export const COMMENT = defineCommand<CommentArguments & { logging: LogSettings }
   arguments: (options) => ({
     ...options,
     baseUrl: options.baseUrl ?? null,
+    identity: options.identity ?? null,
     logging: logSettingsFrom(loggingArguments(options)),
   }),
   run: ({ logging, ...rest }) => runComment(rest, logging),

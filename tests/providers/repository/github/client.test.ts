@@ -145,7 +145,7 @@ describe("posting the review", () => {
     expect(calls[1]?.body).toMatchObject({ event: "REQUEST_CHANGES", comments: [] });
   });
 
-  it("dismisses its own pending reviews first when superseding, and only those", async () => {
+  it("posts first, then dismisses its own pending reviews when superseding, and only those", async () => {
     const calls: RecordedCall[] = [];
     const responder = (call: RecordedCall): Response =>
       call.method === "GET"
@@ -171,12 +171,12 @@ describe("posting the review", () => {
     expect(
       calls.map((call) => `${call.method} ${call.url.replace("https://api.github.com", "")}`),
     ).toEqual([
+      "POST /repos/acme/app/pulls/7/reviews",
       "GET /repos/acme/app/pulls/7/reviews?per_page=100&page=1",
       "PUT /repos/acme/app/pulls/7/reviews/1/dismissals",
       "PUT /repos/acme/app/pulls/7/reviews/3/dismissals",
-      "POST /repos/acme/app/pulls/7/reviews",
     ]);
-    expect(calls[1]?.body).toMatchObject({
+    expect(calls[2]?.body).toMatchObject({
       message: expect.stringContaining("Superseded") as string,
     });
   });
@@ -201,10 +201,75 @@ describe("posting the review", () => {
       supersede: true,
     });
     expect(result.superseded).toBe(1);
-    expect(calls[1]?.url).toContain("/reviews/2/dismissals");
+    expect(calls[2]?.url).toContain("/reviews/2/dismissals");
   });
 
-  it("still posts when a dismissal is refused, and says so", async () => {
+  it("dismisses nothing when the review itself could not be posted", async () => {
+    // Dismissing first and failing to post would lift an earlier block with no verdict in its place.
+    const calls: RecordedCall[] = [];
+    const responder = (call: RecordedCall): Response =>
+      call.method === "POST"
+        ? new Response("unavailable", { status: 500 })
+        : Response.json([listed(1, "CHANGES_REQUESTED")]);
+    await expect(
+      clientWith(responder, calls).submit({
+        repository: repo,
+        pullNumber: 7,
+        body: "b",
+        comments: [],
+        supersede: true,
+      }),
+    ).rejects.toThrow(GithubError);
+    expect(calls.map((call) => call.method)).toEqual(["POST"]);
+  });
+
+  it("never dismisses the review it has just posted", async () => {
+    const calls: RecordedCall[] = [];
+    const responder = (call: RecordedCall): Response => {
+      if (call.method === "POST") return Response.json({ id: 42 });
+      return call.method === "GET"
+        ? Response.json([listed(41, "CHANGES_REQUESTED"), listed(42, "CHANGES_REQUESTED")])
+        : ok();
+    };
+    const result = await clientWith(responder, calls).submit({
+      repository: repo,
+      pullNumber: 7,
+      body: "b",
+      comments: [],
+      event: "request-changes",
+      supersede: true,
+    });
+    expect(result.superseded).toBe(1);
+    expect(calls.filter((call) => call.method === "PUT").map((call) => call.url)).toEqual([
+      "https://api.github.com/repos/acme/app/pulls/7/reviews/41/dismissals",
+    ]);
+  });
+
+  it("leaves earlier reviews standing when it cannot tell its new request for changes from them", async () => {
+    const calls: RecordedCall[] = [];
+    const lines: string[] = [];
+    const client = new GithubReviewClient({
+      token: "t",
+      logger: recordingLogger(lines),
+      fetch: (target, init) => {
+        calls.push({ method: init.method ?? "GET", url: target.toString(), body: null });
+        return Promise.resolve(ok());
+      },
+    });
+    const result = await client.submit({
+      repository: repo,
+      pullNumber: 7,
+      body: "b",
+      comments: [],
+      event: "request-changes",
+      supersede: true,
+    });
+    expect(result.superseded).toBe(0);
+    expect(calls.map((call) => call.method)).toEqual(["POST"]);
+    expect(lines.join("\n")).toContain("left standing");
+  });
+
+  it("keeps its posted review when a dismissal is refused, and says so", async () => {
     // Housekeeping around the review must not cost the review.
     const calls: RecordedCall[] = [];
     const lines: string[] = [];
@@ -229,7 +294,7 @@ describe("posting the review", () => {
       supersede: true,
     });
     expect(result.superseded).toBe(0);
-    expect(calls.map((call) => call.method)).toEqual(["GET", "PUT", "POST"]);
+    expect(calls.map((call) => call.method)).toEqual(["POST", "GET", "PUT"]);
     expect(lines.join("\n")).toContain("WARNING Could not dismiss review 1");
   });
 
@@ -261,10 +326,10 @@ describe("posting the review", () => {
     expect(
       calls.map((call) => `${call.method} ${call.url.replace("https://api.github.com", "")}`),
     ).toEqual([
+      "POST /repos/acme/app/pulls/7/reviews",
       "GET /repos/acme/app/pulls/7/reviews?per_page=100&page=1",
       "GET /repos/acme/app/pulls/7/reviews?per_page=100&page=2",
       "PUT /repos/acme/app/pulls/7/reviews/101/dismissals",
-      "POST /repos/acme/app/pulls/7/reviews",
     ]);
   });
 
@@ -305,7 +370,7 @@ describe("posting the review", () => {
       supersede: true,
     });
     expect(result.superseded).toBe(1);
-    expect(calls.at(-1)?.method).toBe("POST");
+    expect(calls[0]?.method).toBe("POST");
   });
 
   it("supersedes nothing when there is nothing pending, and still posts", async () => {
@@ -320,7 +385,7 @@ describe("posting the review", () => {
       supersede: true,
     });
     expect(result.superseded).toBe(0);
-    expect(calls.map((call) => call.method)).toEqual(["GET", "POST"]);
+    expect(calls.map((call) => call.method)).toEqual(["POST", "GET"]);
   });
 
   it("retries without inline comments when GitHub refuses them", async () => {
@@ -396,6 +461,8 @@ function mixedComments(): Response {
       comment("src/a.ts", 20, 14),
       comment("src/b.ts", null, null),
       comment("src/c.ts", 3, null, "A human wrote this on the same line."),
+      // A human who pasted our marker: the marker alone does not make a comment ours.
+      { ...(comment("src/d.ts", 5) as object), user: { login: "a-human" } },
       { id: 9, body: COMMENT_MARKER }, // no path: cannot be placed
     ],
     { status: 200 },
@@ -405,7 +472,7 @@ function mixedComments(): Response {
 describe("what earlier runs already put on the pull request", () => {
   const target = { repository: "acme/app", pullNumber: 7 };
 
-  it("reads the inline comments, keeps only those carrying our marker, at their current lines", async () => {
+  it("reads the inline comments, keeps only ours -- our marker, our author -- at their current lines", async () => {
     const calls: RecordedCall[] = [];
     const ours = await clientWith(mixedComments, calls).postedComments(target);
     expect(ours).toEqual([
@@ -416,6 +483,11 @@ describe("what earlier runs already put on the pull request", () => {
     expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
       "GET https://api.github.com/repos/acme/app/pulls/7/comments?per_page=100&page=1",
     ]);
+  });
+
+  it("counts only the comments of the identity it was given", async () => {
+    const ours = await clientWith(mixedComments, [], "review-bot").postedComments(target);
+    expect(ours).toEqual([]);
   });
 
   it("walks every full page and stops at the first short one", async () => {

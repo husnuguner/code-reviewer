@@ -199,9 +199,10 @@ reviewer comment --findings code-review.ndjson --repo acme/app --pr 7   # needs 
 | `--pr`                 | The pull request number.                                                                                    |
 | `--max-inline`         | Cap on inline comments (default 50); the rest are listed in the body.                                       |
 | `--request-changes-on` | Severities that make the review a **request for changes** (`bug,security`, or `none`, the default).         |
-| `--supersede`          | Dismiss this identity's earlier pending reviews on the PR first, so it shows one current verdict.           |
+| `--supersede`          | After posting, dismiss this identity's earlier pending reviews on the PR, so it shows one current verdict.  |
 | `--allow-duplicates`   | Post every finding inline even where an earlier automated review already commented on its lines.            |
 | `--base-url`           | REST root, for GitHub Enterprise.                                                                           |
+| `--identity`           | The account the token posts as (default `github-actions[bot]`); set it for a PAT or an App token.           |
 | `--dry-run`            | Print the review instead of posting it. Needs no token.                                                     |
 
 The token is read from the variable the provider names (`GITHUB_TOKEN` for
@@ -218,9 +219,10 @@ What it does with a stream:
   **not posted again**; the body counts it as "already posted". Positions are
   GitHub's current ones, so a comment that moved with the branch still counts
   and one GitHub marked outdated no longer does. Every inline comment the
-  reviewer posts carries an invisible marker (`<!-- code-reviewer -->`), which
-  is how its own comments are told from a human's; `--allow-duplicates` switches the
-  check off;
+  reviewer posts carries an invisible marker (`<!-- code-reviewer -->`); a
+  comment counts as its own only when it carries the marker **and** was written
+  by `--identity`, so a human who pastes the marker keeps nobody off a line;
+  `--allow-duplicates` switches the check off;
 - an **unanchored** one is listed in the body;
 - what the inline cap leaves out is **named in the body**, not dropped;
 - if GitHub refuses the inline comments (a stale anchor after a force-push),
@@ -231,9 +233,19 @@ What it does with a stream:
 `COMMENT`: it informs and blocks nothing. With `--request-changes-on
 bug,security` a run that found either posts as `REQUEST_CHANGES`: a red
 badge, and a merge block wherever branch protection requires a passing review.
-With `--supersede`, each run first dismisses the bot's own earlier
-`CHANGES_REQUESTED` reviews on that pull request, so a run that finds nothing
-lifts the block. Only the bot's own reviews are touched, never a human's.
+With `--supersede`, each run posts its review and then dismisses the bot's
+own earlier `CHANGES_REQUESTED` reviews on that pull request, so a run that
+finds nothing lifts the block. Only the bot's own reviews are touched, never a
+human's, and never the one just posted; a review GitHub refused to take
+dismisses nothing, so a failed post cannot lift a block.
+
+**An incomplete run is posted, never promoted.** A stream that ends without
+its summary record (the review job died) or whose summary counts `failed`
+files is still posted, so the pull request says what happened -- the body
+opens with **Review incomplete** -- but it never supersedes: an unanswered file
+is not a clean one, and lifting a block on its word would turn a crash into a
+pass. Its findings can still request changes; adding a block is safe,
+lifting one is not.
 
 ## Reviewing again
 

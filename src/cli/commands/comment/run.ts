@@ -10,6 +10,7 @@ import { type ReviewPoster } from "../../../core/ports/review-poster";
 import {
   type PostedComment,
   buildReview,
+  isCompleteRun,
   parseRecords,
 } from "../../../core/posting/review-payload";
 import { errorMessage } from "../../../core/util/errors";
@@ -44,6 +45,16 @@ export async function runComment(
   if (records.unreadable > 0) {
     log.warn(`${String(records.unreadable)} line(s) of ${arguments_.findings} were not records.`);
   }
+  // A run that did not finish, or could not review a file, is not a verdict: it is posted, so the pull
+  // request says so, but it may not lift an earlier one.
+  const isComplete = isCompleteRun(records);
+  if (!isComplete) {
+    log.warn(
+      records.summary === null
+        ? `${arguments_.findings} ends without a summary record: the review run did not finish. Posting what it holds as incomplete.`
+        : `${String(records.summary.failed)} file(s) could not be reviewed. Posting the review as incomplete.`,
+    );
+  }
   const build = (posted: readonly PostedComment[]): ReturnType<typeof buildReview> =>
     buildReview(records, {
       maxInline: arguments_.maxInline,
@@ -73,6 +84,7 @@ export async function runComment(
   const poster: ReviewPoster = REPOSITORIES.create(repository.name, {
     token,
     baseUrl: arguments_.baseUrl,
+    identity: arguments_.identity,
     logger,
   });
   const target = { repository: arguments_.repo, pullNumber: arguments_.pr };
@@ -90,13 +102,16 @@ export async function runComment(
       "The run reviewed only the commits since a checkpoint; earlier reviews are left standing rather than superseded.",
     );
   }
+  if (!isComplete && arguments_.supersede) {
+    log.info("The run is incomplete; earlier reviews are left standing rather than superseded.");
+  }
   const { inline, superseded } = await poster.submit({
     repository: arguments_.repo,
     pullNumber: arguments_.pr,
     body: review.body,
     comments: review.comments,
     event: review.event,
-    supersede: !isIncremental && arguments_.supersede,
+    supersede: isComplete && !isIncremental && arguments_.supersede,
   });
   const dismissed = superseded > 0 ? `; dismissed ${String(superseded)} earlier review(s)` : "";
   log.info(

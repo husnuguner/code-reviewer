@@ -348,6 +348,7 @@ function reviewBody(
 ): string {
   const { findings, summary } = records;
   const tally = tallies(summary, records.unreadable, alreadyPosted);
+  const incomplete = incompleteNote(summary);
   const policy = policyNote(summary?.policy_changed ?? []);
   const bypass = bypassNote(summary?.bypass_regions ?? []);
   const scope =
@@ -355,7 +356,8 @@ function reviewBody(
   return [
     "### Automated review",
     "",
-    headline(findings),
+    ...(incomplete === "" ? [] : [incomplete, ""]),
+    headline(findings, incomplete !== ""),
     ...(scope === "" ? [] : ["", scope]),
     ...(policy === "" ? [] : ["", policy]),
     ...(bypass === "" ? [] : ["", bypass]),
@@ -385,8 +387,33 @@ function bypassNote(regions: readonly BypassRegionRecord[]): string {
   return `> **Review was bypassed by markers in the code** in ${regions.length} region(s): ${listed}. A bypass is the author's call, not the reviewer's, so read those yourself.`;
 }
 
-function headline(findings: readonly Finding[]): string {
-  if (findings.length === 0) return "No issues found in the reviewed files.";
+/**
+ * Whether the stream describes a run that finished and reviewed every file it selected: a summary record
+ * is present and counts no failed file. Only such a run may lift an earlier verdict.
+ */
+export function isCompleteRun(records: Pick<ReviewRecords, "summary">): boolean {
+  return records.summary !== null && records.summary.failed === 0;
+}
+
+/**
+ * What a reader must know first when the run is not a verdict: it did not finish (no summary record), or
+ * some files could not be reviewed. `""` for a complete run.
+ */
+function incompleteNote(summary: SummaryRecord | null): string {
+  if (summary === null) {
+    return "> **Review incomplete:** the findings file ends without a summary, so the review run did not finish. Nothing here is a verdict; the review job's log says why.";
+  }
+  return summary.failed > 0
+    ? `> **Review incomplete:** ${summary.failed} file(s) could not be reviewed; the review job's log says why. Nothing here is a verdict on them.`
+    : "";
+}
+
+function headline(findings: readonly Finding[], isIncomplete: boolean): string {
+  if (findings.length === 0) {
+    return isIncomplete
+      ? "No issues found in the files that were reviewed."
+      : "No issues found in the reviewed files.";
+  }
   const files = new Set(findings.map((finding) => finding.path)).size;
   return `**${findings.length} finding(s)** across **${files} file(s)**.`;
 }
@@ -423,6 +450,7 @@ function tallies(summary: SummaryRecord | null, unreadable: number, alreadyPoste
       ? []
       : [
           `${summary.files_reviewed} of ${summary.files_changed} changed file(s) reviewed against \`${summary.base}\``,
+          ...(summary.failed > 0 ? [`${summary.failed} could not be reviewed`] : []),
           ...(summary.refuted > 0 ? [`${summary.refuted} refuted by verification`] : []),
           ...(summary.capped > 0 ? [`${summary.capped} withheld by the per-file cap`] : []),
           ...(summary.bypassed > 0

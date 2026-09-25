@@ -88,10 +88,16 @@ export interface ReviewClientOptions {
   readonly logger?: Logger;
 }
 
-/** A listed comment as a {@link PostedComment}, or nothing when it is not ours or names no path. */
-function postedOf(record: CommentRecord): PostedComment[] {
+/**
+ * A listed comment as a {@link PostedComment}, or nothing when it is not ours or names no path.
+ *
+ * @remarks Ours means both: our marker in the body, and our identity as the author. The marker alone
+ * would let anyone who pastes it into a comment keep the bot off that line.
+ */
+function postedOf(record: CommentRecord, identity: string): PostedComment[] {
   if (typeof record.path !== "string" || record.path === "") return [];
   if (typeof record.body !== "string" || !record.body.includes(COMMENT_MARKER)) return [];
+  if (record.user?.login !== identity) return [];
   return [
     {
       path: record.path,
@@ -120,6 +126,7 @@ interface ReviewRecord {
  * comment is outdated.
  */
 interface CommentRecord {
+  readonly user?: { readonly login?: string } | null;
   readonly path?: string;
   readonly line?: number | null;
   readonly start_line?: number | null;
@@ -140,6 +147,13 @@ const MAX_REVIEW_PAGES = 20;
 /** Pages of inline comments read before giving up; hitting it is logged. Same reasoning as the reviews'. */
 const MAX_COMMENT_PAGES = 20;
 
+/** The id of a review GitHub says it created, or `null` when the answer carries none. */
+function reviewIdOf(created: unknown): number | null {
+  if (typeof created !== "object" || created === null) return null;
+  const { id } = created as { id?: unknown };
+  return typeof id === "number" && Number.isSafeInteger(id) ? id : null;
+}
+
 /** Posts one review per call. */
 export class GithubReviewClient implements ReviewPoster {
   private readonly token: string;
@@ -159,39 +173,27 @@ export class GithubReviewClient implements ReviewPoster {
   }
 
   /**
-   * Submits the review, falling back once to the body alone when GitHub refuses the inline comments.
+   * Submits the review, falling back once to the body alone when GitHub refuses the inline comments, and
+   * only then dismisses the earlier reviews it supersedes.
    *
    * @returns How many comments landed inline and how many earlier reviews were dismissed.
-   * @throws {@link GithubError} on any refusal the fallback cannot fix.
-   * @remarks Not the transport's retry: that repeated the same request; this drops the anchors on a content refusal.
+   * @throws {@link GithubError} on any refusal the fallback cannot fix; nothing has been dismissed then.
+   * @remarks Post first, dismiss second: dismissing first and then failing to post would lift an earlier
+   * block with no verdict standing in its place.
    */
   async submit(submission: ReviewSubmission): Promise<PostingResult> {
-    const { pullNumber, body, comments } = submission;
-    const event = GITHUB_EVENT[submission.event ?? "comment"];
     const { owner, repo } = parseRepository(submission.repository);
-    const reviews = `/repos/${owner}/${repo}/pulls/${String(pullNumber)}/reviews`;
-
-    // Dismiss before posting, so one verdict stands and a clean run lifts an earlier block.
-    const superseded = submission.supersede === true ? await this.dismissPending(reviews) : 0;
-
-    try {
-      await this.request("POST", reviews, { event, body, comments });
-      return { inline: comments.length, superseded };
-    } catch (error) {
-      if (
-        comments.length === 0 ||
-        !(error instanceof GithubError) ||
-        !CONTENT_REFUSAL.has(error.status)
-      ) {
-        throw error;
-      }
+    const reviews = `/repos/${owner}/${repo}/pulls/${String(submission.pullNumber)}/reviews`;
+    const { inline, id } = await this.post(reviews, submission);
+    if (submission.supersede !== true) return { inline, superseded: 0 };
+    if (id === null && submission.event === "request-changes") {
+      // Without the new review's id it cannot be told from the earlier ones it would supersede.
       this.log.warn(
-        `GitHub refused the review with ${String(comments.length)} inline comment(s) (${error.message}); retrying with the body alone.`,
+        "GitHub did not say which review it created; earlier reviews are left standing rather than risk dismissing this one.",
       );
-      const note = `\n\n> ⚠️ GitHub would not accept the inline comments for this review (${error.detail}); the findings are listed above instead.`;
-      await this.request("POST", reviews, { event, body: body + note, comments: [] });
-      return { inline: 0, superseded };
+      return { inline, superseded: 0 };
     }
+    return { inline, superseded: await this.dismissPending(reviews, id) };
   }
 
   /**
@@ -226,7 +228,7 @@ export class GithubReviewClient implements ReviewPoster {
       }
       if (!Array.isArray(listed)) return ours;
       const records = listed as CommentRecord[];
-      ours.push(...records.flatMap((record) => postedOf(record)));
+      ours.push(...records.flatMap((record) => postedOf(record, this.identity)));
       if (records.length < REVIEWS_PER_PAGE) return ours;
     }
     this.log.warn(
@@ -236,12 +238,51 @@ export class GithubReviewClient implements ReviewPoster {
   }
 
   /**
-   * Dismisses this identity's pending reviews (`CHANGES_REQUESTED`, `APPROVED`); never a human's.
+   * Posts the review, retrying once with the body alone on a content refusal.
    *
+   * @returns How many comments landed inline, and the new review's id (`null` when GitHub did not say).
+   * @remarks Not the transport's retry: that repeated the same request; this drops the anchors on a content refusal.
+   */
+  private async post(
+    reviews: string,
+    submission: ReviewSubmission,
+  ): Promise<{ inline: number; id: number | null }> {
+    const { body, comments } = submission;
+    const event = GITHUB_EVENT[submission.event ?? "comment"];
+    try {
+      const created = await this.request("POST", reviews, { event, body, comments });
+      return { inline: comments.length, id: reviewIdOf(created) };
+    } catch (error) {
+      if (
+        comments.length === 0 ||
+        !(error instanceof GithubError) ||
+        !CONTENT_REFUSAL.has(error.status)
+      ) {
+        throw error;
+      }
+      this.log.warn(
+        `GitHub refused the review with ${String(comments.length)} inline comment(s) (${error.message}); retrying with the body alone.`,
+      );
+      const note = `\n\n> ⚠️ GitHub would not accept the inline comments for this review (${error.detail}); the findings are listed above instead.`;
+      const created = await this.request("POST", reviews, {
+        event,
+        body: body + note,
+        comments: [],
+      });
+      return { inline: 0, id: reviewIdOf(created) };
+    }
+  }
+
+  /**
+   * Dismisses this identity's pending reviews (`CHANGES_REQUESTED`, `APPROVED`); never a human's, and never
+   * the review just posted.
+   *
+   * @param posted - The id of the review this run created, which stands.
    * @returns How many were dismissed. A dismissal GitHub refuses is logged and left standing.
    */
-  private async dismissPending(reviews: string): Promise<number> {
-    const pending = await this.ourPendingReviews(reviews);
+  private async dismissPending(reviews: string, posted: number | null): Promise<number> {
+    const listed = await this.ourPendingReviews(reviews);
+    const pending = listed.filter((review) => review.id !== posted);
     let dismissed = 0;
     for (const review of pending) {
       try {

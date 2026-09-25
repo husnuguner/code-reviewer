@@ -66,6 +66,7 @@ function commentEnvironment(overrides: Record<string, string> = {}): Record<stri
     SUPERSEDE: "false",
     ALLOW_DUPLICATES: "false",
     BASE_URL: "",
+    IDENTITY: "",
     DRY_RUN: "false",
     POSTER: "/action/src/cli/main.ts",
     ...overrides,
@@ -456,6 +457,7 @@ describe("actions/comment/action.yml, the Post step", () => {
     expect(step.calls[0]).not.toContain("--supersede");
     expect(step.calls[0]).not.toContain("--dry-run");
     expect(step.calls[0]).not.toContain("--base-url");
+    expect(step.calls[0]).not.toContain("--identity");
     expect(step.calls[0]).not.toContain("--allow-duplicates");
     expect(step.exitCode).toBe(0);
   });
@@ -467,10 +469,13 @@ describe("actions/comment/action.yml, the Post step", () => {
         ALLOW_DUPLICATES: "true",
         DRY_RUN: "true",
         BASE_URL: "https://github.example.com/api/v3",
+        IDENTITY: "review-bot[bot]",
       }),
       stub: "bun",
     });
 
+    const call = step.calls[0] ?? [];
+    expect(call[call.indexOf("--identity") + 1]).toBe("review-bot[bot]");
     expect(step.calls[0]).toContain("--supersede");
     expect(step.calls[0]).toContain("--allow-duplicates");
     expect(step.calls[0]).toContain("--dry-run");

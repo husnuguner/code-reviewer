@@ -15,6 +15,11 @@ export interface RepositorySettings {
   readonly token: string;
   /** API root override; `null` takes the host's default. */
   readonly baseUrl: string | null;
+  /**
+   * The account the token posts as, so superseding and the duplicate check touch only its own reviews;
+   * `null` takes the host's default for its CI token.
+   */
+  readonly identity?: string | null;
   /** Where the poster reports what it worked around; omitted, that is discarded. */
   readonly logger?: Logger;
 }
