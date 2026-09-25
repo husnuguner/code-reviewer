@@ -122,15 +122,24 @@ describe("what git reports", () => {
   it("reviews a file that was moved and edited in one change, at its new path", async () => {
     // `status=renamed` used to be a skip: moving a file and adding a line to it hid the line.
     const root = repo();
+    const body = Array.from({ length: 12 }, (_, index) => `line_${index} = ${index}\n`).join("");
+    git(root, "checkout", "-q", "main");
+    writeFileSync(join(root, "auth.py"), body);
+    git(root, "add", "-A");
+    git(root, "commit", "-qm", "auth");
+    git(root, "checkout", "-q", "feature");
+    git(root, "rebase", "-q", "main");
     mkdirSync(join(root, "lib"));
-    git(root, "mv", "a.py", "lib/a.py");
-    writeFileSync(join(root, "lib", "a.py"), "one = 1\ntwo = 2\nthree = 3\nbackdoor = True\n");
+    git(root, "mv", "auth.py", "lib/auth.py");
+    writeFileSync(join(root, "lib", "auth.py"), `${body}backdoor = True\n`);
     git(root, "commit", "-qam", "move and edit");
     const o = options(root);
     const result = await reviewBranch(o);
-    expect(o.reviewer.seen).toContain("lib/a.py");
-    expect(result.skipped["status"]).toBeUndefined();
-    expect(result.findings.map((f) => f.path)).toContain("lib/a.py");
+    expect(o.reviewer.seen).toContain("lib/auth.py");
+    expect(o.reviewer.seen).not.toContain("auth.py");
+    // Only gone.py, which was removed; the moved file is a rename, not a removal and an addition.
+    expect(result.skipped["status"]).toBe(1);
+    expect(result.findings.map((f) => f.path)).toContain("lib/auth.py");
   });
 
   it("reviews changed files and leaves the rest alone", async () => {
@@ -516,6 +525,24 @@ describe("a change that edits the review policy", () => {
     expect(report).toContain("No model was called.");
   });
 
+  it("names a policy file the change removes: deleting a skill is the shortest way to weaken it", async () => {
+    const root = repo();
+    git(root, "checkout", "-q", "main");
+    mkdirSync(join(root, ".review", "skills"), { recursive: true });
+    writeFileSync(
+      join(root, ".review", "skills", "security.md"),
+      "---\nname: security\n---\n- x\n",
+    );
+    git(root, "add", "-A");
+    git(root, "commit", "-qm", "policy");
+    git(root, "checkout", "-q", "feature");
+    git(root, "rebase", "-q", "main");
+    git(root, "rm", "-q", ".review/skills/security.md");
+    git(root, "commit", "-qm", "drop the skill");
+    const result = await reviewBranch(options(root));
+    expect(result.policy_changed).toEqual([".review/skills/security.md"]);
+  });
+
   it("counts an excluded policy file all the same: it changed, whether or not it is reviewed", async () => {
     const o = options(repoEditingPolicy(), {
       settings: { ...DEFAULT_FILE_REVIEW_SETTINGS, exclude: [".review/**"] },
@@ -535,7 +562,8 @@ describe("streaming", () => {
     for await (const record of stream) records.push(record);
     expect(records.slice(0, -1).every((r) => r.type === "finding")).toBe(true);
     expect(records.at(-1)?.type).toBe("summary");
-    expect(records.at(-1)).toMatchObject({ files_changed: 2, files_reviewed: 2, findings: 2 });
+    // gone.py was removed: it is part of the change, counted and skipped with its reason.
+    expect(records.at(-1)).toMatchObject({ files_changed: 3, files_reviewed: 2, findings: 2 });
   });
 
   it("reports the anchor tallies in the summary", async () => {
@@ -598,10 +626,10 @@ describe("streaming", () => {
         settings: { ...DEFAULT_FILE_REVIEW_SETTINGS, exclude: ["new.py"] },
       }),
     );
-    // The file the project excluded is accounted for rather than merely
-    // missing from the reviewed count.
-    expect(result.files_changed - result.files_reviewed).toBe(1);
-    expect(result.skipped).toEqual({ excluded: 1 });
+    // The file the project excluded, and the one the change removed, are accounted for rather than
+    // merely missing from the reviewed count.
+    expect(result.files_changed - result.files_reviewed).toBe(2);
+    expect(result.skipped).toEqual({ excluded: 1, status: 1 });
   });
 
   it("hands every record to the reporter as it is produced", async () => {

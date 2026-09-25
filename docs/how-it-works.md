@@ -390,7 +390,9 @@ record carries `policy_changed`, a sorted list of those files (`[]` when
 none); the text report and the job summary say so before the findings; the
 posted comment opens with it; `--preview` shows it for free. The files
 themselves are still reviewed like any other. An excluded policy file still
-counts: it changed, whether or not it was reviewed.
+counts: it changed, whether or not it was reviewed. So does a removed one --
+deleting a skill is the shortest way to weaken it -- and a renamed one, by
+both of its paths: moving a skill out of `.review/` removes it just the same.
 
 That is a warning, not a defence. The defence is in CI: the
 [review action](github-action.md#the-policy-is-the-base-branchs) reads

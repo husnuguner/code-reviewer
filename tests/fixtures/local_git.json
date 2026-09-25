@@ -42,7 +42,14 @@
       "input": {
         "raw": "diff --git a/old.py b/renamed.py\nsimilarity index 100%\nrename from old.py\nrename to renamed.py\n"
       },
-      "expected": []
+      "expected": [
+        {
+          "filename": "renamed.py",
+          "status": "renamed",
+          "patch": "diff --git a/old.py b/renamed.py\nsimilarity index 100%\nrename from old.py\nrename to renamed.py\n",
+          "previousFilename": "old.py"
+        }
+      ]
     },
     {
       "name": "rename_with_hunk",
@@ -53,7 +60,8 @@
         {
           "filename": "renamed.py",
           "status": "renamed",
-          "patch": "diff --git a/old.py b/renamed.py\nsimilarity index 90%\nrename from old.py\nrename to renamed.py\nindex 1111111..2222222 100644\n--- a/old.py\n+++ b/renamed.py\n@@ -1,1 +1,2 @@\n x = 1\n+y = 2\n"
+          "patch": "diff --git a/old.py b/renamed.py\nsimilarity index 90%\nrename from old.py\nrename to renamed.py\nindex 1111111..2222222 100644\n--- a/old.py\n+++ b/renamed.py\n@@ -1,1 +1,2 @@\n x = 1\n+y = 2\n",
+          "previousFilename": "old.py"
         }
       ]
     },
@@ -62,21 +70,39 @@
       "input": {
         "raw": "diff --git a/gone.py b/gone.py\ndeleted file mode 100644\nindex 1111111..0000000\n--- a/gone.py\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-doomed = True\n"
       },
-      "expected": []
+      "expected": [
+        {
+          "filename": "gone.py",
+          "status": "removed",
+          "patch": "diff --git a/gone.py b/gone.py\ndeleted file mode 100644\nindex 1111111..0000000\n--- a/gone.py\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-doomed = True\n"
+        }
+      ]
     },
     {
       "name": "binary_new_file",
       "input": {
         "raw": "diff --git a/bin.png b/bin.png\nnew file mode 100644\nindex 0000000..1111111\nBinary files /dev/null and b/bin.png differ\n"
       },
-      "expected": []
+      "expected": [
+        {
+          "filename": "bin.png",
+          "status": "added",
+          "patch": "diff --git a/bin.png b/bin.png\nnew file mode 100644\nindex 0000000..1111111\nBinary files /dev/null and b/bin.png differ\n"
+        }
+      ]
     },
     {
       "name": "mode_change_only",
       "input": {
         "raw": "diff --git a/mode.sh b/mode.sh\nold mode 100644\nnew mode 100755\n"
       },
-      "expected": []
+      "expected": [
+        {
+          "filename": "mode.sh",
+          "status": "modified",
+          "patch": "diff --git a/mode.sh b/mode.sh\nold mode 100644\nnew mode 100755\n"
+        }
+      ]
     },
     {
       "name": "mixed_everything",
@@ -92,7 +118,23 @@
         {
           "filename": "renamed.py",
           "status": "renamed",
-          "patch": "diff --git a/old.py b/renamed.py\nsimilarity index 90%\nrename from old.py\nrename to renamed.py\n--- a/old.py\n+++ b/renamed.py\n@@ -1,1 +1,2 @@\n x = 1\n+y = 2\n"
+          "patch": "diff --git a/old.py b/renamed.py\nsimilarity index 90%\nrename from old.py\nrename to renamed.py\n--- a/old.py\n+++ b/renamed.py\n@@ -1,1 +1,2 @@\n x = 1\n+y = 2\n",
+          "previousFilename": "old.py"
+        },
+        {
+          "filename": "bin.png",
+          "status": "added",
+          "patch": "diff --git a/bin.png b/bin.png\nnew file mode 100644\nBinary files /dev/null and b/bin.png differ\n"
+        },
+        {
+          "filename": "mode.sh",
+          "status": "modified",
+          "patch": "diff --git a/mode.sh b/mode.sh\nold mode 100644\nnew mode 100755\n"
+        },
+        {
+          "filename": "gone.py",
+          "status": "removed",
+          "patch": "diff --git a/gone.py b/gone.py\ndeleted file mode 100644\n--- a/gone.py\n+++ /dev/null\n@@ -1,1 +0,0 @@\n-doomed = True\n"
         }
       ]
     },

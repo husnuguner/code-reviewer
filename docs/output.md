@@ -108,7 +108,7 @@ Then exactly one `summary` record:
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `base`, `branch`      | What was compared: `--base` and `"HEAD"`. An `--uncommitted` run reports `"HEAD"` and `"working tree"`; a `--since` run reports the commit it started from and `"HEAD"`.                              |
 | `incremental`         | `true` for a `--since` run, which reviewed only the commits after `base`; a clean result then says nothing about findings earlier runs reported. `reviewer comment` does not supersede on such a run. |
-| `files_changed`       | Files in the change set.                                                                                                                                                                              |
+| `files_changed`       | Files in the change set, every one git names: removed, binary, pure renames and mode changes included (each is skipped with its reason).                                                              |
 | `files_reviewed`      | Files whose review came back.                                                                                                                                                                         |
 | `failed`              | Files selected for review that could not be reviewed: the model call failed (after its retries), its reply twice held no findings list, or reading the file threw. Never counted as clean.            |
 | `findings`            | Findings reported.                                                                                                                                                                                    |
@@ -120,7 +120,7 @@ Then exactly one `summary` record:
 | `mislabelled`         | Reported findings whose severity the model spelled outside the vocabulary (kept under the mildest one).                                                                                               |
 | `bypassed`            | Added lines inside a region a [`reviewer: by-pass` marker](how-it-works.md#bypassing-a-block-from-the-code) took out of review; not shown to the model. A wholly bypassed file's lines count too.     |
 | `skipped`             | Files not reviewed, by reason: `secret`, `binary`, `status`, `excluded`, `no_added_lines`, `no_patch`, `too_large`, `bypassed` (every added line in a bypassed region; no model call).                |
-| `policy_changed`      | The review-policy files this change edits (`.review/**` and the run's own), sorted; `[]` when none.                                                                                                   |
+| `policy_changed`      | The review-policy files this change edits, removes or renames (`.review/**` and the run's own; both paths of a rename), sorted; `[]` when none.                                                       |
 | `bypass_regions`      | The regions markers took out of review: `{ path, start_line, end_line, reason }`, by path then line; `[]` when none. Listed whether or not the diff reached them.                                     |
 
 The counters close:

@@ -20,6 +20,8 @@ export interface ChangedFileEntry {
   readonly status: string;
   /** The unified-diff patch, possibly headerless. */
   readonly patch: string;
+  /** For a rename, the path the file had before; what a check of "which paths changed" must see too. */
+  readonly previousFilename?: string;
 }
 
 /** A validated changed file. */

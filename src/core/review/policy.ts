@@ -33,7 +33,8 @@ function isUnder(file: string, policy: PolicyPath): boolean {
 /**
  * The changed files that are policy, in code-point order, each once.
  *
- * @param files - The whole change set, before selection: an excluded policy file is still a changed one.
+ * @param files - The whole change set, before selection: an excluded, removed or renamed policy file is still
+ * a changed one, and a rename names both of its paths.
  * @param policyPaths - Where this run's policy lives inside the checkout; `.review` is always among them.
  */
 export function policyChanges(
@@ -45,8 +46,15 @@ export function policyChanges(
   );
   const changed = new Set<string>();
   for (const file of files) {
-    const path = normalisePolicyPath(file.filename);
-    if (path !== "" && [...roots].some((root) => isUnder(path, root))) changed.add(path);
+    // A rename changes both paths: moving a skill out of `.review/` removes it from the policy.
+    const touched = [
+      file.filename,
+      ...(file.previousFilename === undefined ? [] : [file.previousFilename]),
+    ];
+    for (const spelled of touched) {
+      const path = normalisePolicyPath(spelled);
+      if (path !== "" && [...roots].some((root) => isUnder(path, root))) changed.add(path);
+    }
   }
   return sortedByCodePoint(changed);
 }

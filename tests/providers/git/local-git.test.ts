@@ -94,11 +94,14 @@ describe("what git reports", () => {
     expect(await reader.mergeBase("main", "no-such-branch")).toBeNull();
   });
 
-  it("reports the modified and added files, not the deleted or untouched ones", async () => {
+  it("reports every changed file with its status, the removed one included, and not the untouched", async () => {
+    // A removed file is part of the change: selection skips it with a reason, and a removed policy file
+    // must still reach the warning.
     const reader = new LocalGitReader(repo());
     const files = await reader.changedFiles("main", "feature");
     expect(files.map((f) => [f.filename, f.status])).toEqual([
       ["a.py", "modified"],
+      ["gone.py", "removed"],
       ["new.py", "added"],
     ]);
     expect(files[0]?.patch).toContain("+three = 3");
@@ -131,10 +134,11 @@ describe("what git reports", () => {
 describe("what the working tree reports", () => {
   it("reports the changed and the new files, and nothing git is ignoring", async () => {
     const files = await new LocalGitReader(dirtyRepo()).worktreeFiles();
-    // `ignored.py` is excluded, `gone.py` has no added lines to comment on,
+    // `ignored.py` is excluded, `gone.py` is reported as removed for selection to skip,
     // and `vendored/` belongs to the repository embedded in it.
     expect(files.map((f) => [f.filename, f.status])).toEqual([
       ["a.py", "modified"],
+      ["gone.py", "removed"],
       ["new.py", "added"],
     ]);
   });
@@ -184,6 +188,6 @@ describe("what the working tree reports", () => {
       return arguments_.includes("--others") ? `${out}vanished.py\u{0}` : out;
     });
     const files = await reader.worktreeFiles();
-    expect(files.map((f) => f.filename)).toEqual(["a.py", "new.py"]);
+    expect(files.map((f) => f.filename)).toEqual(["a.py", "gone.py", "new.py"]);
   });
 });

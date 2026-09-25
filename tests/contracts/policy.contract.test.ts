@@ -23,6 +23,18 @@ describe("which changed files are policy", () => {
     expect(POLICY_DIR).toBe(".review");
   });
 
+  it("names both paths of a rename: moving a skill out of .review/ removes it from the policy", () => {
+    const moved: ChangedFileEntry[] = [
+      {
+        filename: "docs/old-skill.md",
+        previousFilename: ".review/skills/security.md",
+        status: "renamed",
+        patch: "diff --git a/.review/skills/security.md b/docs/old-skill.md\n",
+      },
+    ];
+    expect(policyChanges(moved, [])).toEqual([".review/skills/security.md"]);
+  });
+
   it("reports a path once however many entries name it", () => {
     const twice = changeSet([".review/config.yaml", ".review/config.yaml"]);
     expect(policyChanges(twice, [])).toEqual([".review/config.yaml"]);
