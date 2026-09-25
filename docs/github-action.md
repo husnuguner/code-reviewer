@@ -245,7 +245,10 @@ What it does with a stream:
 - what the inline cap leaves out is **named in the body**, not dropped;
 - if GitHub refuses the inline comments (a stale anchor after a force-push),
   it **retries with the body alone** rather than losing every finding;
-- a malformed line costs that line and is counted in the body.
+- a malformed line costs that line and is counted in the body;
+- a finding's text is posted inert: an image the model wrote (`![..](url)`,
+  `<img>`) becomes a link, so reading the comment fetches nothing, and an
+  example sits in a fence its own backticks cannot close.
 
 **A comment or a real review.** By default the review is posted as a
 `COMMENT`: it informs and blocks nothing. With `--request-changes-on

