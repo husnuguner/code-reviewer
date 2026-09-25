@@ -11,7 +11,6 @@
         "awilix": "^13.0.5",
         "commander": "^15.0.0",
         "convict": "^6.2.5",
-        "difflib": "^0.2.4",
         "dotenv-expand": "^1000.0.0",
         "find-up": "^8.0.0",
         "p-limit": "^7.3.3",
@@ -26,7 +25,6 @@
         "@eslint/js": "^10.0.1",
         "@types/bun": "^1.4.2",
         "@types/convict": "^6.1.6",
-        "@types/difflib": "^0.2.7",
         "@types/node": "^26.6.2",
         "eslint": "^10.11.0",
         "eslint-config-prettier": "^10.1.8",
@@ -112,8 +110,6 @@
     "@types/bun": ["@types/bun@1.4.2", "", { "dependencies": { "bun-types": "1.4.2" } }, "sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ=="],
 
     "@types/convict": ["@types/convict@6.1.6", "", { "dependencies": { "@types/node": "*" } }, "sha512-1B6jqWHWQud+7yyWAqbxnPmzlHrrOtJzZr1DhhYJ/NbpS4irfZSnq+N5Fm76J9LNRlUZvCmYxTVhhohWRvtqHw=="],
-
-    "@types/difflib": ["@types/difflib@0.2.7", "", {}, "sha512-NCG38r/Wxkx7ZnGntRAVl3dPReR6nrauZq51viGgCQ8iM0QldrF7mN65SFnU3cJPaXo6Ry5+zhL0EVkfOgJsHw=="],
 
     "@types/esrecurse": ["@types/esrecurse@4.3.1", "", {}, "sha512-xJBAbDifo5hpffDBuHl0Y8ywswbiAp/Wi7Y/GtAgSlZyIABppyurxVueOPE8LUQOxdlgi6Zqce7uoEpqNTeiUw=="],
 
@@ -241,8 +237,6 @@
 
     "detect-indent": ["detect-indent@7.0.2", "", {}, "sha512-y+8xyqdGLL+6sh0tVeHcfP/QDd8gUgbasolJJpY7NgeQGSZ739bDtSiaiDgtoicy+mtYB81dKLxO9xRhCyIB3A=="],
 
-    "difflib": ["difflib@0.2.4", "", { "dependencies": { "heap": ">= 0.2.0" } }, "sha512-9YVwmMb0wQHQNr5J9m6BSj6fk4pfGITGQOOs+D9Fl+INODWFOfvhIU1hNv6GgR1RBoC/9NJcwu77zShxV0kT7w=="],
-
     "dotenv-expand": ["dotenv-expand@1000.0.0", "", {}, "sha512-3T4TtUjXm5iGKFEirqKjcDJ0EheFJbv9peb5xytC+HNu3l5Ygnu4dYE8yeqkppHMsh1If9C/A//EJu7IPtNu+A=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.432", "", {}, "sha512-4qa5o+sI3qFR+p1C6wZvY99x6q/3tR34n+ezZvWiJ9s0HJaaKwN6h1HTupFfv4fiSdQYMZWtVFBuzHdAXo1BnA=="],
@@ -324,8 +318,6 @@
     "graceful-fs": ["graceful-fs@4.2.11", "", {}, "sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ=="],
 
     "hashery": ["hashery@1.5.1", "", { "dependencies": { "hookified": "^1.15.0" } }, "sha512-iZyKG96/JwPz1N55vj2Ie2vXbhu440zfUfJvSwEqEbeLluk7NnapfGqa7LH0mOsnDxTF85Mx8/dyR6HfqcbmbQ=="],
-
-    "heap": ["heap@0.2.7", "", {}, "sha512-2bsegYkkHO+h/9MGbn6KWcE45cHZgPANo5LXF7EvWdT0yT2EguSVO1nDgU5c8+ZOPwp2vMNa7YFsJhVcDR9Sdg=="],
 
     "hookified": ["hookified@1.15.1", "", {}, "sha512-MvG/clsADq1GPM2KGo2nyfaWVyn9naPiXrqIe4jYjXNZQt238kWyOGrsyc/DmRAQ+Re6yeo6yX/yoNCG5KAEVg=="],
 
