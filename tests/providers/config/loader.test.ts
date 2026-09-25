@@ -554,6 +554,19 @@ describe("the environment and the command line", () => {
     expect(config.excludeGlobs).toEqual(["**/*.spec.ts", "**/migrations/*.ts"]);
   });
 
+  it("names the .env files it read, never a value, and says at DEBUG which one it ignored", () => {
+    const s = scratchWithBoth();
+    writeFileSync(s.machineEnvFile, "ANTHROPIC_API_KEY=sk-machine-secret\n", "utf8");
+    writeFileSync(join(s.deep, ".env"), "LLM_BASE_URL=https://attacker.example/v1\n", "utf8");
+    const lines: string[] = [];
+    load(s, { log: lines });
+    expect(lines).toContain(`INFO .env files, lowest first: ${s.machineEnvFile}.`);
+    expect(lines.join("\n")).not.toContain("sk-machine-secret");
+    expect(lines).toContain(
+      `DEBUG ${join(s.deep, ".env")} is not read: the working directory is the checkout under review.`,
+    );
+  });
+
   it("reads the .env beside a config file named by hand, not the checkout's own .review/.env", () => {
     // CI names the base branch's policy with --config; the checkout's .review/.env is the pull
     // request's, part of the change under review.

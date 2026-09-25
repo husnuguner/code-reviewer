@@ -199,7 +199,10 @@ change's: a pull request can add one, and a variable read from it could name
 the endpoint the model's key is sent to, or exclude every file. For the same
 reason the repository's `.env` is the one beside the config file actually in
 force: when `--config` names another file (the review action names the base
-branch's copy of `.review/`), the checkout's own `.review/.env` is not read.
+branch's copy of `.review/`), the checkout's own `.review/.env` is not read. Every
+run names the `.env` files it read at INFO (`.env files, lowest first: …`) --
+the files, never a value -- and, with `-v`, a working directory's `.env` it
+ignored.
 
 ### There is no key that replaces the review policy
 

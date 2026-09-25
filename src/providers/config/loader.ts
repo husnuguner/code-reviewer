@@ -3,6 +3,9 @@
  * @packageDocumentation
  */
 
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 import { configIncoherences } from "../../core/config/coherence";
 import {
   type Config,
@@ -13,7 +16,7 @@ import {
 import { type Logger, NULL_LOGGER } from "../../core/ports/logger";
 
 import { environmentFilePaths, mergedEnvironment, readEnvironmentFile } from "./environment-files";
-import { type Environment, configHome, configPaths } from "./paths";
+import { ENV_FILENAME, type Environment, configHome, configPaths } from "./paths";
 import { loadConfigFiles } from "./reader";
 
 /** Options for {@link loadRunConfig}. */
@@ -32,6 +35,21 @@ export interface LoadRunConfigOptions {
 }
 
 /**
+ * Names the `.env` files a run read, never a value; and, at DEBUG, a working directory's `.env` it did not.
+ *
+ * @remarks A `.env` decides which key goes where; reading one in silence was how a checkout's `.env` could
+ * configure a run unseen.
+ */
+function sayWhichEnvironmentFiles(read: readonly string[], cwd: string, logger: Logger): void {
+  const log = logger.child("config");
+  if (read.length > 0) log.info(`.env files, lowest first: ${read.join(" < ")}.`);
+  const ignored = join(cwd, ENV_FILENAME);
+  if (!read.includes(ignored) && existsSync(ignored)) {
+    log.debug(`${ignored} is not read: the working directory is the checkout under review.`);
+  }
+}
+
+/**
  * Resolves one run's configuration: command line › environment and `.env` › repository file › machine file ›
  * defaults.
  *
@@ -42,10 +60,14 @@ export function loadRunConfig(options: LoadRunConfigOptions): Config {
   const cwd = options.cwd ?? process.cwd();
   const logger = options.logger ?? NULL_LOGGER;
   const paths = configPaths(options.configFile, processEnvironment, cwd);
+  const environmentFiles = environmentFilePaths(paths.repo, processEnvironment).filter((path) =>
+    existsSync(path),
+  );
   const environment = mergedEnvironment(
     processEnvironment,
-    environmentFilePaths(paths.repo, processEnvironment).map(readEnvironmentFile),
+    environmentFiles.map(readEnvironmentFile),
   );
+  sayWhichEnvironmentFiles(environmentFiles, cwd, logger);
   const files = loadConfigFiles(paths, environment, logger);
   if (files.length > 0) {
     logger
