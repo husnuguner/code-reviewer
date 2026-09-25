@@ -22,6 +22,7 @@ import { type ReportContext } from "../../../src/providers/reporting/format-prov
 
 const SUMMARY: SummaryRecord = {
   type: "summary",
+  reviewer_version: "0.0.0-test",
   base: "main",
   branch: "HEAD",
   incremental: false,

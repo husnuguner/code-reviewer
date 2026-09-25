@@ -61,6 +61,7 @@ const SILENT = resolveLogSettings({ level: "silent" }, { environment: {} });
 function summary(isIncremental: boolean, failed = 0): string {
   return JSON.stringify({
     type: "summary",
+    reviewer_version: "0.0.0-test",
     base: "abc123",
     branch: "HEAD",
     incremental: isIncremental,

@@ -290,6 +290,15 @@ describe("reviewing only the commits since a point", () => {
     expect(result.incremental).toBe(true);
   });
 
+  it("carries the reviewer's version on the summary, as the caller states it", async () => {
+    const stream = iterBranchReview(options(repo(), { reviewerVersion: "9.8.7" }));
+    const records: BranchReviewRecord[] = await Array.fromAsync(stream);
+    expect(records.at(-1)).toMatchObject({ type: "summary", reviewer_version: "9.8.7" });
+    const plain = iterBranchReview(options(repo()));
+    const unstated: BranchReviewRecord[] = await Array.fromAsync(plain);
+    expect(unstated.at(-1)).toMatchObject({ reviewer_version: "" });
+  });
+
   it("names the starting commit as the base, and says the run was incremental", async () => {
     const stream = iterBranchReview(options(twoCommits(), { since: "HEAD~1" }));
     const records: BranchReviewRecord[] = await Array.fromAsync(stream);

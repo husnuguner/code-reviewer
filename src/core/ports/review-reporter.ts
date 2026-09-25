@@ -47,6 +47,8 @@ export interface BypassMarkerRecord {
  */
 export interface SummaryRecord {
   readonly type: "summary";
+  /** The reviewer's version that wrote the stream (`package.json`); `""` when the caller did not say. */
+  readonly reviewer_version: string;
   /** What the checkout was compared against: `--base`, `--since`'s commit, or `HEAD` for the working tree. */
   readonly base: string;
   readonly branch: string;

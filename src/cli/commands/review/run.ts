@@ -14,6 +14,7 @@ import {
   streamBranchReview,
 } from "../../../core/review/branch-review";
 import { severityGate } from "../../../core/review/severity";
+import { packageVersion } from "../../../providers/assets/shipped-files";
 import { closeReporter } from "../../../providers/reporting/closable";
 import { OperatorError } from "../../command-line";
 import { type RunCradle, type RunRequest, buildContainer } from "../../container";
@@ -134,6 +135,7 @@ async function runBranchReview(arguments_: ReviewArguments, cradle: RunCradle): 
     maxFindingsPerFile: config.reportPolicy().maxFindingsPerFile,
     codeContext: cradle.codeContext,
     policyPaths: cradle.policyPaths,
+    reviewerVersion: packageVersion(),
     logger,
   };
 

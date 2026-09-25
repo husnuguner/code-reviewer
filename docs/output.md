@@ -84,6 +84,7 @@ Then exactly one `summary` record:
 ```json
 {
   "type": "summary",
+  "reviewer_version": "0.0.12",
   "base": "main",
   "branch": "HEAD",
   "incremental": false,
@@ -107,6 +108,7 @@ Then exactly one `summary` record:
 
 | Field                 | Meaning                                                                                                                                                                                               |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reviewer_version`    | The reviewer's version that wrote the stream; `reviewer comment` names it in the posted body's tallies. `""` from an older stream.                                                                    |
 | `base`, `branch`      | What was compared: `--base` and `"HEAD"`. An `--uncommitted` run reports `"HEAD"` and `"working tree"`; a `--since` run reports the commit it started from and `"HEAD"`.                              |
 | `incremental`         | `true` for a `--since` run, which reviewed only the commits after `base`; a clean result then says nothing about findings earlier runs reported. `reviewer comment` does not supersede on such a run. |
 | `files_changed`       | Files in the change set, every one git names: removed, binary, pure renames and mode changes included (each is skipped with its reason).                                                              |

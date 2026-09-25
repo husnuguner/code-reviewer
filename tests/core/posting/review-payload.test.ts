@@ -38,6 +38,7 @@ function finding(over: Partial<Finding> = {}): Finding {
 
 const SUMMARY: SummaryRecord = {
   type: "summary",
+  reviewer_version: "0.0.0-test",
   base: "main",
   branch: "HEAD",
   incremental: false,
@@ -209,6 +210,15 @@ describe("building the review", () => {
     expect(buildReview({ findings: [], summary: SUMMARY, unreadable: 0 }).body).not.toContain(
       "adds",
     );
+  });
+
+  it("reads the reviewer's version off the stream and names it in the tallies", () => {
+    const records = parseRecords(ndjson({ ...SUMMARY, reviewer_version: "0.0.13" }));
+    expect(records.summary?.reviewer_version).toBe("0.0.13");
+    expect(buildReview(records).body).toContain("code-reviewer 0.0.13");
+    const older = parseRecords(ndjson({ ...SUMMARY, reviewer_version: undefined }));
+    expect(older.summary?.reviewer_version).toBe("");
+    expect(buildReview(older).body).not.toContain("code-reviewer ");
   });
 
   it("calls a run complete only with a summary that counts no failed file", () => {

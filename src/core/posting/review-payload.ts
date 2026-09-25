@@ -166,6 +166,7 @@ function toFinding(record: JsonObject): Finding | null {
 function toSummary(record: JsonObject): SummaryRecord {
   return {
     type: "summary",
+    reviewer_version: text_(record["reviewer_version"]),
     base: text_(record["base"]),
     branch: text_(record["branch"]),
     incremental: record["incremental"] === true,
@@ -535,6 +536,9 @@ function tallies(summary: SummaryRecord | null, unreadable: number, alreadyPoste
       ? [`${alreadyPosted} already posted inline by an earlier review and not repeated`]
       : []),
     ...(unreadable > 0 ? [`${unreadable} unreadable record(s)`] : []),
+    ...(summary !== null && summary.reviewer_version !== ""
+      ? [`code-reviewer ${summary.reviewer_version}`]
+      : []),
   ];
   return notes.length === 0 ? "" : `<sub>${notes.join("; ")}.</sub>`;
 }

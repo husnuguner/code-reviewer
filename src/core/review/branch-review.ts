@@ -81,6 +81,8 @@ export interface BranchReviewOptions {
   readonly codeContext?: CodeContext | null;
   /** Where this run's policy lives inside the checkout, beside `.review`; a change to any of it is reported. */
   readonly policyPaths?: readonly PolicyPath[];
+  /** The reviewer's version, carried on the summary; the core does not read a package manifest. */
+  readonly reviewerVersion?: string;
   readonly logger?: Logger;
 }
 
@@ -211,6 +213,7 @@ export async function* iterBranchReview(
 
   yield {
     type: "summary",
+    reviewer_version: options.reviewerVersion ?? "",
     base,
     branch,
     incremental: options.since !== undefined,
