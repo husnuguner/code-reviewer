@@ -138,6 +138,10 @@ describe("which prompts directory is in force", () => {
       { label: "prompts/house-style.md", text: "Prefer early returns." },
     ]);
     expect(lines.some((line) => line.includes("says nothing"))).toBe(true);
+    // Housekeeping is DEBUG: a default run says which instructions are in force, and nothing more.
+    expect(lines.filter((line) => line.startsWith("info:"))).toEqual([
+      expect.stringContaining("Standing instructions:") as string,
+    ]);
   });
 
   it("falls back to the machine's when the repository has no prompts directory, or no .review/ at all", () => {

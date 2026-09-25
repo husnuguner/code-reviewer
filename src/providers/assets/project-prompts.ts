@@ -39,7 +39,7 @@ export function readStandingInstructions(
       log.info(`Standing instructions: ${repoDirectory} (${own.length} file(s)).`);
       return own;
     }
-    log.info(`The repository's ${repoDirectory} says nothing; reading the machine's prompts.`);
+    log.debug(`The repository's ${repoDirectory} says nothing; reading the machine's prompts.`);
   }
   const shared = readProjectPrompts(machineDirectory, logger);
   if (shared.length > 0) {
@@ -62,7 +62,7 @@ export function readProjectPrompts(
   const log = logger.child("prompts");
   const files = markdownFiles(directory);
   if (files === null) {
-    log.info(`No prompts directory at ${directory}; the policy stands alone.`);
+    log.debug(`No prompts directory at ${directory}; the policy stands alone.`);
     return [];
   }
   const instructions: StandingInstruction[] = [];
@@ -71,11 +71,11 @@ export function readProjectPrompts(
     try {
       const text = readFileSync(file, "utf8").trim();
       if (text === "") {
-        log.info(`Prompt file ${show(label)} is empty; nothing added.`);
+        log.debug(`Prompt file ${show(label)} is empty; nothing added.`);
         continue;
       }
       instructions.push({ label, text });
-      log.info(`Prompt file ${show(label)}: ${text.length} character(s) added to the policy.`);
+      log.debug(`Prompt file ${show(label)}: ${text.length} character(s) added to the policy.`);
     } catch (error) {
       log.warn(`Prompt file ${show(label)} could not be read: ${errorMessage(error)}`);
     }

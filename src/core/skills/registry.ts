@@ -72,7 +72,9 @@ export class SkillRegistry implements SkillMatcher {
     }
     const registry = new SkillRegistry(applyMappings(skills, mappings, defaults, log), logger);
     const names = sortedByCodePoint(registry.skills.map((s) => s.name)).join(", ");
-    log.info(`Loaded ${registry.skills.length} skill(s): ${names || "(none)"}`);
+    // Said at INFO when there is something to say; a repository without skills hears it with -v.
+    if (registry.skills.length === 0) log.debug("Loaded 0 skill(s).");
+    else log.info(`Loaded ${registry.skills.length} skill(s): ${names}`);
     return registry;
   }
 
