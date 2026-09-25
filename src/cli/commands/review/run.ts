@@ -33,13 +33,16 @@ export const INCOMPLETE_EXIT_CODE = 4;
 /**
  * The exit code a finished run earns.
  *
- * @returns `4` when a selected file could not be reviewed, `3` when a reported finding is gated, else `0`.
+ * @param isIncompleteAllowed - `--allow-incomplete`: an unreviewed file does not decide the code.
+ * @returns `4` when a selected file could not be reviewed (unless allowed), `3` when a reported finding is
+ * gated, else `0`.
  */
 export function exitCodeFor(
   result: Pick<BranchReviewResult, "findings" | "failed">,
   failOn: readonly string[],
+  isIncompleteAllowed = false,
 ): number {
-  if (result.failed > 0) return INCOMPLETE_EXIT_CODE;
+  if (!isIncompleteAllowed && result.failed > 0) return INCOMPLETE_EXIT_CODE;
   return hasFailingFinding(result, failOn) ? FINDINGS_EXIT_CODE : 0;
 }
 
@@ -140,7 +143,7 @@ async function runBranchReview(arguments_: ReviewArguments, cradle: RunCradle): 
   } finally {
     await closeReporter(reporter);
   }
-  return exitCodeFor(result, arguments_.failOn);
+  return exitCodeFor(result, arguments_.failOn, arguments_.allowIncomplete);
 }
 
 /** `--preview`: prints the selection. Never touches the model or the verifier, so no credential is needed. */

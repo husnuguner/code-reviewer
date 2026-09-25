@@ -140,12 +140,14 @@ describe("the review flags", () => {
       exclude: [],
       failOn: [],
       verify: true,
+      allowIncomplete: false,
     });
   });
 
   it("turn on", () => {
     expect(review(["--preview"]).preview).toBe(true);
     expect(review(["--uncommitted"]).uncommitted).toBe(true);
+    expect(review(["--allow-incomplete"]).allowIncomplete).toBe(true);
     // The only flag that is on until refused: there is no `--verify`.
     expect(review(["--no-verify"]).verify).toBe(false);
   });

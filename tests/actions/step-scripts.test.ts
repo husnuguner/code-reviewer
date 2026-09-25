@@ -147,6 +147,13 @@ describe("actions/review/action.yml, the Review step", () => {
     expect(step.exitCode).toBe(0);
   });
 
+  it("passes --allow-incomplete only when the input asks for it", () => {
+    const off = runStep(run, { env: reviewEnvironment(), stub: "bun" });
+    expect(off.calls[0]).not.toContain("--allow-incomplete");
+    const on = runStep(run, { env: reviewEnvironment({ ALLOW_INCOMPLETE: "true" }), stub: "bun" });
+    expect(on.calls[0]).toContain("--allow-incomplete");
+  });
+
   it("stops at the preview, which spawns the reviewer with no output file", () => {
     const step = runStep(run, {
       env: reviewEnvironment({ PREVIEW: "true" }),

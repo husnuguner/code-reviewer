@@ -193,6 +193,7 @@ reviewer review --uncommitted                      # the work that is not in a c
 | `--exclude GLOB`                                        | Skip files matching the glob; repeatable.                                                                                               |
 | `--skills-path PATH`                                    | Directory of review skills inside the reviewed repo; empty disables skills.                                                             |
 | `--no-verify`                                           | Report every finding the model produced, skipping the verification pass.                                                                |
+| `--allow-incomplete`                                    | Do not exit `4` when a file could not be reviewed; `--fail-on` alone decides. The report still says incomplete.                         |
 | `--config PATH`                                         | Another repository `config.yaml`, in place of the nearest `.review/config.yaml`.                                                        |
 | `-v`, `-q`, `--log-level`, `--log-format`, `--no-color` | Logging; see [docs/output.md](docs/output.md#logging).                                                                                  |
 

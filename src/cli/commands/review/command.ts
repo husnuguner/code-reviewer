@@ -36,6 +36,8 @@ export interface ReviewArguments extends ConfigArguments {
   readonly failOn: readonly Severity[];
   /** `false` only when `--no-verify` was passed. */
   readonly verify: boolean;
+  /** Exit as the findings decide even when a file could not be reviewed; the report still says so. */
+  readonly allowIncomplete: boolean;
 }
 
 /** The `review` flags, on top of `--config`. */
@@ -104,6 +106,11 @@ function reviewOptions(command: Command): Command {
         )
           .argParser(severityList)
           .default([], "none"),
+      )
+      .option(
+        "--allow-incomplete",
+        "Do not exit 4 when a file could not be reviewed (the model did not answer); --fail-on alone decides the exit code. The report still says the review is incomplete, and `reviewer comment` still will not let the run lift an earlier block.",
+        false,
       )
       .option(
         "--no-verify",

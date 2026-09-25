@@ -69,6 +69,11 @@ describe("the exit code", () => {
     expect(exitCodeFor({ ...reported("bug"), failed: 1 }, ["bug"])).toBe(INCOMPLETE_EXIT_CODE);
   });
 
+  it("leaves the code to --fail-on under --allow-incomplete", () => {
+    expect(exitCodeFor({ findings: [], failed: 1 }, [], true)).toBe(0);
+    expect(exitCodeFor({ ...reported("bug"), failed: 1 }, ["bug"], true)).toBe(FINDINGS_EXIT_CODE);
+  });
+
   it("is 3 for a gated finding on a complete run, and 0 otherwise", () => {
     expect(exitCodeFor({ ...reported("bug"), failed: 0 }, ["bug"])).toBe(FINDINGS_EXIT_CODE);
     expect(exitCodeFor({ ...reported("bug"), failed: 0 }, [])).toBe(0);

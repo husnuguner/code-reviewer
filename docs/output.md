@@ -157,8 +157,9 @@ or the cap withheld cannot fail a build the reviewer never showed it to.
 rejected key, a rate limit that outlasted the retries, a prompt over the
 model's context window, a reply with no findings list in it twice. Every
 record is still written and the report says `Review incomplete`; the run is
-not a verdict, so it does not exit `0`, and `reviewer comment` does not let
-it lift an earlier block. The log names each file and why, with the size of
+not a verdict, so it does not exit `0` (unless `--allow-incomplete` hands the
+code to `--fail-on` alone), and `reviewer comment` does not let it lift an
+earlier block either way. The log names each file and why, with the size of
 the prompt the vendor refused.
 
 ## Logging

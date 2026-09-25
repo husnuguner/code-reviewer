@@ -103,6 +103,14 @@ inputs:
       never fails it: the review informs, the humans decide.
     required: false
     default: "none"
+  allow-incomplete:
+    description: >-
+      Do not fail the job when a file could not be reviewed (the model did
+      not answer); fail-on alone decides. The summary still says the review
+      is incomplete, and the comment action still will not let it lift an
+      earlier block. Default false: an incomplete review fails the job.
+    required: false
+    default: "false"
   verify:
     description: >-
       Check each file's findings against its own diff and drop the refuted
@@ -362,6 +370,7 @@ runs:
         IN_LOG_LEVEL: ${{ inputs.log-level }}
         REVIEWER_CONFIG: ${{ steps.policy.outputs.config }}
         FAIL_ON: ${{ inputs.fail-on }}
+        ALLOW_INCOMPLETE: ${{ inputs.allow-incomplete }}
         OUT_FILE: ${{ inputs.out }}
         PREVIEW: ${{ inputs.preview }}
         ANNOTATIONS: ${{ inputs.annotations }}
@@ -404,6 +413,9 @@ runs:
           done < <(printf '%s\n' "${IN_EXCLUDE}" | tr ',' '\n')
         fi
         args+=(--fail-on "${FAIL_ON}")
+        if [ "${ALLOW_INCOMPLETE:-false}" = "true" ]; then
+          args+=(--allow-incomplete)
+        fi
         args+=(--log-format github)
         if [ -n "${IN_LOG_LEVEL}" ]; then
           args+=(--log-level "${IN_LOG_LEVEL}")
