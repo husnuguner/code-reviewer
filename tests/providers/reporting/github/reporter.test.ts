@@ -180,7 +180,7 @@ describe("the job summary", () => {
     expect(bypass).toBe(
       "> **Review was bypassed by markers in the code in 2 region(s): src/a.ts:41-80 (legacy), src/b.ts:1-4 (generated); read those yourself.**",
     );
-    expect(markdown).toContain("; 2 in bypassed regions");
+    expect(markdown).toContain("; 2 added line(s) in bypassed regions not reviewed");
     expect(summaryFor([record()], SUMMARY)).not.toContain("bypass");
   });
 });

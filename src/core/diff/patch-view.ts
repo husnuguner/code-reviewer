@@ -1,11 +1,13 @@
 /**
  * One file's patch as the model is shown it: the annotated diff, the commentable lines and the
- * anchor haystack, computed together from one text so they cannot disagree.
+ * anchor haystack, computed together from one text so they cannot disagree. A stretch the author took
+ * out of review leaves all three at once, one placeholder line standing where it was.
  * @packageDocumentation
  */
 
 import { countCodePoints } from "../util/text";
 
+import { type Elision, elisionAt, elisionLine } from "./elision";
 import { type DiffLine, hunkHeader, parseUnifiedDiff } from "./unified-diff";
 
 /** One entry of the new side: `[new-file line number, text]`. */
@@ -38,6 +40,8 @@ export interface PatchView {
   readonly newSide: readonly NewSideEntry[];
   /** Length of `annotated` in code points. */
   readonly chars: number;
+  /** How many diff rows an elision replaced; `0` when the whole patch is shown. */
+  readonly elided: number;
 }
 
 /** One diff line as a row of the rendering. */
@@ -65,13 +69,67 @@ function annotatedHunks(patch: string): AnnotatedHunk[] {
 }
 
 /**
- * What to show the model for one file: the whole patch, annotated.
+ * Which elision each row of a hunk falls in, by position; `null` for a row that is shown.
+ *
+ * @remarks A row with no new-side number -- a removed line, the no-newline marker -- goes with the
+ * next new-side row of the hunk: a diff puts what was removed before what replaced it, so those lines
+ * are the old body of the block that follows. Trailing such rows go with the row before them.
+ */
+function elisionsByRow(rows: readonly Row[], elisions: readonly Elision[]): (Elision | null)[] {
+  const ofRow = (row: Row): Elision | null =>
+    row.newLine === null ? null : elisionAt(row.newLine, elisions);
+  const lastNewSide = rows.findLast((row) => row.newLine !== null);
+  // Walked backwards so each numberless row sees the new-side row that follows it; the rows after
+  // the last new-side one start from that one's elision.
+  let following: Elision | null = lastNewSide === undefined ? null : ofRow(lastNewSide);
+  const out: (Elision | null)[] = Array.from({ length: rows.length }, () => null);
+  for (let index = rows.length - 1; index >= 0; index--) {
+    const row = rows[index];
+    if (row !== undefined && row.newLine !== null) following = ofRow(row);
+    out[index] = following;
+  }
+  return out;
+}
+
+/** One hunk as shown: its rows with every elided run replaced by one line, and how many rows that took. */
+interface ShownHunk {
+  readonly header: string;
+  readonly rows: readonly Row[];
+  readonly replaced: number;
+}
+
+/** The hunk with every elided run replaced by its one line. */
+function shownHunk(hunk: AnnotatedHunk, elisions: readonly Elision[]): ShownHunk {
+  if (elisions.length === 0) return { ...hunk, replaced: 0 };
+  const byRow = elisionsByRow(hunk.rows, elisions);
+  const rows: Row[] = [];
+  let replaced = 0;
+  let current: Elision | null = null;
+  for (const [index, row] of hunk.rows.entries()) {
+    const elision = byRow[index] ?? null;
+    if (elision === null) {
+      rows.push(row);
+    } else {
+      replaced += 1;
+      if (elision !== current) {
+        rows.push({ text: elisionLine(elision), newLine: null, isAdded: false, value: "" });
+      }
+    }
+    current = elision;
+  }
+  return { header: hunk.header, rows, replaced };
+}
+
+/**
+ * What to show the model for one file: the whole patch, annotated, less any elided stretch.
  *
  * @param patch - The file's unified-diff patch.
- * @returns The view; `addedLines` and `newSide` describe `annotated` and nothing else.
+ * @param elisions - New-side stretches to leave out, each replaced by one line naming it; none by default.
+ * @returns The view; `addedLines` and `newSide` describe `annotated` and nothing else, so a line that
+ * is not shown is neither commentable nor an anchor.
  */
-export function patchView(patch: string): PatchView {
-  const hunks = annotatedHunks(patch);
+export function patchView(patch: string, elisions: readonly Elision[] = []): PatchView {
+  const hunks = annotatedHunks(patch).map((hunk) => shownHunk(hunk, elisions));
   const pieces = hunks.flatMap((hunk) => [hunk.header, ...hunk.rows.map((row) => row.text)]);
   const rows = hunks.flatMap((hunk) => hunk.rows);
   const newSide = rows.flatMap((row): NewSideEntry[] =>
@@ -81,7 +139,8 @@ export function patchView(patch: string): PatchView {
     rows.flatMap((row): number[] => (row.isAdded && row.newLine !== null ? [row.newLine] : [])),
   );
   const annotated = pieces.join("\n");
-  return { annotated, addedLines: added, newSide, chars: countCodePoints(annotated) };
+  const elided = hunks.reduce((sum, hunk) => sum + hunk.replaced, 0);
+  return { annotated, addedLines: added, newSide, chars: countCodePoints(annotated), elided };
 }
 
 /** The new-file line numbers of the added lines. */

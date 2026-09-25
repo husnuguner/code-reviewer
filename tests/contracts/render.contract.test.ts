@@ -35,6 +35,8 @@ interface PromptInput {
   language?: string;
   /** The run's per-file cap, told to the model; absent or 0 asks for no limit. */
   max_findings?: number;
+  /** Whether the diff carries a `[bypassed \u2026]` line; absent reads as no. */
+  has_bypassed_lines?: boolean;
 }
 
 /** A prompt's non-empty lines, section headers dropped, in code-point order. */
@@ -148,6 +150,9 @@ describe("prompts", () => {
           content: input.content,
           ...(input.language !== undefined && { language: input.language }),
           ...(input.max_findings !== undefined && { maxFindings: input.max_findings }),
+          ...(input.has_bypassed_lines !== undefined && {
+            hasBypassedLines: input.has_bypassed_lines,
+          }),
         }),
       ).toBe(expected);
     },

@@ -24,6 +24,19 @@
       "expected": "File: a.ts\n\nAllowed line numbers (you may ONLY use these in findings):\n2\n\nUnified diff (added lines prefixed with [L<n>]):\n```diff\n@@ -1 +1,2 @@\n old\n[L2] +added\n```\n\nWrite each finding's \"body\" in English. Keep the JSON keys and the \"severity\" values in English.\nReturn the findings JSON now."
     },
     {
+      "name": "build_user_prompt/with_bypassed_lines",
+      "input": {
+        "path": "a.ts",
+        "annotated_patch": "@@ -1,2 +1,4 @@\n old\n[bypassed lines 2-3: generated]\n[L4] +added",
+        "allowed_lines": [
+          4
+        ],
+        "content": null,
+        "has_bypassed_lines": true
+      },
+      "expected": "File: a.ts\n\nAllowed line numbers (you may ONLY use these in findings):\n4\n\nUnified diff (added lines prefixed with [L<n>]; a line reading [bypassed lines a-b: reason] stands for lines the author took out of review -- they are not shown and take no finding):\n```diff\n@@ -1,2 +1,4 @@\n old\n[bypassed lines 2-3: generated]\n[L4] +added\n```\n\nWrite each finding's \"body\" in English. Keep the JSON keys and the \"severity\" values in English.\nReturn the findings JSON now."
+    },
+    {
       "name": "build_user_prompt/no_allowed_lines",
       "input": {
         "path": "a.ts",

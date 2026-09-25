@@ -118,10 +118,10 @@ Then exactly one `summary` record:
 | `refuted`             | Findings the verification pass removed before they were reported.                                                                                                                                     |
 | `capped`              | Findings `max-findings-per-file` withheld.                                                                                                                                                            |
 | `mislabelled`         | Reported findings whose severity the model spelled outside the vocabulary (kept under the mildest one).                                                                                               |
-| `bypassed`            | Findings that fell in a region a [`reviewer: by-pass` marker](how-it-works.md#bypassing-a-block-from-the-code) took out of review; dropped before verification.                                       |
+| `bypassed`            | Added lines inside a region a [`reviewer: by-pass` marker](how-it-works.md#bypassing-a-block-from-the-code) took out of review; not shown to the model. A wholly bypassed file's lines count too.     |
 | `skipped`             | Files not reviewed, by reason: `secret`, `binary`, `status`, `excluded`, `no_added_lines`, `no_patch`, `too_large`, `bypassed` (every added line in a bypassed region; no model call).                |
 | `policy_changed`      | The review-policy files this change edits (`.review/**` and the run's own), sorted; `[]` when none.                                                                                                   |
-| `bypass_regions`      | The regions markers took out of review: `{ path, start_line, end_line, reason }`, by path then line; `[]` when none. Listed whether or not a finding fell in them.                                    |
+| `bypass_regions`      | The regions markers took out of review: `{ path, start_line, end_line, reason }`, by path then line; `[]` when none. Listed whether or not the diff reached them.                                     |
 
 The counters close:
 
@@ -131,8 +131,9 @@ files_changed = files_reviewed + failed + sum(skipped)
 
 `anchors`, `unanchored` and `mislabelled` are counted over the findings that
 were **reported**, so they describe the same population as `findings`. What
-never got that far is `bypassed`, `refuted` and `capped`, in that order: a
-finding in a bypassed region is dropped before the verifier sees it.
+never got that far is `refuted` and `capped`, in that order. `bypassed` counts
+lines, not findings: a bypassed region is not shown to the model, so no finding
+is ever made there to be dropped.
 
 While the major version is 0, any release may change this contract; see
 [Versioning](../README.md#versioning).

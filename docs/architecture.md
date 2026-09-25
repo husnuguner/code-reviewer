@@ -51,20 +51,21 @@ vendor, host or rendering answers.
 
 Key modules under `review/`:
 
-| Module             | Role                                                                          |
-| ------------------ | ----------------------------------------------------------------------------- |
-| `selection.ts`     | Which files are in scope, and why the rest are not. Pure.                     |
-| `review-file.ts`   | The per-file step: skills, content, pre-context, model, anchor, verify.       |
-| `file-reviewer.ts` | The only place the model is asked for findings; parses and anchors the reply. |
-| `verify.ts`        | The verification pass; fails open.                                            |
-| `anchor.ts`        | Two signals (line, quote) settled into one anchor.                            |
-| `bypass.ts`        | `reviewer: by-pass` markers and the block each one names. Pure.               |
-| `braces.ts`        | Braces counted as structure, not characters; shared by context and bypass.    |
-| `branch-review.ts` | The flow: git → select → review in parallel → cap → stream records.           |
-| `volume.ts`        | `max-findings-per-file`.                                                      |
-| `render.ts`        | Text report and preview.                                                      |
-| `guards.ts`        | Credential paths and binary patches: never the project's to override.         |
-| `policy.ts`        | Which changed files are the review policy itself, and the warning they earn.  |
+| Module               | Role                                                                          |
+| -------------------- | ----------------------------------------------------------------------------- |
+| `selection.ts`       | Which files are in scope, and why the rest are not. Pure.                     |
+| `review-file.ts`     | The per-file step: skills, content, pre-context, model, anchor, verify.       |
+| `file-reviewer.ts`   | The only place the model is asked for findings; parses and anchors the reply. |
+| `verify.ts`          | The verification pass; fails open.                                            |
+| `anchor.ts`          | Two signals (line, quote) settled into one anchor.                            |
+| `bypass.ts`          | `reviewer: by-pass` markers and the block each one names. Pure.               |
+| `../diff/elision.ts` | A stretch left out of what is shown, and the one line that stands for it.     |
+| `braces.ts`          | Braces counted as structure, not characters; shared by context and bypass.    |
+| `branch-review.ts`   | The flow: git → select → review in parallel → cap → stream records.           |
+| `volume.ts`          | `max-findings-per-file`.                                                      |
+| `render.ts`          | Text report and preview.                                                      |
+| `guards.ts`          | Credential paths and binary patches: never the project's to override.         |
+| `policy.ts`          | Which changed files are the review policy itself, and the warning they earn.  |
 
 ### `src/providers/` — what can change
 
@@ -109,7 +110,8 @@ kind and handing an instance to the registry, never by editing the core.
 - **Nothing is dropped in silence.** Refuted, capped, mislabelled, unanchored,
   failed, skipped: each is counted or listed.
 - **What the model may comment on is what the model was shown.** The annotated
-  diff, the allowed lines and the anchor haystack are one value (`patchView`).
+  diff, the allowed lines and the anchor haystack are one value (`patchView`);
+  a bypassed region leaves all three at once.
 - **Reporting is the end of the line.** The reviewer writes to a stream; what
   becomes a comment is decided downstream, by something that cannot call a
   model.
@@ -130,10 +132,12 @@ The choices with a real trade-off behind them, and what was given up:
   about which commit is under review. Given up: reviewing a ref without
   checking it out.
 - **A file is reviewed whole or not at all.** Nothing shown to the model is
-  cut: an oversized diff is skipped as `too_large` and said so, never trimmed
-  to fit. Given up: a partial review of a very large file; the ceiling is a
-  constant, not a setting, because a cap the project can raise is a cap the
-  project will raise until the review is half a review.
+  cut to size: an oversized diff is skipped as `too_large` and said so, never
+  trimmed to fit. The one thing left out is a block the author bypassed, which
+  is a decision, not a budget, and is named where it was. Given up: a partial
+  review of a very large file; the ceiling is a constant, not a setting,
+  because a cap the project can raise is a cap the project will raise until
+  the review is half a review.
 - **A change is held to the policy it starts from, not the one it proposes.**
   `.review/` is instructions, so a change that edits it could weaken its own
   review. The flow names such a change (`policy_changed`) in every report, and
@@ -210,10 +214,16 @@ The choices with a real trade-off behind them, and what was given up:
   is required, the marker sits in the diff, and every report lists the
   regions it honoured with their reasons. Whether markers count at all is the
   repository's policy (`settings.bypass-markers`), read from the base branch,
-  so a pull request cannot grant itself the right. Given up: the model still
-  reads a bypassed block and may spend tokens on it -- its findings there are
-  dropped, not prevented -- and a bypass is a judgement the human reviewer
-  must check, which is why it is shouted rather than hidden.
+  so a pull request cannot grant itself the right. Given up: a bypass is a
+  judgement the human reviewer must check, which is why it is shouted rather
+  than hidden.
+- **A bypassed block is not shown, not merely not reported.** Its lines leave
+  the diff, the allowed lines, the anchor haystack and the file text together,
+  one line standing where they were (`[bypassed lines a-b: reason]`), before
+  either model call. No finding can then land there, and no tokens are spent
+  on code the author said needs no reading. Given up: the block as context --
+  a call into a bypassed function is reviewed without its body; the marker is
+  taken at its word.
 
 ## Tests
 

@@ -62,8 +62,8 @@ src/api/users/handler.ts:58
 - **Verified findings.** A second pass drops findings the diff itself refutes.
   It can only remove, never invent or re-rate, and fails open.
 - **Bypass from the code.** A comment reading `reviewer: by-pass - <reason>`
-  takes the block after it out of review; every run names the regions it
-  honoured, so a bypass is a visible decision.
+  takes the block after it out of review -- the model is not shown it -- and
+  every run names the regions it honoured, so a bypass is a visible decision.
 - **Nothing dropped in silence.** Skipped, refuted, capped, mislabelled,
   bypassed and unanchored are all counted in the summary.
 - **Free preview.** `--preview` prints exactly what would be reviewed, and

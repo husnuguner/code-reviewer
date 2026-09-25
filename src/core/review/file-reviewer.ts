@@ -61,6 +61,8 @@ export interface ReviewFileInput {
   readonly path: string;
   readonly annotatedPatch: string;
   readonly allowedLines: ReadonlySet<number>;
+  /** Whether the diff carries a `[bypassed …]` line where a region was left out; told to the model. */
+  readonly hasBypassedLines?: boolean;
   readonly content: string | null;
   /** Language for each finding's `body`; default English. */
   readonly language?: string;
@@ -109,6 +111,7 @@ export class FileReviewer {
       path: input.path,
       annotatedPatch: input.annotatedPatch,
       allowedLines: [...input.allowedLines].toSorted((a, b) => a - b),
+      hasBypassedLines: input.hasBypassedLines ?? false,
       content: input.content,
       language: input.language ?? "English",
       contextText: input.contextText ?? "",

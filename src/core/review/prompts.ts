@@ -67,6 +67,8 @@ export interface UserPromptInput {
   readonly path: string;
   readonly annotatedPatch: string;
   readonly allowedLines: readonly number[];
+  /** Whether a `[bypassed …]` line stands in the diff for lines the author took out of review. */
+  readonly hasBypassedLines?: boolean;
   readonly content: string | null;
   /** Language for each finding's `body`; default English. */
   readonly language?: string;
@@ -75,6 +77,13 @@ export interface UserPromptInput {
   /** The per-file cap, told to the model so it does not generate what the report would cut; `0` asks for no limit. */
   readonly maxFindings?: number;
 }
+
+/** How the diff block is introduced. */
+const DIFF_HEADING = "Unified diff (added lines prefixed with [L<n>]):";
+
+/** The same, when a bypassed region left a placeholder line in it: what that line is, and is not. */
+const DIFF_HEADING_WITH_BYPASS =
+  "Unified diff (added lines prefixed with [L<n>]; a line reading [bypassed lines a-b: reason] stands for lines the author took out of review -- they are not shown and take no finding):";
 
 /**
  * The sentence asking the model to stop at the cap, in the reviewer's severity order.
@@ -98,6 +107,7 @@ export function buildUserPrompt({
   path,
   annotatedPatch,
   allowedLines,
+  hasBypassedLines = false,
   content,
   language = "English",
   contextText = "",
@@ -121,7 +131,7 @@ export function buildUserPrompt({
     "Allowed line numbers (you may ONLY use these in findings):",
     allowedLines.length > 0 ? allowedLines.join(", ") : "(none)",
     "",
-    "Unified diff (added lines prefixed with [L<n>]):",
+    hasBypassedLines ? DIFF_HEADING_WITH_BYPASS : DIFF_HEADING,
     "```diff",
     annotatedPatch,
     "```",

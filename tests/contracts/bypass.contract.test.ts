@@ -7,15 +7,14 @@
 
 import { describe, expect, it } from "bun:test";
 
-import { finding } from "../../src/core/domain/finding";
 import { type BypassRegionRecord } from "../../src/core/ports/review-reporter";
 import {
   type BypassRegion,
   bypassWarning,
+  countBypassed,
   describeRegion,
   isWhollyBypassed,
   scanBypass,
-  withoutBypassed,
 } from "../../src/core/review/bypass";
 
 import { casesUnder, loadFixture } from "./fixtures";
@@ -42,32 +41,11 @@ describe("scanning a file for bypass markers", () => {
   });
 });
 
-/** A finding as the fixture spells it: an id in the body, a line, maybe a start line. */
-interface FixtureFinding {
-  id: string;
-  line: number | null;
-  start_line: number | null;
-}
-
-describe("removing findings that fall in a region", () => {
+describe("how many added lines the regions take", () => {
   it.each(
-    casesUnder<
-      { findings: FixtureFinding[]; regions: BypassRegion[] },
-      { kept: string[]; bypassed: string[] }
-    >(bypass, "without_bypassed"),
+    casesUnder<{ lines: number[]; regions: BypassRegion[] }, number>(bypass, "count_bypassed"),
   )("$name", ({ input, expected }) => {
-    const findings = input.findings.map((f) =>
-      finding({ line: f.line, severity: "bug", body: f.id, start_line: f.start_line }),
-    );
-    const split = withoutBypassed(findings, input.regions);
-    expect(split.kept.map((f) => f.body)).toEqual(expected.kept);
-    expect(split.bypassed.map((f) => f.body)).toEqual(expected.bypassed);
-  });
-
-  it("hands the same finding objects back, not copies", () => {
-    const one = finding({ line: 15, severity: "bug", body: "x" });
-    const split = withoutBypassed([one], [{ start: 10, end: 20, reason: "r" }]);
-    expect(split.bypassed[0]).toBe(one);
+    expect(countBypassed(new Set(input.lines), input.regions)).toBe(expected);
   });
 });
 

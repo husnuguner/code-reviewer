@@ -1,25 +1,24 @@
 /**
  * Taking a block out of review from inside the code. A comment reading `reviewer: by-pass - <reason>`
- * marks the block that follows it -- a function, an `if`, a class, a Python `def` -- and no finding
- * inside that block is reported. The marker sits in the diff for every human reviewer to see, the reason
- * is required, and every run names the regions it honoured, so a bypass is a visible decision, never a
+ * marks the block that follows it -- a function, an `if`, a class, a Python `def` -- and that block is
+ * not shown to the model: one line naming the region and its reason stands where it was, in the diff
+ * and in the file text alike. The marker sits in the diff for every human reviewer to see, the reason is
+ * required, and every run names the regions it honoured, so a bypass is a visible decision, never a
  * silent one.
  * @packageDocumentation
  */
 
-import { type Finding } from "../domain/finding";
+import { type Elision } from "../diff/elision";
 import { type BypassRegionRecord } from "../ports/review-reporter";
 import { compareCodePoints } from "../util/text";
 
 import { braceDepthChange, withoutStringLiterals } from "./braces";
 
-/** One bypassed stretch of a file, in new-side line numbers, both ends inclusive. */
-export interface BypassRegion {
-  readonly start: number;
-  readonly end: number;
-  /** What the marker gave as the reason; never empty. */
-  readonly reason: string;
-}
+/**
+ * One bypassed stretch of a file, in new-side line numbers, both ends inclusive: an {@link Elision},
+ * so the diff view and the file text leave it out the same way.
+ */
+export type BypassRegion = Elision;
 
 /** What a scan of one file found. */
 export interface BypassScan {
@@ -298,38 +297,12 @@ export function isWhollyBypassed(
   return hasLines;
 }
 
-/** Result of removing a file's bypassed findings. */
-export interface BypassedFindings {
-  readonly kept: readonly Finding[];
-  readonly bypassed: readonly Finding[];
-}
-
-/**
- * Splits findings by whether their anchor falls in a bypassed region.
- *
- * @remarks A multi-line anchor is bypassed when any of its lines is. A finding with no line cannot be
- * placed, so it is kept: the marker names code, not comments about the file at large.
- */
-export function withoutBypassed(
-  findings: readonly Finding[],
-  regions: readonly BypassRegion[],
-): BypassedFindings {
-  if (regions.length === 0) return { kept: findings, bypassed: [] };
-  const kept: Finding[] = [];
-  const bypassed: Finding[] = [];
-  for (const finding of findings) {
-    if (finding.line === null) {
-      kept.push(finding);
-      continue;
-    }
-    const first = finding.start_line ?? finding.line;
-    let isInside = false;
-    for (let line = Math.min(first, finding.line); !isInside && line <= finding.line; line++) {
-      isInside = isBypassed(line, regions);
-    }
-    (isInside ? bypassed : kept).push(finding);
-  }
-  return { kept, bypassed };
+/** How many of `lines` lie in a region: the added lines a file's markers took out of review. */
+export function countBypassed(lines: Iterable<number>, regions: readonly BypassRegion[]): number {
+  if (regions.length === 0) return 0;
+  let count = 0;
+  for (const line of lines) if (isBypassed(line, regions)) count += 1;
+  return count;
 }
 
 /** A file's regions as the summary record carries them. */

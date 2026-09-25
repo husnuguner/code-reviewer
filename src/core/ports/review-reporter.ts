@@ -60,7 +60,7 @@ export interface SummaryRecord {
   readonly capped: number;
   /** Reported findings re-rated to the mildest severity because the model named an unknown one. */
   readonly mislabelled: number;
-  /** Findings that fell in a bypassed region and were not reported. */
+  /** Added lines inside a bypassed region, not shown to the model; a wholly bypassed file's lines included. */
   readonly bypassed: number;
   /** Files not reviewed, by reason; reasons that skipped none omitted. */
   readonly skipped: Readonly<Record<string, number>>;

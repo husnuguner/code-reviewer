@@ -142,6 +142,7 @@ export async function* iterBranchReview(
     }
     if (outcome.value.kind === "bypassed") {
       bypassedFiles++;
+      bypassed += outcome.value.lines;
       regions.push(...regionRecords(outcome.value.path, outcome.value.regions));
       continue;
     }
@@ -328,7 +329,7 @@ export interface BranchReviewResult {
   readonly capped: number;
   /** Reported findings re-rated from an unknown severity. */
   readonly mislabelled: number;
-  /** Findings that fell in a bypassed region and were not reported. */
+  /** Added lines in a bypassed region, not shown to the model; a wholly bypassed file's included. */
   readonly bypassed: number;
   /** Files not reviewed, by reason. */
   readonly skipped: Readonly<Record<string, number>>;
@@ -429,7 +430,7 @@ function caveats(result: TextReportInput, base: string): string[] {
     ...(failed > 0 ? [`${failed} file(s) could not be reviewed; the log says why.`] : []),
     ...(policy === "" ? [] : [policy]),
     ...(bypass === "" ? [] : [bypass]),
-    ...(bypassed > 0 ? [`${bypassed} finding(s) in bypassed regions were not reported.`] : []),
+    ...(bypassed > 0 ? [`${bypassed} added line(s) in bypassed regions were not reviewed.`] : []),
   ];
 }
 

@@ -761,34 +761,14 @@
       }
     },
     {
-      "name": "without_bypassed/inside, on the bounds and outside",
+      "name": "count_bypassed/inside and on both bounds count, outside does not",
       "input": {
-        "findings": [
-          {
-            "id": "in",
-            "line": 15,
-            "start_line": null
-          },
-          {
-            "id": "start",
-            "line": 10,
-            "start_line": null
-          },
-          {
-            "id": "end",
-            "line": 20,
-            "start_line": null
-          },
-          {
-            "id": "before",
-            "line": 9,
-            "start_line": null
-          },
-          {
-            "id": "after",
-            "line": 21,
-            "start_line": null
-          }
+        "lines": [
+          9,
+          10,
+          15,
+          20,
+          21
         ],
         "regions": [
           {
@@ -798,111 +778,58 @@
           }
         ]
       },
-      "expected": {
-        "kept": [
-          "before",
-          "after"
-        ],
-        "bypassed": [
-          "in",
-          "start",
-          "end"
-        ]
-      }
+      "expected": 3
     },
     {
-      "name": "without_bypassed/a multi-line anchor is bypassed when any line is",
+      "name": "count_bypassed/two regions, lines between them are free",
       "input": {
-        "findings": [
-          {
-            "id": "overlap-start",
-            "line": 12,
-            "start_line": 5
-          },
-          {
-            "id": "overlap-end",
-            "line": 25,
-            "start_line": 18
-          },
-          {
-            "id": "around",
-            "line": 25,
-            "start_line": 5
-          },
-          {
-            "id": "clear",
-            "line": 8,
-            "start_line": 3
-          }
+        "lines": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
         ],
         "regions": [
           {
-            "start": 10,
-            "end": 20,
-            "reason": "r"
-          }
-        ]
-      },
-      "expected": {
-        "kept": [
-          "clear"
-        ],
-        "bypassed": [
-          "overlap-start",
-          "overlap-end",
-          "around"
-        ]
-      }
-    },
-    {
-      "name": "without_bypassed/an unanchored finding is kept",
-      "input": {
-        "findings": [
-          {
-            "id": "loose",
-            "line": null,
-            "start_line": null
-          }
-        ],
-        "regions": [
-          {
-            "start": 10,
-            "end": 20,
-            "reason": "r"
-          }
-        ]
-      },
-      "expected": {
-        "kept": [
-          "loose"
-        ],
-        "bypassed": []
-      }
-    },
-    {
-      "name": "without_bypassed/no regions keeps everything",
-      "input": {
-        "findings": [
-          {
-            "id": "a",
-            "line": 15,
-            "start_line": null
+            "start": 1,
+            "end": 2,
+            "reason": "a"
           },
           {
-            "id": "b",
-            "line": null,
-            "start_line": null
+            "start": 5,
+            "end": 6,
+            "reason": "b"
           }
+        ]
+      },
+      "expected": 4
+    },
+    {
+      "name": "count_bypassed/no regions",
+      "input": {
+        "lines": [
+          10,
+          11
         ],
         "regions": []
       },
-      "expected": {
-        "kept": [
-          "a",
-          "b"
-        ],
-        "bypassed": []
-      }
+      "expected": 0
+    },
+    {
+      "name": "count_bypassed/no lines",
+      "input": {
+        "lines": [],
+        "regions": [
+          {
+            "start": 1,
+            "end": 9,
+            "reason": "r"
+          }
+        ]
+      },
+      "expected": 0
     },
     {
       "name": "wholly_bypassed/every added line inside",

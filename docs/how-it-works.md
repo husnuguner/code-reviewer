@@ -325,11 +325,20 @@ The region runs from the marker line to the block's end. Overlapping regions
 merge. The whole file is read, not just the diff, so a block that starts in a
 hunk and ends far below it is bypassed whole.
 
-What happens: a finding whose anchor falls inside a region is dropped before
-verification and counted as `bypassed`; a file whose every added line is
-inside one is not sent to the model at all and counted under
-`skipped.bypassed`. The model still reads a partly bypassed file whole -- the
-marker changes what is reported, not what is shown.
+What happens: the region is **not shown to the model**. In the diff, in the
+allowed-lines list, in the anchor haystack and in the attached file text alike,
+its lines are replaced by one line reading
+`[bypassed lines 7-21: legacy, scheduled for removal]`, and the prompt says
+what that line means. Removed lines that the block replaced go with it; a
+region that crosses two hunks stands in each. So no finding can be made there,
+no tokens are spent reading it, and the verifier never sees it either. The
+added lines a region hid are counted as `bypassed`; a file whose every added
+line is inside one is not sent to the model at all and counted under
+`skipped.bypassed`.
+
+The price is context: code that calls into a bypassed function is reviewed
+without that function's body. The marker is a statement that the block needs
+no reading, and the reviewer takes it at its word.
 
 What you see: **every honoured region is named in every report** -- the text
 header, the job summary, the posted comment -- with its lines and its reason,
@@ -358,7 +367,7 @@ behind:
 | `failed`      | Files selected for review whose review threw.                     |
 | `refuted`     | Findings the verification pass removed.                           |
 | `capped`      | Findings the volume policy withheld.                              |
-| `bypassed`    | Findings inside a region a `reviewer: by-pass` marker named.      |
+| `bypassed`    | Added lines inside a region a `reviewer: by-pass` marker named.   |
 | `mislabelled` | Reported findings re-rated because the model invented a severity. |
 | `unanchored`  | Reported findings that have no line.                              |
 | `anchors`     | How each reported finding's line was decided.                     |

@@ -1,10 +1,11 @@
 /**
  * Bypass markers in the flow, against real git. The scan itself is pinned by
- * `tests/contracts/bypass.contract.test.ts`; what these check is everything
- * around it: that the whole file is read so a block can run past the hunk, that
- * a bypassed finding never reaches the verifier, that a file bypassed whole
- * calls no model, that the setting switches it off, and that every path out of
- * the report leaves a count and a log line behind.
+ * `tests/contracts/bypass.contract.test.ts` and the view with regions left out by
+ * `tests/contracts/diff.contract.test.ts`; what these check is everything
+ * around them: that the whole file is read so a block can run past the hunk,
+ * that neither the model nor the verifier is shown a bypassed line, that a file
+ * bypassed whole calls no model, that the setting switches it off, and that
+ * every path out of the report leaves a count and a log line behind.
  */
 
 import { describe, expect, it } from "bun:test";
@@ -104,12 +105,15 @@ function repo(): string {
   return root;
 }
 
-/** Reports one finding on every allowed line, its body naming the line, so what was dropped is legible. */
+/** Reports one finding on every allowed line, its body naming the line, so what was left out is legible. */
 class EveryLineReviewer implements PerFileReviewer {
   readonly seen: string[] = [];
+  /** Every prompt input, by path, so a test can read what the model was shown. */
+  readonly inputs = new Map<string, ReviewFileInput>();
 
   reviewFile(input: ReviewFileInput): Promise<Finding[]> {
     this.seen.push(input.path);
+    this.inputs.set(input.path, input);
     return Promise.resolve(
       [...input.allowedLines]
         .toSorted((a, b) => a - b)
@@ -118,12 +122,14 @@ class EveryLineReviewer implements PerFileReviewer {
   }
 }
 
-/** Keeps everything; records which findings it was asked about. */
+/** Keeps everything; records which findings it was asked about and the diff it was shown. */
 class RecordingVerifier {
   readonly asked: string[] = [];
+  readonly diffs = new Map<string, string>();
 
   verify(input: VerifyInput): Promise<Verdict> {
     this.asked.push(...input.findings.map((f) => `${input.path}:${f.body}`));
+    this.diffs.set(input.path, input.annotatedPatch);
     return Promise.resolve({ kept: [...input.findings], refuted: [] });
   }
 }
@@ -166,18 +172,59 @@ describe("a block bypassed from inside the code", () => {
     expect(LEGACY_END - ADDED_LINE).toBeGreaterThan(3);
   });
 
-  it("drops the findings inside the region and keeps the one outside it", async () => {
-    const result = await reviewBranch(options(repo()));
-    const onSvc = result.findings.filter((f) => f.path === "svc.ts").map((f) => f.line);
-    // The blank line before `tail` is an added line too; the reviewer comments on every one it may.
-    expect(onSvc).toEqual([TAIL_LINE - 1, TAIL_LINE]);
-    // The marker line and the added body line were both added lines the reviewer commented on.
-    expect(result.bypassed).toBe(2);
+  it("shows the model the diff with the region replaced by one line, and only the lines outside it as allowed", async () => {
+    const o = options(repo());
+    await reviewBranch(o);
+    const input = o.reviewer.inputs.get("svc.ts");
+    expect(input?.annotatedPatch).toContain(
+      `[bypassed lines ${MARKER_LINE}-${LEGACY_END}: legacy, scheduled for removal]`,
+    );
+    expect(input?.annotatedPatch).not.toContain("added();");
+    expect(input?.annotatedPatch).not.toContain("by-pass");
+    expect(input?.annotatedPatch).toContain(`[L${TAIL_LINE}] +export const tail = 1;`);
+    // The blank line before `tail` is an added line too.
+    expect([...(input?.allowedLines ?? [])].toSorted((a, b) => a - b)).toEqual([
+      TAIL_LINE - 1,
+      TAIL_LINE,
+    ]);
+    expect(input?.hasBypassedLines).toBe(true);
+    // The anchor haystack is the shown diff's: a quote from the block cannot place a finding.
+    expect(input?.anchorIndex?.some(([line]) => line === ADDED_LINE)).toBe(false);
   });
 
-  it("never sends a bypassed finding to the verifier", async () => {
+  it("leaves the region out of the file text too, the same line standing where it was", async () => {
+    const o = options(repo());
+    await reviewBranch(o);
+    const content = o.reviewer.inputs.get("svc.ts")?.content ?? "";
+    expect(content).toContain("export function fresh() {");
+    expect(content).toContain(
+      `[bypassed lines ${MARKER_LINE}-${LEGACY_END}: legacy, scheduled for removal]`,
+    );
+    expect(content).not.toContain("step0();");
+    expect(content).toContain("export const tail = 1;");
+  });
+
+  it("tells a file with no marker nothing about bypassing", async () => {
+    const o = options(repo());
+    await reviewBranch(o);
+    const input = o.reviewer.inputs.get("plain.ts");
+    expect(input?.hasBypassedLines).toBe(false);
+    expect(input?.annotatedPatch).not.toContain("[bypassed");
+  });
+
+  it("reports only the findings outside the region, and counts the added lines the region hid", async () => {
+    const result = await reviewBranch(options(repo()));
+    const onSvc = result.findings.filter((f) => f.path === "svc.ts").map((f) => f.line);
+    expect(onSvc).toEqual([TAIL_LINE - 1, TAIL_LINE]);
+    // svc.ts: the marker line and the added body line; whole.ts: its four lines, bypassed whole.
+    expect(result.bypassed).toBe(2 + 4);
+  });
+
+  it("shows the verifier the same diff the reviewer saw, so it too never reads a bypassed line", async () => {
     const verifier = new RecordingVerifier();
-    await reviewBranch(options(repo(), { verifier }));
+    const o = options(repo(), { verifier });
+    await reviewBranch(o);
+    expect(verifier.diffs.get("svc.ts")).toBe(o.reviewer.inputs.get("svc.ts")?.annotatedPatch);
     expect(verifier.asked.filter((entry) => entry.startsWith("svc.ts:"))).toEqual([
       `svc.ts:L${TAIL_LINE - 1}`,
       `svc.ts:L${TAIL_LINE}`,
@@ -223,20 +270,19 @@ describe("a block bypassed from inside the code", () => {
     expect(result.findings.filter((f) => f.path === "plain.ts")).toHaveLength(1);
   });
 
-  it("logs every region it honoured and every finding it dropped", async () => {
+  it("logs every region it honoured and how many added lines each file lost to them", async () => {
     const lines: string[] = [];
     await reviewBranch(options(repo(), { logger: recordingLogger(lines) }));
     expect(lines).toContain(
       `INFO svc.ts: lines ${MARKER_LINE}-${LEGACY_END} bypassed (legacy, scheduled for removal).`,
     );
     expect(lines).toContain(
-      "INFO svc.ts: 2 finding(s) fell in a bypassed region and were not reported.",
-    );
-    expect(lines).toContain(
       "INFO skip whole.ts: every added line lies in a bypassed region; the model was not called.",
     );
     const reviewLine = lines.find((line) => line.startsWith("INFO review svc.ts:")) ?? "";
-    expect(reviewLine).toMatch(/, 2 bypassed \(/u);
+    expect(reviewLine).toContain("+4 line(s), 2 bypassed, ");
+    const plainLine = lines.find((line) => line.startsWith("INFO review plain.ts:")) ?? "";
+    expect(plainLine).not.toContain("bypassed");
   });
 
   it("carries the counts and the regions on the summary record", async () => {
@@ -244,7 +290,7 @@ describe("a block bypassed from inside the code", () => {
     const records: BranchReviewRecord[] = await Array.fromAsync(stream);
     const summary = records.at(-1) as SummaryRecord;
     expect(summary.type).toBe("summary");
-    expect(summary.bypassed).toBe(2);
+    expect(summary.bypassed).toBe(6);
     expect(summary.skipped).toEqual({ bypassed: 1 });
     expect(summary.bypass_regions).toHaveLength(2);
   });
@@ -262,6 +308,11 @@ describe("the bypass-markers setting", () => {
     expect(result.bypass_regions).toEqual([]);
     expect(result.skipped).toEqual({});
     expect(o.reviewer.seen).toContain("whole.ts");
+    // Off means shown in full: the block's lines are in the diff, and nothing says bypassed.
+    const input = o.reviewer.inputs.get("svc.ts");
+    expect(input?.annotatedPatch).toContain("added();");
+    expect(input?.annotatedPatch).not.toContain("[bypassed");
+    expect(input?.hasBypassedLines).toBe(false);
     expect(result.findings.filter((f) => f.path === "svc.ts").map((f) => f.line)).toEqual([
       MARKER_LINE,
       ADDED_LINE,
@@ -304,7 +355,7 @@ describe("an uncommitted marker", () => {
 });
 
 describe("the text report", () => {
-  it("names every bypassed region and the findings it cost, before the findings", () => {
+  it("names every bypassed region and the added lines they hid, before the findings", () => {
     const lines = branchReviewText("main", "HEAD", {
       findings: [],
       bypassed: 2,
@@ -317,7 +368,7 @@ describe("the text report", () => {
       "\n=== Branch review: HEAD vs main ===",
       "No issues found.",
       "Review was bypassed by markers in the code in 2 region(s): svc.ts:7-21 (legacy), whole.ts:1-4 (generated); read those yourself.",
-      "2 finding(s) in bypassed regions were not reported.",
+      "2 added line(s) in bypassed regions were not reviewed.",
     ]);
   });
 

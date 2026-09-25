@@ -84,7 +84,9 @@ export function summaryFor(
         (summary.failed > 0 ? `; ${summary.failed} could not be reviewed` : "") +
         (summary.refuted > 0 ? `; ${summary.refuted} finding(s) refuted by verification` : "") +
         (summary.capped > 0 ? `; ${summary.capped} withheld by max-findings-per-file` : "") +
-        (summary.bypassed > 0 ? `; ${summary.bypassed} in bypassed regions` : "") +
+        (summary.bypassed > 0
+          ? `; ${summary.bypassed} added line(s) in bypassed regions not reviewed`
+          : "") +
         (summary.mislabelled > 0
           ? `; ${summary.mislabelled} reported under a severity the model invented`
           : "") +

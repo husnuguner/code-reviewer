@@ -1,0 +1,191 @@
+{
+  "module": "elision",
+  "cases": [
+    {
+      "name": "patch_view/a region inside one hunk becomes one line, and its lines leave the allowed set and the haystack",
+      "input": {
+        "patch": "@@ -1,3 +1,7 @@\n import x\n+// reviewer: by-pass - legacy\n+function legacy() {\n+  added();\n }\n export const a = 1;\n+export const tail = 2;\n",
+        "elide": [{ "start": 2, "end": 5, "reason": "legacy" }]
+      },
+      "expected": {
+        "added_lines": [7],
+        "new_side_index": [
+          [1, "import x"],
+          [6, "export const a = 1;"],
+          [7, "export const tail = 2;"]
+        ],
+        "annotate_patch": "@@ -1,3 +1,7 @@\n import x\n[bypassed lines 2-5: legacy]\n export const a = 1;\n[L7] +export const tail = 2;",
+        "elided": 4
+      }
+    },
+    {
+      "name": "patch_view/removed lines go with the added lines that replaced them",
+      "input": {
+        "patch": "@@ -1,4 +1,4 @@\n keep\n-old body a\n-old body b\n+// reviewer: by-pass - rewritten\n+function f() { return 1; }\n end\n",
+        "elide": [{ "start": 2, "end": 3, "reason": "rewritten" }]
+      },
+      "expected": {
+        "added_lines": [],
+        "new_side_index": [
+          [1, "keep"],
+          [4, "end"]
+        ],
+        "annotate_patch": "@@ -1,4 +1,4 @@\n keep\n[bypassed lines 2-3: rewritten]\n end",
+        "elided": 4
+      }
+    },
+    {
+      "name": "patch_view/removed lines before a shown line stay shown",
+      "input": {
+        "patch": "@@ -1,3 +1,4 @@\n keep\n-old\n+new\n+// reviewer: by-pass - r\n end\n",
+        "elide": [{ "start": 3, "end": 4, "reason": "r" }]
+      },
+      "expected": {
+        "added_lines": [2],
+        "new_side_index": [
+          [1, "keep"],
+          [2, "new"]
+        ],
+        "annotate_patch": "@@ -1,3 +1,4 @@\n keep\n-old\n[L2] +new\n[bypassed lines 3-4: r]",
+        "elided": 2
+      }
+    },
+    {
+      "name": "patch_view/trailing removed lines go with the line before them",
+      "input": {
+        "patch": "@@ -1,3 +1,1 @@\n x\n-gone\n-gone too\n",
+        "elide": [{ "start": 1, "end": 1, "reason": "r" }]
+      },
+      "expected": {
+        "added_lines": [],
+        "new_side_index": [],
+        "annotate_patch": "@@ -1,3 +1,1 @@\n[bypassed line 1: r]",
+        "elided": 3
+      }
+    },
+    {
+      "name": "patch_view/a region spanning two hunks stands in each, named whole",
+      "input": {
+        "patch": "@@ -1,2 +1,4 @@\n a\n+// reviewer: by-pass - big\n+function big() {\n b\n@@ -10,2 +11,4 @@\n c\n+  more();\n }\n+after();\n",
+        "elide": [{ "start": 2, "end": 13, "reason": "big" }]
+      },
+      "expected": {
+        "added_lines": [14],
+        "new_side_index": [
+          [1, "a"],
+          [14, "after();"]
+        ],
+        "annotate_patch": "@@ -1,2 +1,4 @@\n a\n[bypassed lines 2-13: big]\n@@ -10,2 +11,4 @@\n[bypassed lines 2-13: big]\n[L14] +after();",
+        "elided": 6
+      }
+    },
+    {
+      "name": "patch_view/two regions that touch keep their own lines and reasons",
+      "input": {
+        "patch": "@@ -1,1 +1,5 @@\n x\n+p\n+q\n+r\n+s\n",
+        "elide": [
+          { "start": 2, "end": 3, "reason": "a" },
+          { "start": 4, "end": 5, "reason": "b" }
+        ]
+      },
+      "expected": {
+        "added_lines": [],
+        "new_side_index": [[1, "x"]],
+        "annotate_patch": "@@ -1,1 +1,5 @@\n x\n[bypassed lines 2-3: a]\n[bypassed lines 4-5: b]",
+        "elided": 4
+      }
+    },
+    {
+      "name": "patch_view/a one-line region reads as a line",
+      "input": {
+        "patch": "@@ -1,2 +1,3 @@\n x\n+y\n z\n",
+        "elide": [{ "start": 2, "end": 2, "reason": "r" }]
+      },
+      "expected": {
+        "added_lines": [],
+        "new_side_index": [
+          [1, "x"],
+          [3, "z"]
+        ],
+        "annotate_patch": "@@ -1,2 +1,3 @@\n x\n[bypassed line 2: r]\n z",
+        "elided": 1
+      }
+    },
+    {
+      "name": "patch_view/a region the diff never reaches changes nothing",
+      "input": {
+        "patch": "@@ -1,2 +1,3 @@\n x\n+y\n z\n",
+        "elide": [{ "start": 50, "end": 60, "reason": "elsewhere" }]
+      },
+      "expected": {
+        "added_lines": [2],
+        "new_side_index": [
+          [1, "x"],
+          [2, "y"],
+          [3, "z"]
+        ],
+        "annotate_patch": "@@ -1,2 +1,3 @@\n x\n[L2] +y\n z",
+        "elided": 0
+      }
+    },
+    {
+      "name": "patch_view/the no-newline marker follows its line out",
+      "input": {
+        "patch": "@@ -1,2 +1,3 @@\n x\n y\n+last\n\\ No newline at end of file\n",
+        "elide": [{ "start": 3, "end": 3, "reason": "r" }]
+      },
+      "expected": {
+        "added_lines": [],
+        "new_side_index": [
+          [1, "x"],
+          [2, "y"]
+        ],
+        "annotate_patch": "@@ -1,2 +1,3 @@\n x\n y\n[bypassed line 3: r]",
+        "elided": 2
+      }
+    },
+    {
+      "name": "elide_lines/a region becomes one line; the rest is verbatim",
+      "input": {
+        "lines": ["a", "b", "c", "d", "e"],
+        "elide": [{ "start": 2, "end": 4, "reason": "r" }]
+      },
+      "expected": ["a", "[bypassed lines 2-4: r]", "e"]
+    },
+    {
+      "name": "elide_lines/two regions that touch keep their own lines",
+      "input": {
+        "lines": ["a", "b", "c", "d"],
+        "elide": [
+          { "start": 1, "end": 2, "reason": "x" },
+          { "start": 3, "end": 4, "reason": "y" }
+        ]
+      },
+      "expected": ["[bypassed lines 1-2: x]", "[bypassed lines 3-4: y]"]
+    },
+    {
+      "name": "elide_lines/a region past the end still names itself whole",
+      "input": {
+        "lines": ["a", "b"],
+        "elide": [{ "start": 2, "end": 9, "reason": "r" }]
+      },
+      "expected": ["a", "[bypassed lines 2-9: r]"]
+    },
+    {
+      "name": "elide_lines/one line",
+      "input": {
+        "lines": ["a", "b", "c"],
+        "elide": [{ "start": 2, "end": 2, "reason": "r" }]
+      },
+      "expected": ["a", "[bypassed line 2: r]", "c"]
+    },
+    {
+      "name": "elide_lines/no regions",
+      "input": {
+        "lines": ["a", "b"],
+        "elide": []
+      },
+      "expected": ["a", "b"]
+    }
+  ]
+}

@@ -201,7 +201,7 @@ describe("building the review", () => {
     });
     expect(review.body).toContain("2 refuted by verification");
     expect(review.body).toContain("3 withheld by the per-file cap");
-    expect(review.body).toContain("4 in bypassed regions");
+    expect(review.body).toContain("4 added line(s) in bypassed regions not reviewed");
     expect(review.body).toContain("1 unreadable record(s)");
   });
 

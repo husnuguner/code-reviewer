@@ -425,7 +425,9 @@ function tallies(summary: SummaryRecord | null, unreadable: number, alreadyPoste
           `${summary.files_reviewed} of ${summary.files_changed} changed file(s) reviewed against \`${summary.base}\``,
           ...(summary.refuted > 0 ? [`${summary.refuted} refuted by verification`] : []),
           ...(summary.capped > 0 ? [`${summary.capped} withheld by the per-file cap`] : []),
-          ...(summary.bypassed > 0 ? [`${summary.bypassed} in bypassed regions`] : []),
+          ...(summary.bypassed > 0
+            ? [`${summary.bypassed} added line(s) in bypassed regions not reviewed`]
+            : []),
         ]),
     ...(alreadyPosted > 0
       ? [`${alreadyPosted} already posted inline by an earlier review and not repeated`]
