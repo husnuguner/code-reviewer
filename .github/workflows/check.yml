@@ -13,10 +13,13 @@ on:
 permissions:
   contents: read
 
-# One run per ref; a newer push cancels the one still going.
+# One run per ref. A newer push to a pull request cancels the one still
+# going; on main every push runs to the end, because the Release workflow
+# runs after a Check that passed, and a cancelled one would leave the version
+# it bumped to the next push.
 concurrency:
   group: check-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
@@ -27,6 +30,9 @@ jobs:
       - name: Check out
         # actions/checkout v6.1.0
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          # The check pushes nothing; the token has no business on disk.
+          persist-credentials: false
 
       - name: Set up Bun
         # oven-sh/setup-bun v2.2.0
