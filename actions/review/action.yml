@@ -386,12 +386,12 @@ runs:
         set_if_given REVIEW_VERIFY "${IN_VERIFY}"
         # The reviewed side is the checkout: what actions/checkout put here. The
         # other side is the base branch, or -- for an incremental run -- the
-        # previous head the range step settled on.
-        args=(review)
+        # previous head the range step settled on; the base branch is named
+        # either way, so a bypass marker the pull request added in an earlier
+        # push is still its own, not honoured.
+        args=(review --base "origin/${BASE_REF}")
         if [ -n "${SINCE:-}" ]; then
           args+=(--since "${SINCE}")
-        else
-          args+=(--base "origin/${BASE_REF}")
         fi
         args+=(--fail-on "${FAIL_ON}")
         args+=(--log-format github)

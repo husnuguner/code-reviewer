@@ -308,6 +308,16 @@ takes the block after it out of review. Any comment syntax works (`//`, `#`,
 read, in any case. **The reason is required**: a marker without one is not
 honoured, and the log says so at WARNING.
 
+**A marker is honoured once it is merged.** One the change under review adds
+itself -- on a line the change added, relative to what it merges into -- is not
+honoured: the block is shown and reviewed like any other, the log says so at
+WARNING, and every report names the marker (`bypass_added`) so the human
+reviewer judges it now, before it takes effect for every later review. A
+`--since` run still asks what the whole change added (against `--base`), so a
+marker an earlier push added is not taken as merged because this push's diff
+starts after it. In Markdown, a marker inside a fenced code block is an
+example of one, not an instruction, and is not read at all.
+
 What "the block" is:
 
 - A marker on a line of its own names the next line of code, skipping
@@ -345,19 +355,24 @@ no reading, and the reviewer takes it at its word.
 
 What you see: **every honoured region is named in every report** -- the text
 header, the job summary, the posted comment -- with its lines and its reason,
-whether or not a finding fell in it. A bypass is the author's call, not the
-reviewer's, so the human reviewer is asked to read those lines themselves.
+whether or not a finding fell in it; and so is every marker the change added.
+A bypass is the author's call, not the reviewer's, so the human reviewer is
+asked to read those lines themselves.
 
 `settings.bypass-markers: false` switches the markers off for a repository
 (the log still says at INFO when it saw one). It is a policy key, read from
-the base branch in CI like the rest of `.review/`, so a pull request cannot
-grant itself the right to bypass.
+the base branch in CI like the rest of `.review/`, and a marker the pull
+request adds is not honoured either way, so a pull request cannot grant
+itself a bypass.
 
 Known limits: a `/* … */` comment spanning several lines is not recognised,
 so a brace inside one counts; `#` opens a comment only before whitespace, so
 `#count = {`, `#include` and CSS's `#id {` are code and `#TODO {` is too; a
 block that never closes runs to the end of the file, and the report shows that
-size.
+size. A region is computed on the new file, so a change that restructures the
+code after an existing marker -- drops a closing brace, say -- moves where that
+region ends; the report names the region with its lines, and a region much
+larger than it was is the thing to look at.
 
 ## Nothing is dropped in silence
 

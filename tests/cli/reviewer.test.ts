@@ -135,10 +135,10 @@ describe("the review flags", () => {
     expect(() => review(["--branch", "feature/x"])).toThrow(UsageError);
   });
 
-  it("take --since as a third scope, and refuse it beside the other two", () => {
+  it("take --since as a third scope beside --base, which names what the change merges into", () => {
     expect(review(["--since", "abc123"]).since).toBe("abc123");
     expect(review(["--since", "abc123"]).base).toBe("main");
-    expect(() => review(["--since", "abc123", "--base", "develop"])).toThrow(UsageError);
+    expect(review(["--since", "abc123", "--base", "develop"]).base).toBe("develop");
     expect(() => review(["--since", "abc123", "--uncommitted"])).toThrow(UsageError);
     expect(() => review(["--since"])).toThrow(UsageError);
   });

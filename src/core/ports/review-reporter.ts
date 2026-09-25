@@ -29,6 +29,17 @@ export interface BypassRegionRecord {
 }
 
 /**
+ * A `reviewer: by-pass` marker the change under review added itself, and which was therefore not honoured:
+ * a pull request cannot take its own code out of its own review. It takes effect once merged.
+ */
+export interface BypassMarkerRecord {
+  readonly path: string;
+  /** The marker's line on the new side. */
+  readonly line: number;
+  readonly reason: string;
+}
+
+/**
  * The closing record of a branch review.
  *
  * @remarks `files_changed = files_reviewed + failed + sum(skipped)`. `anchors`, `unanchored` and
@@ -46,7 +57,7 @@ export interface SummaryRecord {
   readonly incremental: boolean;
   readonly files_changed: number;
   readonly files_reviewed: number;
-  /** Files selected for review whose review threw. */
+  /** Files selected for review that could not be reviewed: the model did not answer, or reading threw. */
   readonly failed: number;
   readonly findings: number;
   readonly files_with_findings: number;
@@ -68,6 +79,8 @@ export interface SummaryRecord {
   readonly policy_changed: readonly string[];
   /** The regions `reviewer: by-pass` markers took out of review, by path then line; `[]` when none. */
   readonly bypass_regions: readonly BypassRegionRecord[];
+  /** Markers the change added itself, not honoured until merged, by path then line; `[]` when none. */
+  readonly bypass_added: readonly BypassMarkerRecord[];
 }
 
 /** Any branch-review record. */

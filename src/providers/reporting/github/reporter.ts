@@ -10,7 +10,7 @@ import {
   type SummaryRecord,
   type SummaryWriter,
 } from "../../../core/ports/review-reporter";
-import { bypassWarning } from "../../../core/review/bypass";
+import { bypassAddedWarning, bypassWarning } from "../../../core/review/bypass";
 import { policyWarning } from "../../../core/review/policy";
 import { incrementalNote } from "../../../core/review/render";
 import { severityLabel, severityRankOf } from "../../../core/review/severity";
@@ -55,6 +55,8 @@ export function summaryFor(
   if (policy !== "") lines.push(`> **${policy}**`, "");
   const bypass = bypassWarning(summary?.bypass_regions ?? []);
   if (bypass !== "") lines.push(`> **${bypass}**`, "");
+  const requested = bypassAddedWarning(summary?.bypass_added ?? []);
+  if (requested !== "") lines.push(`> **${requested}**`, "");
   const failed = summary?.failed ?? 0;
   if (failed > 0) {
     lines.push(

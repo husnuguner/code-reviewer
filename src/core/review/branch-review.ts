@@ -10,6 +10,7 @@
 
 import pLimit from "p-limit";
 
+import { addedLines } from "../diff/patch-view";
 import { type ChangedFileEntry } from "../domain/changed-file";
 import { type CodeContext } from "../ports/code-context";
 import { type GitReader } from "../ports/git-reader";
@@ -17,6 +18,7 @@ import { type Logger, NULL_LOGGER } from "../ports/logger";
 import {
   type BranchReviewRecord,
   type BranchReviewReporter,
+  type BypassMarkerRecord,
   type BypassRegionRecord,
   type FindingRecord,
   type SummaryRecord,
@@ -26,7 +28,14 @@ import { asCompleted } from "../util/as-completed";
 import { errorMessage } from "../util/errors";
 import { compareCodePoints } from "../util/text";
 
-import { bypassWarning, regionRecords, sortedRegions } from "./bypass";
+import {
+  bypassAddedWarning,
+  bypassWarning,
+  markerRecords,
+  regionRecords,
+  sortedMarkers,
+  sortedRegions,
+} from "./bypass";
 import { type PolicyPath, policyChanges, policyWarning } from "./policy";
 import { incrementalNote, previewReport, textBody } from "./render";
 import {
@@ -98,6 +107,7 @@ export async function* iterBranchReview(
 
   const limit = pLimit(options.maxConcurrentFiles);
   const changeSet = selected.map((decision) => decision.file);
+  const provenance = await changeProvenance(options, log);
   const reviewOne = async (decision: SelectedFile): Promise<FileOutcome> => {
     try {
       return await reviewChangedFile(decision, {
@@ -110,6 +120,9 @@ export async function* iterBranchReview(
         codeContext: options.codeContext ?? null,
         changeSet,
         maxFindingsPerFile: options.maxFindingsPerFile ?? 0,
+        ...(provenance !== null && {
+          changeAddedLines: provenance.get(decision.path) ?? new Set<number>(),
+        }),
         ...(options.logger && { logger: options.logger }),
       });
     } catch (error) {
@@ -128,6 +141,7 @@ export async function* iterBranchReview(
   let bypassed = 0;
   let bypassedFiles = 0;
   const regions: BypassRegionRecord[] = [];
+  const addedMarkers: BypassMarkerRecord[] = [];
   // A credential the per-file step refused although selection passed it; counted under `secret`.
   let guarded = 0;
   const anchors = new Map<string, number>();
@@ -153,6 +167,7 @@ export async function* iterBranchReview(
       bypassedFiles++;
       bypassed += outcome.value.lines;
       regions.push(...regionRecords(outcome.value.path, outcome.value.regions));
+      addedMarkers.push(...markerRecords(outcome.value.path, outcome.value.addedMarkers));
       continue;
     }
     const result = outcome.value.file;
@@ -160,6 +175,7 @@ export async function* iterBranchReview(
     refuted += result.refuted;
     bypassed += result.bypassed;
     regions.push(...regionRecords(result.path, result.bypassRegions));
+    addedMarkers.push(...markerRecords(result.path, result.addedMarkers));
     const volume = capPerFile(result.findings, options.maxFindingsPerFile ?? 0);
     capped += volume.capped;
     // Per-finding tallies are taken over reported findings only, so they describe one population.
@@ -213,7 +229,33 @@ export async function* iterBranchReview(
     ),
     policy_changed: policy,
     bypass_regions: sortedRegions(regions),
+    bypass_added: sortedMarkers(addedMarkers),
   };
+}
+
+/**
+ * For a `--since` run, the lines the whole change added to each file, relative to what it merges into
+ * (`base`); `null` for any other run, whose reviewed diff already starts where the change does.
+ *
+ * @remarks A bypass marker is the change's own when it sits on one of these lines, and the change cannot
+ * take its own code out of its own review. Without it, a marker one push added would be a context line to
+ * the next push's `--since` run -- and honoured before anyone merged it. When the merge-base cannot be
+ * found, the reviewed diff decides and the log says so.
+ */
+async function changeProvenance(
+  options: Pick<BranchReviewOptions, "base" | "since" | "uncommitted" | "git">,
+  log: Logger,
+): Promise<ReadonlyMap<string, ReadonlySet<number>> | null> {
+  if (options.since === undefined || options.uncommitted === true) return null;
+  const forkPoint = await options.git.mergeBase(options.base, HEAD);
+  if (forkPoint === null) {
+    log.info(
+      `No merge-base for '${HEAD}' and '${options.base}': bypass markers added before '${options.since}' are taken as merged.`,
+    );
+    return null;
+  }
+  const whole = await options.git.changedFiles(forkPoint, HEAD);
+  return new Map(whole.map((file) => [file.filename, addedLines(file.patch)]));
 }
 
 /** A selected file whose review threw, with the file it was about, so the log can name it. */
@@ -358,6 +400,8 @@ export interface BranchReviewResult {
   readonly policy_changed: readonly string[];
   /** The regions bypass markers took out of review; `[]` when none. */
   readonly bypass_regions: readonly BypassRegionRecord[];
+  /** Markers the change added itself, not honoured until merged; `[]` when none. */
+  readonly bypass_added: readonly BypassMarkerRecord[];
 }
 
 /** Runs {@link iterBranchReview} to completion and collects the result. */
@@ -395,6 +439,7 @@ function collect(
     skipped: summary?.skipped ?? {},
     policy_changed: summary?.policy_changed ?? [],
     bypass_regions: summary?.bypass_regions ?? [],
+    bypass_added: summary?.bypass_added ?? [],
   };
 }
 
@@ -435,6 +480,8 @@ export interface TextReportInput {
   readonly bypassed?: number;
   /** The regions bypass markers took out of review. */
   readonly bypass_regions?: readonly BypassRegionRecord[];
+  /** Markers the change added itself, not honoured until merged. */
+  readonly bypass_added?: readonly BypassMarkerRecord[];
 }
 
 /**
@@ -446,12 +493,14 @@ function caveats(result: TextReportInput, base: string): string[] {
   const bypassed = result.bypassed ?? 0;
   const policy = policyWarning(result.policy_changed ?? []);
   const bypass = bypassWarning(result.bypass_regions ?? []);
+  const requested = bypassAddedWarning(result.bypass_added ?? []);
   return [
     ...(result.incremental === true ? [incrementalNote(base)] : []),
     ...(failed > 0 ? [`${failed} file(s) could not be reviewed; the log says why.`] : []),
     ...(policy === "" ? [] : [policy]),
     ...(bypass === "" ? [] : [bypass]),
     ...(bypassed > 0 ? [`${bypassed} added line(s) in bypassed regions were not reviewed.`] : []),
+    ...(requested === "" ? [] : [requested]),
   ];
 }
 

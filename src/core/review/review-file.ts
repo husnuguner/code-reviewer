@@ -20,7 +20,14 @@ import { type Clock, SYSTEM_CLOCK, seconds, stopwatch } from "../util/timing";
 export { DEFAULT_FILE_REVIEW_SETTINGS, type FileReviewSettings } from "../config/settings";
 
 import { EXACT } from "./anchor";
-import { type BypassRegion, countBypassed, isWhollyBypassed, scanBypass } from "./bypass";
+import {
+  type BypassMarker,
+  type BypassRegion,
+  countBypassed,
+  isMarkdownPath,
+  isWhollyBypassed,
+  scanBypass,
+} from "./bypass";
 import { type ContextLimits, gatherContext, renderContext } from "./context";
 import { type ReviewFileInput } from "./file-reviewer";
 import { isSecretPath } from "./guards";
@@ -60,6 +67,8 @@ export interface ReviewedFile {
   readonly bypassed: number;
   /** The regions `reviewer: by-pass` markers took out of review in this file. */
   readonly bypassRegions: readonly BypassRegion[];
+  /** Markers this change added to the file itself; not honoured until merged. */
+  readonly addedMarkers: readonly BypassMarker[];
 }
 
 /**
@@ -79,6 +88,8 @@ export type FileOutcome =
       readonly regions: readonly BypassRegion[];
       /** The added lines, every one of them in a region. */
       readonly lines: number;
+      /** Markers this change added to the file itself; not honoured until merged. */
+      readonly addedMarkers: readonly BypassMarker[];
     };
 
 /** Options for {@link reviewChangedFile}. */
@@ -97,6 +108,12 @@ export interface ReviewChangedFileOptions {
   readonly changeSet?: readonly ChangedFile[];
   /** The per-file cap, passed to the prompt; `0` means all. */
   readonly maxFindingsPerFile?: number;
+  /**
+   * The new-side lines the change under review added to this file, relative to what it merges into; a
+   * bypass marker on one of them is not honoured. Omitted: the reviewed diff's added lines, which are the
+   * same thing except for a `--since` run, whose diff starts later than the change does.
+   */
+  readonly changeAddedLines?: ReadonlySet<number>;
   readonly logger?: Logger;
   /** The clock timings are read from; injectable for tests. */
   readonly now?: Clock;
@@ -146,9 +163,16 @@ export async function reviewChangedFile(
 
   const outcome = await limit(async (): Promise<ModelRound> => {
     const text = await newSideOf(selected, options, log);
-    const regions = bypassRegionsOf(selected, text, settings, log);
+    const changeAdded = options.changeAddedLines ?? allowed;
+    const { regions, added: addedMarkers } = bypassRegionsOf(selected, text, {
+      settings,
+      changeAdded,
+      log,
+    });
     const bypassed = countBypassed(allowed, regions);
-    if (isWhollyBypassed(allowed, regions)) return { kind: "bypassed", regions, lines: bypassed };
+    if (isWhollyBypassed(allowed, regions)) {
+      return { kind: "bypassed", regions, lines: bypassed, addedMarkers };
+    }
     const shown = shownDiff(selected, regions);
     const content = promptContentOf(file, text, regions, log);
     const rendered: RenderedSkills =
@@ -173,7 +197,7 @@ export async function reviewChangedFile(
     });
     const model = modelElapsed();
     const skillNames = rendered.applied;
-    const base = { kind: "reviewed" as const, skillNames, regions, bypassed };
+    const base = { kind: "reviewed" as const, skillNames, regions, bypassed, addedMarkers };
     if (verifier === null) {
       return { ...base, verdict: keepAll(findings), timings: { context, model, verify: null } };
     }
@@ -190,9 +214,15 @@ export async function reviewChangedFile(
     log.info(
       `skip ${file.path}: every added line lies in a bypassed region; the model was not called.`,
     );
-    return { kind: "bypassed", path: file.path, regions: outcome.regions, lines: outcome.lines };
+    return {
+      kind: "bypassed",
+      path: file.path,
+      regions: outcome.regions,
+      lines: outcome.lines,
+      addedMarkers: outcome.addedMarkers,
+    };
   }
-  const { verdict, timings, skillNames, regions, bypassed } = outcome;
+  const { verdict, timings, skillNames, regions, bypassed, addedMarkers } = outcome;
   const refuted = verdict.refuted.length;
   const checked = refuted === 0 ? "" : `, ${refuted} refuted`;
   const hidden = bypassed === 0 ? "" : `, ${bypassed} bypassed`;
@@ -208,6 +238,7 @@ export async function reviewChangedFile(
       refuted,
       bypassed,
       bypassRegions: regions,
+      addedMarkers,
     },
   };
 }
@@ -221,11 +252,13 @@ type ModelRound =
       readonly skillNames: readonly string[];
       readonly regions: readonly BypassRegion[];
       readonly bypassed: number;
+      readonly addedMarkers: readonly BypassMarker[];
     }
   | {
       readonly kind: "bypassed";
       readonly regions: readonly BypassRegion[];
       readonly lines: number;
+      readonly addedMarkers: readonly BypassMarker[];
     };
 
 /** The diff as the model is shown it, with the same three answers the selection carried. */
@@ -338,31 +371,45 @@ function promptContentOf(
 function bypassRegionsOf(
   selected: SelectedFile,
   text: NewSideText | null,
-  settings: FileReviewSettings,
-  log: Logger,
-): readonly BypassRegion[] {
+  how: {
+    readonly settings: FileReviewSettings;
+    /** The lines the change added, relative to what it merges into. */
+    readonly changeAdded: ReadonlySet<number>;
+    readonly log: Logger;
+  },
+): { regions: readonly BypassRegion[]; added: readonly BypassMarker[] } {
   const { path } = selected;
+  const { settings, log } = how;
+  const none = { regions: [], added: [] };
   if (text === null) {
     const visible = scanBypass(selected.newSide.map(([, line]) => line));
     if (visible.regions.length > 0 || visible.unreasoned.length > 0) {
       log.warn(`${path}: could not be read whole; its bypass markers were not honoured.`);
     }
-    return [];
+    return none;
   }
-  const scan = scanBypass(text.lines);
+  const scan = scanBypass(text.lines, {
+    addedLines: how.changeAdded,
+    isMarkdown: isMarkdownPath(path),
+  });
   if (!settings.bypassMarkers) {
-    if (scan.regions.length > 0 || scan.unreasoned.length > 0) {
+    if (scan.regions.length > 0 || scan.unreasoned.length > 0 || scan.added.length > 0) {
       log.info(`${path}: bypass markers present, but bypass-markers is off; reviewed in full.`);
     }
-    return [];
+    return none;
   }
   for (const line of scan.unreasoned) {
     log.warn(`${path}:${line}: 'reviewer: by-pass' without a reason; not honoured.`);
   }
+  for (const marker of scan.added) {
+    log.warn(
+      `${path}:${marker.line}: 'reviewer: by-pass' added by this change; not honoured until it is merged (${marker.reason}).`,
+    );
+  }
   for (const region of scan.regions) {
     log.info(`${path}: lines ${region.start}-${region.end} bypassed (${region.reason}).`);
   }
-  return scan.regions;
+  return { regions: scan.regions, added: scan.added };
 }
 
 /** The pre-context block for one file, or `""`. Failure here never fails the review. */

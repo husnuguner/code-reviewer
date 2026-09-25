@@ -100,7 +100,8 @@ Then exactly one `summary` record:
   "bypassed": 0,
   "skipped": { "excluded": 1, "secret": 1 },
   "policy_changed": [],
-  "bypass_regions": []
+  "bypass_regions": [],
+  "bypass_added": []
 }
 ```
 
@@ -122,6 +123,7 @@ Then exactly one `summary` record:
 | `skipped`             | Files not reviewed, by reason: `secret`, `binary`, `status`, `excluded`, `no_added_lines`, `no_patch`, `too_large`, `bypassed` (every added line in a bypassed region; no model call).                |
 | `policy_changed`      | The review-policy files this change edits, removes or renames (`.review/**` and the run's own; both paths of a rename), sorted; `[]` when none.                                                       |
 | `bypass_regions`      | The regions markers took out of review: `{ path, start_line, end_line, reason }`, by path then line; `[]` when none. Listed whether or not the diff reached them.                                     |
+| `bypass_added`        | Markers the change added itself, which were **not** honoured (they take effect once merged): `{ path, line, reason }`, by path then line; `[]` when none.                                             |
 
 The counters close:
 

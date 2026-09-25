@@ -53,12 +53,13 @@ function reviewOptions(command: Command): Command {
           .conflicts(["base"]),
       )
       // A third way to name the scope: what one push added. The checkout is still the reviewed side; only
-      // the starting point moves, from the merge-base to a commit the caller names.
+      // the starting point moves, from the merge-base to a commit the caller names. --base then still names
+      // what the change merges into, which decides whose bypass markers are already merged.
       .addOption(
         new Option(
           "--since <ref>",
-          "Review only the commits after this one (the diff since..HEAD), for a run that should look at what a push added and nothing before it. The ref should be an ancestor of HEAD. Cannot be combined with --base or --uncommitted.",
-        ).conflicts(["base", "uncommitted"]),
+          "Review only the commits after this one (the diff since..HEAD), for a run that should look at what a push added and nothing before it. The ref should be an ancestor of HEAD. --base still names what the change merges into: a bypass marker the change added since then is not honoured. Cannot be combined with --uncommitted.",
+        ).conflicts(["uncommitted"]),
       )
       .option(
         "--format <format>",

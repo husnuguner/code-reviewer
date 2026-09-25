@@ -144,13 +144,16 @@ describe("actions/review/action.yml, the Review step", () => {
     expect(step.exitCode).toBe(0);
   });
 
-  it("reviews since the range step's commit instead of from the base when it named one", () => {
+  it("reviews since the range step's commit when it named one, still naming the base branch", () => {
+    // The base decides which bypass markers the pull request added: an earlier push's marker is a
+    // context line to this diff, and still not merged.
     const since = "a".repeat(40);
     const step = runStep(run, { env: reviewEnvironment({ SINCE: since }), stub: "bun" });
 
     expect(step.calls[0]).toContain("--since");
     expect(step.calls[0]).toContain(since);
-    expect(step.calls[0]).not.toContain("--base");
+    const call = step.calls[0] ?? [];
+    expect(call[call.indexOf("--base") + 1]).toBe("origin/pre-prod");
     expect(step.exitCode).toBe(0);
   });
 });

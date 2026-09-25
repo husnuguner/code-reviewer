@@ -61,6 +61,7 @@ const SUMMARY: SummaryRecord = {
   skipped: { excluded: 2 },
   policy_changed: [],
   bypass_regions: [],
+  bypass_added: [],
 };
 
 /** One finding of a given severity, anchored at `line` (`null` = unanchored). */
@@ -134,6 +135,15 @@ describe("the job summary", () => {
     expect(markdown).toContain("No issues found in the files that were reviewed.");
     expect(markdown).not.toContain("No issues found in the reviewed files.");
     expect(summaryFor([], SUMMARY)).not.toContain("incomplete");
+  });
+
+  it("names the bypass markers the change added, which were not honoured", () => {
+    const markdown = summaryFor([], {
+      ...SUMMARY,
+      bypass_added: [{ path: "svc.ts", line: 3, reason: "trust me" }],
+    });
+    expect(markdown).toContain("This change adds 1 bypass marker(s): svc.ts:3 (trust me).");
+    expect(summaryFor([], SUMMARY)).not.toContain("bypass marker");
   });
 
   it("says so plainly when nothing was found", () => {

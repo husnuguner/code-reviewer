@@ -237,9 +237,12 @@ The choices with a real trade-off behind them, and what was given up:
   is required, the marker sits in the diff, and every report lists the
   regions it honoured with their reasons. Whether markers count at all is the
   repository's policy (`settings.bypass-markers`), read from the base branch,
-  so a pull request cannot grant itself the right. Given up: a bypass is a
-  judgement the human reviewer must check, which is why it is shouted rather
-  than hidden.
+  and a marker is honoured only once merged: one on a line the change itself
+  added (against `--base`, even on a `--since` run) is named in every report
+  and not honoured, so a pull request cannot take its own code out of its own
+  review. Given up: a bypass is a judgement the human reviewer must check,
+  which is why it is shouted rather than hidden; and a marker an author adds
+  locally is not honoured until it is committed and merged either.
 - **A bypassed block is not shown, not merely not reported.** Its lines leave
   the diff, the allowed lines, the anchor haystack and the file text together,
   one line standing where they were (`[bypassed lines a-b: reason]`), before

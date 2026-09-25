@@ -9,7 +9,7 @@
  */
 
 import { type Elision } from "../diff/elision";
-import { type BypassRegionRecord } from "../ports/review-reporter";
+import { type BypassMarkerRecord, type BypassRegionRecord } from "../ports/review-reporter";
 import { compareCodePoints } from "../util/text";
 
 import { braceDepthChange, withoutStringLiterals } from "./braces";
@@ -20,12 +20,46 @@ import { braceDepthChange, withoutStringLiterals } from "./braces";
  */
 export type BypassRegion = Elision;
 
+/** One marker, where it sits and what it says. */
+export interface BypassMarker {
+  readonly line: number;
+  readonly reason: string;
+}
+
 /** What a scan of one file found. */
 export interface BypassScan {
   /** The honoured regions, by start line, overlapping ones merged. */
   readonly regions: readonly BypassRegion[];
   /** Lines carrying a marker without a reason; those are not honoured. */
   readonly unreasoned: readonly number[];
+  /** Markers on a line the change added: its own request, not honoured until it is merged. */
+  readonly added: readonly BypassMarker[];
+}
+
+/** How a scan reads one file. */
+export interface BypassScanOptions {
+  /**
+   * New-side lines the change under review added, relative to what it merges into. A marker on one of
+   * them is not honoured: a change cannot take its own code out of its own review. Omitted, every marker
+   * counts.
+   */
+  readonly addedLines?: ReadonlySet<number>;
+  /** Markdown: a marker inside a fenced code block is an example of one, not an instruction. */
+  readonly isMarkdown?: boolean;
+}
+
+/** A Markdown code fence, opening or closing. */
+const FENCE_LINE = /^\s*(?:```|~~~)/u;
+
+/** Extensions read as Markdown, whose fenced blocks hold examples rather than code. */
+const MARKDOWN_EXTENSIONS: ReadonlySet<string> = new Set(["md", "mdx", "markdown"]);
+
+/** Whether a path is a Markdown document. */
+export function isMarkdownPath(path: string): boolean {
+  const name = path.split("/").at(-1) ?? path;
+  return (
+    name.includes(".") && MARKDOWN_EXTENSIONS.has((name.split(".").at(-1) ?? "").toLowerCase())
+  );
 }
 
 /**
@@ -255,14 +289,21 @@ function merged(regions: readonly BypassRegion[]): BypassRegion[] {
  * Finds every bypass marker in a file and the region each one names.
  *
  * @param lines - The file's new side, whole; line `n` is `lines[n - 1]`.
- * @returns The honoured regions and the lines of markers that gave no reason.
+ * @returns The honoured regions, the lines of markers that gave no reason, and the markers the change added.
  * @remarks A marker on a line with code names that line's statement; a marker on its own line names the
  * next line of code. The region runs from the marker to the end of that statement or block.
  */
-export function scanBypass(lines: readonly string[]): BypassScan {
+export function scanBypass(lines: readonly string[], options: BypassScanOptions = {}): BypassScan {
   const regions: BypassRegion[] = [];
   const unreasoned: number[] = [];
+  const added: BypassMarker[] = [];
+  let isInFence = false;
   for (const [index, line] of lines.entries()) {
+    if (options.isMarkdown === true && FENCE_LINE.test(line)) {
+      isInFence = !isInFence;
+      continue;
+    }
+    if (isInFence) continue;
     // A marker inside a string literal is data, not an instruction; one in a comment survives the strip.
     if (!MARKER.test(withoutStringLiterals(line))) continue;
     const match = MARKER.exec(line);
@@ -272,11 +313,15 @@ export function scanBypass(lines: readonly string[]): BypassScan {
       unreasoned.push(index + 1);
       continue;
     }
+    if (options.addedLines?.has(index + 1) === true) {
+      added.push({ line: index + 1, reason });
+      continue;
+    }
     const head = hasCodeBefore(line, match.index) ? index : headFrom(lines, index + 1);
     const end = head === null ? index : statementEnd(lines, head);
     regions.push({ start: index + 1, end: Math.max(index, end) + 1, reason });
   }
-  return { regions: merged(regions), unreasoned };
+  return { regions: merged(regions), unreasoned, added };
 }
 
 /** Whether new-side line `line` lies in one of `regions`. */
@@ -335,6 +380,33 @@ export function sortedRegions(records: readonly BypassRegionRecord[]): BypassReg
   return records.toSorted(
     (a, b) => compareCodePoints(a.path, b.path) || a.start_line - b.start_line,
   );
+}
+
+/** A file's added markers as the summary record carries them. */
+export function markerRecords(
+  path: string,
+  markers: readonly BypassMarker[],
+): BypassMarkerRecord[] {
+  return markers.map((marker) => ({ path, line: marker.line, reason: marker.reason }));
+}
+
+/** Added markers as the summary lists them: by path, then by line. */
+export function sortedMarkers(records: readonly BypassMarkerRecord[]): BypassMarkerRecord[] {
+  return records.toSorted((a, b) => compareCodePoints(a.path, b.path) || a.line - b.line);
+}
+
+/**
+ * The note every report carries when the change added markers of its own; `""` when it added none.
+ *
+ * @remarks Not honoured is not ignored: once merged they take blocks out of every later review, so the human
+ * reviewer is asked to judge them now.
+ */
+export function bypassAddedWarning(records: readonly BypassMarkerRecord[]): string {
+  if (records.length === 0) return "";
+  const listed = sortedMarkers(records).map(
+    (record) => `${record.path}:${record.line} (${record.reason})`,
+  );
+  return `This change adds ${records.length} bypass marker(s): ${listed.join(", ")}. They were not honoured -- the blocks were reviewed -- and take effect once merged; judge them now.`;
 }
 
 /** The one-line note every report carries when regions were bypassed; `""` when none were. */

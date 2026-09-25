@@ -5,11 +5,12 @@
 
 import { type ReviewEvent } from "../ports/review-poster";
 import {
+  type BypassMarkerRecord,
   type BypassRegionRecord,
   type FindingRecord,
   type SummaryRecord,
 } from "../ports/review-reporter";
-import { regionLocation, sortedRegions } from "../review/bypass";
+import { regionLocation, sortedMarkers, sortedRegions } from "../review/bypass";
 import { incrementalNote } from "../review/render";
 import { severityGate, severityLabel, severityRankOf } from "../review/severity";
 import { type JsonObject, type JsonValue, isJsonArray, isJsonObject } from "../util/json";
@@ -182,7 +183,19 @@ function toSummary(record: JsonObject): SummaryRecord {
     skipped: {},
     policy_changed: stringList(record["policy_changed"]),
     bypass_regions: regionList(record["bypass_regions"]),
+    bypass_added: markerList(record["bypass_added"]),
   };
+}
+
+/** The well-formed markers of a JSON list: a path, a positive line, a reason; anything else is dropped. */
+function markerList(value: JsonValue | undefined): BypassMarkerRecord[] {
+  if (!isJsonArray(value)) return [];
+  return value.flatMap((item): BypassMarkerRecord[] => {
+    if (!isJsonObject(item)) return [];
+    const path = text_(item["path"]);
+    const line = lineNumber(item["line"]);
+    return path === "" || line === null ? [] : [{ path, line, reason: text_(item["reason"]) }];
+  });
 }
 
 /** The well-formed regions of a JSON list: a path, two positive lines in order, a reason; anything else is dropped. */
@@ -351,6 +364,7 @@ function reviewBody(
   const incomplete = incompleteNote(summary);
   const policy = policyNote(summary?.policy_changed ?? []);
   const bypass = bypassNote(summary?.bypass_regions ?? []);
+  const requested = bypassAddedNote(summary?.bypass_added ?? []);
   const scope =
     summary?.incremental === true ? `> **${incrementalNote(`\`${summary.base}\``)}**` : "";
   return [
@@ -361,6 +375,7 @@ function reviewBody(
     ...(scope === "" ? [] : ["", scope]),
     ...(policy === "" ? [] : ["", policy]),
     ...(bypass === "" ? [] : ["", bypass]),
+    ...(requested === "" ? [] : ["", requested]),
     ...(loose.length > 0
       ? ["", details(`${loose.length} finding(s) that could not be anchored to a line`, loose)]
       : []),
@@ -406,6 +421,15 @@ function incompleteNote(summary: SummaryRecord | null): string {
   return summary.failed > 0
     ? `> **Review incomplete:** ${summary.failed} file(s) could not be reviewed; the review job's log says why. Nothing here is a verdict on them.`
     : "";
+}
+
+/** The note a change that adds bypass markers of its own earns: they were not honoured, and will be once merged. */
+function bypassAddedNote(markers: readonly BypassMarkerRecord[]): string {
+  if (markers.length === 0) return "";
+  const listed = sortedMarkers(markers)
+    .map((marker) => `\`${marker.path}:${marker.line}\` (${marker.reason})`)
+    .join(", ");
+  return `> **This pull request adds ${markers.length} bypass marker(s)**: ${listed}. They were not honoured here -- those blocks were reviewed -- but once merged they take them out of every later review, so judge them now.`;
 }
 
 function headline(findings: readonly Finding[], isIncomplete: boolean): string {

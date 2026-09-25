@@ -55,6 +55,7 @@ const SUMMARY: SummaryRecord = {
   skipped: {},
   policy_changed: [],
   bypass_regions: [],
+  bypass_added: [],
 };
 
 /** The record stream as the reviewer writes it. */
@@ -183,6 +184,31 @@ describe("building the review", () => {
       "**Review incomplete:** 2 file(s) could not be reviewed",
     );
     expect(review.body).toContain("2 could not be reviewed");
+  });
+
+  it("names the bypass markers the pull request added, read off the stream, dropping malformed ones", () => {
+    const records = parseRecords(
+      ndjson({
+        ...SUMMARY,
+        bypass_added: [
+          { path: "src/b.ts", line: 9, reason: "later" },
+          { path: "src/a.ts", line: 3, reason: "trust me" },
+          { path: "", line: 1, reason: "no path" },
+          { path: "src/c.ts", line: 0, reason: "no line" },
+        ],
+      }),
+    );
+    expect(records.summary?.bypass_added).toEqual([
+      { path: "src/b.ts", line: 9, reason: "later" },
+      { path: "src/a.ts", line: 3, reason: "trust me" },
+    ]);
+    const body = buildReview(records).body;
+    expect(body).toContain(
+      "> **This pull request adds 2 bypass marker(s)**: `src/a.ts:3` (trust me), `src/b.ts:9` (later).",
+    );
+    expect(buildReview({ findings: [], summary: SUMMARY, unreadable: 0 }).body).not.toContain(
+      "adds",
+    );
   });
 
   it("calls a run complete only with a summary that counts no failed file", () => {

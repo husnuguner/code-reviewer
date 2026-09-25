@@ -78,6 +78,7 @@ function summary(isIncremental: boolean, failed = 0): string {
     skipped: {},
     policy_changed: [],
     bypass_regions: [],
+    bypass_added: [],
   });
 }
 

@@ -39,6 +39,7 @@ const SUMMARY: SummaryRecord = {
   skipped: {},
   policy_changed: [],
   bypass_regions: [],
+  bypass_added: [],
 };
 
 /** A context that collects instead of writing anywhere. */

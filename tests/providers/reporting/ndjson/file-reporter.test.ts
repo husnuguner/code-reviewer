@@ -55,6 +55,7 @@ const SUMMARY: SummaryRecord = {
   skipped: {},
   policy_changed: [],
   bypass_regions: [],
+  bypass_added: [],
 };
 
 /** A fresh directory nothing else writes to. */
