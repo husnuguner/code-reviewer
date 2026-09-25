@@ -86,6 +86,13 @@ export const runGit: GitRunner = async (root, arguments_, options) => {
 /** Paths as bytes, not C escapes, whatever the machine's git config says. */
 const RAW_PATHS = ["-c", "core.quotePath=false"] as const;
 
+/**
+ * A diff as git computes it, whatever the machine's config says: no external diff program
+ * (`diff.external`) and no text conversion (`textconv`), either of which would hand the parser, and the
+ * model, something other than the patch.
+ */
+const PLAIN_DIFF = ["--no-ext-diff", "--no-textconv"] as const;
+
 /** `git diff` exits 1 when the sides differ. */
 const DIFFERS: readonly number[] = [1];
 
@@ -161,6 +168,7 @@ export class LocalGitReader implements GitReader {
     const raw = await this.run(this.root, [
       ...RAW_PATHS,
       "diff",
+      ...PLAIN_DIFF,
       `--unified=${this.context}`,
       "--find-renames",
       "--no-color",
@@ -223,6 +231,7 @@ export class LocalGitReader implements GitReader {
     const raw = await this.run(this.root, [
       ...RAW_PATHS,
       "diff",
+      ...PLAIN_DIFF,
       `--unified=${this.context}`,
       "--find-renames",
       "--no-color",
@@ -252,6 +261,7 @@ export class LocalGitReader implements GitReader {
         [
           ...RAW_PATHS,
           "diff",
+          ...PLAIN_DIFF,
           "--no-index",
           `--unified=${this.context}`,
           "--no-color",

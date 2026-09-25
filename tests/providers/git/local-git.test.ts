@@ -107,6 +107,19 @@ describe("what git reports", () => {
     expect(files[0]?.patch).toContain("+three = 3");
   });
 
+  it("reads git's own diff whatever external diff program the machine configured", async () => {
+    // `diff.external` runs for a plain `git diff`; its output is not a patch the parser -- or the model --
+    // should be handed.
+    const root = repo();
+    const external = join(root, "..", `external-diff-${String(Date.now())}.sh`);
+    writeFileSync(external, "#!/bin/sh\necho 'EXTERNAL DIFF'\n", { mode: 0o755 });
+    git(root, "config", "diff.external", external);
+    const files = await new LocalGitReader(root).changedFiles("main", "feature");
+    expect(files.map((f) => f.filename)).toContain("a.py");
+    expect(files.find((f) => f.filename === "a.py")?.patch).toContain("+three = 3");
+    expect(files.some((f) => f.patch.includes("EXTERNAL DIFF"))).toBe(false);
+  });
+
   it("knows which refs name a commit, and refuses an option-shaped one", async () => {
     const reader = new LocalGitReader(repo());
     expect(await reader.hasCommit("main")).toBe(true);
