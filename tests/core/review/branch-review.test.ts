@@ -260,7 +260,7 @@ describe("what git reports", () => {
     const refusal = reviewBranch(options(repo(), { base: "develop" }));
     await expect(refusal).rejects.toThrow(GitError);
     await expect(refusal).rejects.toThrow(
-      /--base 'develop' is not a commit in .*Fetch it \(git fetch origin\), or name another or origin\/develop\./u,
+      /--base 'develop' is not a commit in .*Fetch it \(git fetch origin\), or name another \(origin\/develop, if the remote has it\)\./u,
     );
   });
 

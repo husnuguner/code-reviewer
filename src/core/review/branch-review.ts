@@ -359,7 +359,9 @@ async function changedFilesOf(
  */
 async function requireCommit(git: GitReader, reference: string, flag: string): Promise<void> {
   if (await git.hasCommit(reference)) return;
-  const remote = reference.startsWith("origin/") ? "" : ` or origin/${reference}`;
+  const remote = reference.startsWith("origin/")
+    ? ""
+    : ` (origin/${reference}, if the remote has it)`;
   throw new GitError(
     `${flag} '${reference}' is not a commit in ${git.root}. Fetch it (git fetch origin), or name another${remote}.`,
   );
