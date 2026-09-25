@@ -210,6 +210,20 @@ describe("redaction", () => {
     ).toEqual(["error: auth failed: ***"]);
   });
 
+  it("masks a value it is told of later, in every logger of the family, from then on", async () => {
+    // The model's key is known once the configuration is read: from a `.env` or a config file, where
+    // no variable name marks it as a secret.
+    const { sink, lines } = capture();
+    const root = PinoLogger.console({ sink, settings: settings({ level: "info", color: false }) });
+    const child = root.child("x");
+    child.info("key sk-from-a-dotenv-file");
+    root.mask("sk-from-a-dotenv-file");
+    root.mask("short");
+    child.info("key sk-from-a-dotenv-file, and short");
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(lines()).toEqual(["info: key sk-from-a-dotenv-file", "info: key ***, and short"]);
+  });
+
   it("masks in every rendering, including the one a collector parses", () => {
     const [line] = logged({ level: "info", format: "json", secrets: ["sk-secret-value"] }, (log) =>
       log.error("auth failed: sk-secret-value"),

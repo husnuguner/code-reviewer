@@ -176,8 +176,8 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
     ).singleton(),
     modelProviders: asFunction(() => builtinModelProviders()).singleton(),
     formatProviders: asFunction(() => builtinFormatProviders()).singleton(),
-    config: asFunction(({ request: r, modelProviders, logger }: RunCradle) =>
-      loadRunConfig({
+    config: asFunction(({ request: r, modelProviders, logger }: RunCradle) => {
+      const config = loadRunConfig({
         configFile: r.configFile,
         overrides: r.overrides,
         requiresModel: r.requiresModel,
@@ -186,8 +186,11 @@ export function buildContainer(request: RunRequest): AwilixContainer<RunCradle> 
         ...(r.environment && { environment: r.environment }),
         ...(r.cwd !== undefined && { cwd: r.cwd }),
         logger,
-      }),
-    ).singleton(),
+      });
+      // The key may have come from a `.env` or a config file, where no variable name says it is one.
+      if (logger instanceof PinoLogger) logger.mask(config.apiKey);
+      return config;
+    }).singleton(),
     // The retry decorator wraps here, so "try again, and say so" is one policy for every vendor.
     chatModel: asFunction(
       ({ config, modelProviders, logger }: RunCradle) =>

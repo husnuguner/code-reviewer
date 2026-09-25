@@ -103,7 +103,7 @@ function shouldColor(flags: LoggingFlags, format: LogFormat, isColorSupported: b
 const SECRET_NAME = /(?:API_?KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL)/iu;
 
 /** The shortest value worth masking; shorter ones would redact innocent text. */
-const SHORTEST_SECRET = 8;
+export const SHORTEST_SECRET = 8;
 
 /** The credential values in `environment`, longest first so a prefix cannot mask a longer one. */
 export function secretsFrom(environment: Environment): readonly string[] {

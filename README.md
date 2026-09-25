@@ -389,7 +389,8 @@ Inputs, the `reviewer comment` flags, and pinning advice:
   protect `.github/workflows/**` and `.review/**` with `CODEOWNERS` (see
   [GitHub Action](docs/github-action.md#what-this-does-not-defend-against)).
 - **Secrets never reach a log line.** Values of `*_API_KEY`, `*_TOKEN`,
-  `*_SECRET`, `*_PASSWORD` variables are masked at the sink in every format.
+  `*_SECRET`, `*_PASSWORD` variables, and the model's key wherever it was read
+  from, are masked at the sink in every format.
 - **The bot may request changes; it may not approve.**
 
 ## Documentation

@@ -233,4 +233,6 @@ start-up against **stdout** (Windows always colours). `--no-color` outranks all 
 Every value in the environment held by a variable whose name says it is a
 credential (`*_API_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`, …) is masked as
 `***` at the sink, in every format, so a message that interpolated a key
-cannot leak it into a CI log.
+cannot leak it into a CI log. So is the model's key once the configuration is
+read, wherever it came from -- a `.env`, a config file -- where no variable's
+name says what it holds.

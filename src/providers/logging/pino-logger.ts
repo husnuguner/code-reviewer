@@ -12,7 +12,7 @@ import { type Logger as PinoInstance, pino } from "pino";
 import { type Logger } from "../../core/ports/logger";
 import { escapeData } from "../../lib/github-actions/workflow-commands";
 
-import { type LogSettings, redact, resolveLogSettings } from "./log-settings";
+import { type LogSettings, SHORTEST_SECRET, redact, resolveLogSettings } from "./log-settings";
 
 export {
   LOG_FORMATS,
@@ -130,8 +130,12 @@ const RENDERINGS: Readonly<Record<string, LogRendering>> = {
 };
 
 /** One pino JSON line as the redacted, rendered text that reaches the sink, newline included. */
-export function formatLine(line: string, settings: LogSettings): string {
-  const safe = redact(line, settings.secrets);
+export function formatLine(
+  line: string,
+  settings: LogSettings,
+  secrets: readonly string[] = settings.secrets,
+): string {
+  const safe = redact(line, secrets);
   const record = parseRecord(safe);
   // A line pino did not write is passed through rather than dropped.
   if (record === null) return `${safe}\n`;
@@ -139,16 +143,37 @@ export function formatLine(line: string, settings: LogSettings): string {
   return `${render(record, settings)}\n`;
 }
 
-/** Turns pino's JSON lines into whatever `settings.format` asked for. */
-function formattingStream(sink: NodeJS.WritableStream, settings: LogSettings): Writable {
+/** Turns pino's JSON lines into whatever `settings.format` asked for, masking what `secrets` holds now. */
+function formattingStream(
+  sink: NodeJS.WritableStream,
+  settings: LogSettings,
+  secrets: SecretList,
+): Writable {
   return new Writable({
     write(chunk: Buffer | string, _encoding, callback): void {
       for (const line of chunk.toString().split("\n")) {
-        if (line.trim() !== "") sink.write(formatLine(line, settings));
+        if (line.trim() !== "") sink.write(formatLine(line, settings, secrets.values));
       }
       callback();
     },
   });
+}
+
+/**
+ * The values every line is masked for, shared by a root logger and its children. It grows: the model's key
+ * is known only once the configuration is read, after the first lines are written.
+ */
+class SecretList {
+  values: readonly string[];
+
+  constructor(initial: readonly string[]) {
+    this.values = initial;
+  }
+
+  add(value: string): void {
+    if (value.length < SHORTEST_SECRET || this.values.includes(value)) return;
+    this.values = [...this.values, value].toSorted((a, b) => b.length - a.length);
+  }
 }
 
 /** Options for {@link PinoLogger.console}. */
@@ -161,12 +186,16 @@ export interface ConsoleLoggingOptions {
 
 /** A `Logger` bound to one pino instance and one component name. */
 export class PinoLogger implements Logger {
-  constructor(private readonly pinoLogger: PinoInstance) {}
+  constructor(
+    private readonly pinoLogger: PinoInstance,
+    private readonly secrets: SecretList = new SecretList([]),
+  ) {}
 
   /** The application's root logger, writing to stderr in the settled shape. `silent` is pino's own threshold. */
   static console(options: ConsoleLoggingOptions = {}): PinoLogger {
     const settings = options.settings ?? resolveLogSettings();
-    const destination = formattingStream(options.sink ?? process.stderr, settings);
+    const secrets = new SecretList(settings.secrets);
+    const destination = formattingStream(options.sink ?? process.stderr, settings, secrets);
     const root = pino(
       {
         name: ROOT_NAME,
@@ -179,7 +208,15 @@ export class PinoLogger implements Logger {
       },
       destination,
     );
-    return new PinoLogger(root);
+    return new PinoLogger(root, secrets);
+  }
+
+  /**
+   * Masks a value in every line from now on, this logger's family included: for a credential that came
+   * from a file (a `.env`, a config file) rather than from a variable whose name says what it holds.
+   */
+  mask(value: string): void {
+    this.secrets.add(value);
   }
 
   debug(message: string): void {
@@ -200,6 +237,6 @@ export class PinoLogger implements Logger {
 
   /** A child named `reviewer.<name>`. */
   child(name: string): Logger {
-    return new PinoLogger(this.pinoLogger.child({ name: `${ROOT_NAME}.${name}` }));
+    return new PinoLogger(this.pinoLogger.child({ name: `${ROOT_NAME}.${name}` }), this.secrets);
   }
 }
