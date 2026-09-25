@@ -189,7 +189,7 @@ reviewer review --uncommitted                      # the work that is not in a c
 | `--out PATH`                                            | Also write every record to this file as NDJSON. This is what a CI bot reads.                                                            |
 | `--preview`                                             | Print which files would be reviewed and why the others are skipped, then stop.                                                          |
 | `--fail-on LIST`                                        | Exit `3` when a reported finding has one of these severities, e.g. `bug,security`.                                                      |
-| `--lang LANG`                                           | Language of each finding's body (default `en`). JSON keys and severities stay English.                                                  |
+| `--lang LANG`                                           | Language of each finding's body: an ISO code (`tr`, `de`, …) or a name (default English). JSON keys and severities stay English.        |
 | `--exclude GLOB`                                        | Skip files matching the glob; repeatable.                                                                                               |
 | `--skills-path PATH`                                    | Directory of review skills inside the reviewed repo; empty disables skills.                                                             |
 | `--no-verify`                                           | Report every finding the model produced, skipping the verification pass.                                                                |
